@@ -6,6 +6,7 @@ const U = (id: string, w = 400) =>
 export type Category = {
   id: string;
   name: string;
+  icon: 'all' | 'fruits' | 'vegetables' | 'dairy' | 'bakery' | 'snacks' | 'beverages' | 'staples';
   image: string;
 };
 
@@ -21,15 +22,16 @@ export type Product = {
 };
 
 export const categories: Category[] = [
-  { id: 'all', name: 'All', image: U('photo-1542838132-92c53300491e', 200) },
-  { id: 'fruits', name: 'Fruits', image: U('photo-1610832958506-aa56368176cf', 200) },
-  { id: 'vegetables', name: 'Vegetables', image: U('photo-1540420773420-3366772f4999', 200) },
-  { id: 'dairy', name: 'Dairy', image: U('photo-1628088062854-d1870b4553da', 200) },
-  { id: 'bakery', name: 'Bakery', image: U('photo-1509440159596-0249088772ff', 200) },
-  { id: 'snacks', name: 'Snacks', image: U('photo-1566478989037-eec170784d0b', 200) },
-  { id: 'beverages', name: 'Beverages', image: U('photo-1600271886742-f049cd451bba', 200) },
-  { id: 'staples', name: 'Staples', image: U('photo-1586201375761-83865001e31c', 200) },
+  { id: 'all', name: 'All', icon: 'all', image: U('photo-1542838132-92c53300491e', 200) },
+  { id: 'fruits', name: 'Fruits', icon: 'fruits', image: U('photo-1610832958506-aa56368176cf', 200) },
+  { id: 'vegetables', name: 'Vegetables', icon: 'vegetables', image: U('photo-1540420773420-3366772f4999', 200) },
+  { id: 'dairy', name: 'Dairy', icon: 'dairy', image: U('photo-1628088062854-d1870b4553da', 200) },
+  { id: 'bakery', name: 'Bakery', icon: 'bakery', image: U('photo-1509440159596-0249088772ff', 200) },
+  { id: 'snacks', name: 'Snacks', icon: 'snacks', image: U('photo-1566478989037-eec170784d0b', 200) },
+  { id: 'beverages', name: 'Beverages', icon: 'beverages', image: U('photo-1600271886742-f049cd451bba', 200) },
+  { id: 'staples', name: 'Staples', icon: 'staples', image: U('photo-1586201375761-83865001e31c', 200) },
 ];
+
 
 export const products: Product[] = [
   { id: 'p1', name: 'Fresh Bananas', unit: '1 dozen', price: 49, mrp: 60, categoryId: 'fruits', image: U('photo-1571771894821-ce9b6c11b08e'), inStock: true },
