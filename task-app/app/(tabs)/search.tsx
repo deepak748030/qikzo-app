@@ -15,7 +15,7 @@ export default function SearchScreen() {
   const [debounced, setDebounced] = useState('');
   const [searching, setSearching] = useState(false);
   const [page, setPage] = useState(1);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Debounced search (400ms) — no API call per keystroke.
   useEffect(() => {
