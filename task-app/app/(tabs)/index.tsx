@@ -1,88 +1,108 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Image } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, ScrollView, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Bell, Wallet, TrendingUp, Star } from 'lucide-react-native';
-import { colors } from '@/lib/theme';
-import { mockTasks, user, Task } from '@/lib/mockData';
-import TaskIcon from '@/components/TaskIcon';
+import { Search, MapPin } from 'lucide-react-native';
+import { colors, fonts } from '@/lib/theme';
+import Brand from '@/components/Brand';
+import ProductCard from '@/components/ProductCard';
+import { categories, products, Product } from '@/lib/mockData';
+import { useAuth } from '@/lib/authStore';
+
+const BANNERS = [
+  { id: 'b1', title: 'Fresh fruits', sub: 'Up to 30% off', emoji: '🍎' },
+  { id: 'b2', title: 'Daily dairy', sub: 'Farm fresh everyday', emoji: '🥛' },
+  { id: 'b3', title: 'Pantry staples', sub: 'Stock up & save', emoji: '🌾' },
+];
+
+const PAGE = 8;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const phone = useAuth((s) => s.phone);
+  const cardWidth = (width - 12 - 6) / 2;
 
-  const renderTask = ({ item }: { item: Task }) => (
-    <Pressable
-      style={styles.taskRow}
-      onPress={() => router.push({ pathname: '/task-details', params: { id: item.id } })}
-    >
-      <TaskIcon category={item.category} />
-      <View style={{ flex: 1, marginLeft: 10 }}>
-        <Text style={styles.taskTitle}>{item.title}</Text>
-        <Text style={styles.taskSub}>{item.subtitle}</Text>
+  const [activeCat, setActiveCat] = useState('all');
+  const [page, setPage] = useState(1);
+
+  const filtered = useMemo(
+    () => (activeCat === 'all' ? products : products.filter((p) => p.categoryId === activeCat)),
+    [activeCat]
+  );
+  const data = useMemo(() => filtered.slice(0, page * PAGE), [filtered, page]);
+  const hasMore = data.length < filtered.length;
+
+  const loadMore = useCallback(() => {
+    if (hasMore) setPage((p) => p + 1);
+  }, [hasMore]);
+
+  const onCat = (id: string) => { setActiveCat(id); setPage(1); };
+
+  const Header = (
+    <View>
+      <View style={[styles.banners]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={width} decelerationRate="fast">
+          {BANNERS.map((b) => (
+            <View key={b.id} style={[styles.banner, { width }]}>
+              <View style={styles.bannerInner}>
+                <View>
+                  <Text style={styles.bannerTitle}>{b.title}</Text>
+                  <Text style={styles.bannerSub}>{b.sub}</Text>
+                </View>
+                <Text style={styles.bannerEmoji}>{b.emoji}</Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
       </View>
-      <Text style={styles.reward}>+ ₹{item.reward.toFixed(2)}</Text>
-    </Pressable>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
+        {categories.map((c) => {
+          const active = c.id === activeCat;
+          return (
+            <Pressable key={c.id} style={[styles.cat, active && styles.catActive]} onPress={() => onCat(c.id)}>
+              <Text style={styles.catEmoji}>{c.emoji}</Text>
+              <Text style={[styles.catLabel, active && styles.catLabelActive]}>{c.name}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      <Text style={styles.section}>Popular near you</Text>
+    </View>
   );
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
+    <View style={[styles.container, { paddingTop: insets.top + 6 }]}>
+      <View style={styles.topBar}>
+        <View>
+          <Brand size={26} />
+          <View style={styles.locRow}>
+            <MapPin size={12} color={colors.mutedForeground} />
+            <Text style={styles.loc}>{phone ? `Delivering to ${phone}` : 'Set delivery location'}</Text>
           </View>
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={styles.hello}>Hello, {user.name.split(' ')[0]} 👋</Text>
-            <Text style={styles.subhello}>Good to see you back!</Text>
-          </View>
-          <Pressable style={styles.bellBtn} onPress={() => router.push('/notifications')}>
-            <Bell size={20} color="#FFFFFF" />
-            <View style={styles.bellDot} />
-          </Pressable>
         </View>
       </View>
 
+      <Pressable style={styles.searchBar} onPress={() => router.push('/search')}>
+        <Search size={18} color={colors.mutedForeground} />
+        <Text style={styles.searchText}>Search for fruits, milk, bread...</Text>
+      </Pressable>
+
       <FlatList
-        data={mockTasks}
-        keyExtractor={(i) => i.id}
-        renderItem={renderTask}
-        contentContainerStyle={{ paddingHorizontal: 6, paddingBottom: 24 }}
-        ListHeaderComponent={
-          <View>
-            <View style={styles.balanceCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.balanceLabel}>Total Balance</Text>
-                <Text style={styles.balanceValue}>₹ {user.balance.toFixed(2)}</Text>
-              </View>
-              <View style={styles.walletIcon}><Wallet size={26} color="#FFFFFF" /></View>
-            </View>
-
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Star size={18} color="#F59E0B" fill="#F59E0B" />
-                <View style={{ marginLeft: 8 }}>
-                  <Text style={styles.statLabel}>Total Points</Text>
-                  <Text style={styles.statValue}>{user.totalPoints.toLocaleString()}</Text>
-                </View>
-              </View>
-              <View style={styles.statCard}>
-                <TrendingUp size={18} color={colors.success} />
-                <View style={{ marginLeft: 8 }}>
-                  <Text style={styles.statLabel}>Today's Earnings</Text>
-                  <Text style={styles.statValue}>₹ {user.todayEarnings.toFixed(2)}</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>Available Tasks</Text>
-              <Pressable onPress={() => router.push('/(tabs)/tasks')}>
-                <Text style={styles.viewAll}>View All</Text>
-              </Pressable>
-            </View>
-          </View>
-        }
-        ItemSeparatorComponent={() => <View style={styles.sep} />}
+        data={data}
+        keyExtractor={(item: Product) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.col}
+        ListHeaderComponent={Header}
+        ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+        renderItem={({ item }) => <ProductCard product={item} width={cardWidth} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        ListFooterComponent={hasMore ? <ActivityIndicator style={{ marginVertical: 14 }} color={colors.foreground} /> : null}
       />
     </View>
   );
@@ -90,49 +110,29 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    backgroundColor: colors.primary, paddingHorizontal: 6, paddingBottom: 14,
-    borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
+  topBar: { paddingHorizontal: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
+  loc: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body },
+  searchBar: {
+    marginHorizontal: 6, marginTop: 10, marginBottom: 6, height: 40, flexDirection: 'row', alignItems: 'center',
+    gap: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: colors.inputBorder, backgroundColor: colors.inputBg, borderRadius: 0,
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center' },
-  avatar: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: '#FFFFFF',
-    alignItems: 'center', justifyContent: 'center',
+  searchText: { color: colors.mutedForeground, fontSize: 13, fontFamily: fonts.body },
+  banners: { marginBottom: 6 },
+  banner: { paddingHorizontal: 0 },
+  bannerInner: {
+    height: 96, backgroundColor: colors.primary, marginHorizontal: 0, paddingHorizontal: 18,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 0,
   },
-  avatarText: { color: colors.primary, fontWeight: '800', fontSize: 16 },
-  hello: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  subhello: { color: 'rgba(255,255,255,0.85)', fontSize: 11 },
-  bellBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  bellDot: { position: 'absolute', top: 6, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444' },
-  balanceCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary,
-    borderRadius: 8, padding: 12, marginTop: 8,
-    borderWidth: 1, borderColor: colors.primaryDark,
-  },
-  balanceLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 12 },
-  balanceValue: { color: '#FFFFFF', fontWeight: '800', fontSize: 22, marginTop: 2 },
-  walletIcon: {
-    width: 44, height: 44, borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  statsRow: { flexDirection: 'row', gap: 4, marginTop: 4 },
-  statCard: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.card, padding: 10, borderRadius: 6,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  statLabel: { color: colors.mutedForeground, fontSize: 11 },
-  statValue: { color: colors.foreground, fontWeight: '700', fontSize: 15 },
-  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 4 },
-  sectionTitle: { color: colors.foreground, fontWeight: '700', fontSize: 15 },
-  viewAll: { color: colors.primary, fontWeight: '600', fontSize: 12 },
-  taskRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card,
-    padding: 10,
-  },
-  sep: { height: 1, backgroundColor: colors.border },
-  taskTitle: { color: colors.foreground, fontWeight: '700', fontSize: 14 },
-  taskSub: { color: colors.mutedForeground, fontSize: 11, marginTop: 2 },
-  reward: { color: colors.success, fontWeight: '700', fontSize: 13 },
+  bannerTitle: { color: colors.primaryForeground, fontSize: 20, fontFamily: fonts.displayBold },
+  bannerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontFamily: fonts.body, marginTop: 4 },
+  bannerEmoji: { fontSize: 48 },
+  catRow: { paddingHorizontal: 6, gap: 6, paddingVertical: 2 },
+  cat: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
+  catActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  catEmoji: { fontSize: 20 },
+  catLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground, marginTop: 2 },
+  catLabelActive: { color: colors.primaryForeground },
+  section: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground, paddingHorizontal: 6, marginTop: 12, marginBottom: 8 },
+  col: { paddingHorizontal: 6, gap: 6 },
 });
