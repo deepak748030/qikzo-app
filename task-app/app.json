@@ -1,39 +1,37 @@
 {
   "expo": {
-    "name": "Self Task",
-    "slug": "self-task",
+    "name": "Qizko",
+    "slug": "qizko",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "selftask",
+    "scheme": "qizko",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/images/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#2D6BFF"
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
     },
     "android": {
-      "package": "com.selftask.app",
+      "package": "com.qizko.app",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#2D6BFF"
+        "backgroundColor": "#FFFFFF"
       },
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.VIBRATE",
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.selftask.app",
+      "bundleIdentifier": "com.qizko.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Self Task needs camera access to upload task proof.",
-        "NSPhotoLibraryUsageDescription": "Self Task needs photo library access to upload task proof."
+        "NSLocationWhenInUseUsageDescription": "Qizko uses your location to deliver groceries to your address."
       }
     },
     "web": {
@@ -56,23 +54,9 @@
         }
       ],
       [
-        "expo-notifications",
+        "expo-location",
         {
-          "icon": "./assets/images/icon.png",
-          "color": "#2D6BFF"
-        }
-      ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Self Task needs camera access to upload task proof."
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Self Task needs photo library access to upload task proof.",
-          "cameraPermission": "Self Task needs camera access to upload task proof."
+          "locationWhenInUsePermission": "Qizko uses your location to deliver groceries to your address."
         }
       ]
     ],
