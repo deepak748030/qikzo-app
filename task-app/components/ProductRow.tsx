@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { router } from 'expo-router';
 import { colors, fonts } from '@/lib/theme';
 import { Product } from '@/lib/mockData';
@@ -18,9 +18,7 @@ export default function ProductRow({ product }: { product: Product }) {
       style={styles.row}
       onPress={() => router.push({ pathname: '/product-details', params: { id: product.id } })}
     >
-      <View style={styles.thumb}>
-        <Text style={styles.emoji}>{product.emoji}</Text>
-      </View>
+      <Image source={{ uri: product.image }} style={styles.thumb} resizeMode="cover" />
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{product.name}</Text>
         <Text style={styles.unit}>{product.unit}</Text>
@@ -44,10 +42,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.divider, backgroundColor: colors.card,
   },
   thumb: {
-    width: 52, height: 52, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center',
+    width: 56, height: 56, backgroundColor: colors.chipBg,
     borderWidth: 1, borderColor: colors.border, borderRadius: 0,
   },
-  emoji: { fontSize: 28 },
   info: { flex: 1, marginLeft: 10 },
   name: { fontSize: 14, fontFamily: fonts.heading, color: colors.foreground },
   unit: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 1 },
@@ -56,3 +53,4 @@ const styles = StyleSheet.create({
   mrp: { fontSize: 11, color: colors.mutedForeground, textDecorationLine: 'line-through', fontFamily: fonts.body },
   oos: { fontSize: 10, color: colors.danger, fontFamily: fonts.bodyBold, textAlign: 'center' },
 });
+

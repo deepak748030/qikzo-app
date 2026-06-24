@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { colors, fonts } from '@/lib/theme';
@@ -8,6 +8,7 @@ import QtyStepper from '@/components/QtyStepper';
 import Button from '@/components/Button';
 import { getProductById } from '@/lib/mockData';
 import { useCart } from '@/lib/cartStore';
+
 
 export default function ProductDetails() {
   const insets = useSafeAreaInsets();
@@ -35,9 +36,9 @@ export default function ProductDetails() {
       <ScreenHeader title="Product details" />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Image strikes to the left & right edges of the screen */}
-        <View style={[styles.hero, { width, height: width * 0.7 }]}>
+        <View style={[styles.hero, { width, height: width * 0.85 }]}>
+          <Image source={{ uri: product.image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           {off > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{off}% OFF</Text></View> : null}
-          <Text style={styles.heroEmoji}>{product.emoji}</Text>
         </View>
 
         <View style={styles.body}>
@@ -96,8 +97,7 @@ function Meta({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   missing: { padding: 6, fontFamily: fonts.body, color: colors.mutedForeground },
-  hero: { backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: colors.border },
-  heroEmoji: { fontSize: 120 },
+  hero: { backgroundColor: colors.chipBg, overflow: 'hidden', borderBottomWidth: 1, borderBottomColor: colors.border },
   badge: { position: 'absolute', top: 0, left: 0, backgroundColor: colors.accent, paddingHorizontal: 8, paddingVertical: 4 },
   badgeText: { color: colors.accentForeground, fontSize: 11, fontFamily: fonts.bodyBold },
   body: { paddingHorizontal: 6, paddingTop: 12 },

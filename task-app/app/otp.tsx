@@ -65,6 +65,7 @@ export default function OtpScreen() {
             <TextInput
               key={i}
               ref={(r) => { inputs.current[i] = r; }}
+              autoFocus={i === 0}
               style={[styles.otpBox, d ? styles.otpBoxFilled : null]}
               keyboardType="number-pad"
               maxLength={1}

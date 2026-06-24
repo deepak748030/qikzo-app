@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ScrollView, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, Pressable, useWindowDimensions, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Search, MapPin } from 'lucide-react-native';
@@ -10,10 +10,11 @@ import { categories, products, Product } from '@/lib/mockData';
 import { useAuth } from '@/lib/authStore';
 
 const BANNERS = [
-  { id: 'b1', title: 'Fresh fruits', sub: 'Up to 30% off', emoji: '🍎' },
-  { id: 'b2', title: 'Daily dairy', sub: 'Farm fresh everyday', emoji: '🥛' },
-  { id: 'b3', title: 'Pantry staples', sub: 'Stock up & save', emoji: '🌾' },
+  { id: 'b1', title: 'Fresh fruits', sub: 'Up to 30% off', image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=800&q=80&auto=format&fit=crop' },
+  { id: 'b2', title: 'Daily dairy', sub: 'Farm fresh everyday', image: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=800&q=80&auto=format&fit=crop' },
+  { id: 'b3', title: 'Pantry staples', sub: 'Stock up & save', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800&q=80&auto=format&fit=crop' },
 ];
+
 
 const PAGE = 8;
 
@@ -46,11 +47,12 @@ export default function HomeScreen() {
           {BANNERS.map((b) => (
             <View key={b.id} style={[styles.banner, { width }]}>
               <View style={styles.bannerInner}>
-                <View>
+                <Image source={{ uri: b.image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                <View style={styles.bannerOverlay} />
+                <View style={styles.bannerText}>
                   <Text style={styles.bannerTitle}>{b.title}</Text>
                   <Text style={styles.bannerSub}>{b.sub}</Text>
                 </View>
-                <Text style={styles.bannerEmoji}>{b.emoji}</Text>
               </View>
             </View>
           ))}
@@ -62,7 +64,7 @@ export default function HomeScreen() {
           const active = c.id === activeCat;
           return (
             <Pressable key={c.id} style={[styles.cat, active && styles.catActive]} onPress={() => onCat(c.id)}>
-              <Text style={styles.catEmoji}>{c.emoji}</Text>
+              <Image source={{ uri: c.image }} style={styles.catImg} resizeMode="cover" />
               <Text style={[styles.catLabel, active && styles.catLabelActive]}>{c.name}</Text>
             </Pressable>
           );
@@ -121,18 +123,19 @@ const styles = StyleSheet.create({
   banners: { marginBottom: 6 },
   banner: { paddingHorizontal: 0 },
   bannerInner: {
-    height: 96, backgroundColor: colors.primary, marginHorizontal: 0, paddingHorizontal: 18,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 0,
+    height: 130, marginHorizontal: 0, overflow: 'hidden', borderRadius: 0,
+    justifyContent: 'flex-end',
   },
-  bannerTitle: { color: colors.primaryForeground, fontSize: 20, fontFamily: fonts.displayBold },
-  bannerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontFamily: fonts.body, marginTop: 4 },
-  bannerEmoji: { fontSize: 48 },
-  catRow: { paddingHorizontal: 6, gap: 6, paddingVertical: 2 },
-  cat: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
-  catActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  catEmoji: { fontSize: 20 },
-  catLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground, marginTop: 2 },
-  catLabelActive: { color: colors.primaryForeground },
+  bannerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
+  bannerText: { padding: 16 },
+  bannerTitle: { color: '#fff', fontSize: 22, fontFamily: fonts.displayBold },
+  bannerSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontFamily: fonts.body, marginTop: 4 },
+  catRow: { paddingHorizontal: 6, gap: 8, paddingVertical: 4 },
+  cat: { alignItems: 'center', paddingBottom: 6, paddingHorizontal: 6, paddingTop: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card, width: 72 },
+  catActive: { borderColor: colors.foreground, borderWidth: 2 },
+  catImg: { width: 44, height: 44, borderRadius: 0 },
+  catLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground, marginTop: 4 },
+  catLabelActive: { color: colors.foreground },
   section: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground, paddingHorizontal: 6, marginTop: 12, marginBottom: 8 },
   col: { paddingHorizontal: 6, gap: 6 },
 });

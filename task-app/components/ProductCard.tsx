@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { router } from 'expo-router';
 import { colors, fonts } from '@/lib/theme';
 import { Product } from '@/lib/mockData';
@@ -19,12 +19,12 @@ export default function ProductCard({ product, width }: { product: Product; widt
       onPress={() => router.push({ pathname: '/product-details', params: { id: product.id } })}
     >
       <View style={styles.imageWrap}>
+        <Image source={{ uri: product.image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         {off > 0 ? (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{off}% OFF</Text>
           </View>
         ) : null}
-        <Text style={styles.emoji}>{product.emoji}</Text>
         {!product.inStock ? (
           <View style={styles.oos}>
             <Text style={styles.oosText}>OUT OF STOCK</Text>
@@ -51,10 +51,9 @@ export default function ProductCard({ product, width }: { product: Product; widt
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 0 },
   imageWrap: {
-    height: 110, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center',
+    height: 130, backgroundColor: colors.chipBg, overflow: 'hidden',
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  emoji: { fontSize: 52 },
   badge: { position: 'absolute', top: 0, left: 0, backgroundColor: colors.accent, paddingHorizontal: 5, paddingVertical: 2 },
   badgeText: { color: colors.accentForeground, fontSize: 9, fontFamily: fonts.bodyBold },
   oos: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' },
@@ -67,3 +66,4 @@ const styles = StyleSheet.create({
   amount: { fontSize: 14, fontFamily: fonts.displayBold, color: colors.foreground },
   mrp: { fontSize: 11, color: colors.mutedForeground, textDecorationLine: 'line-through', fontFamily: fonts.body },
 });
+

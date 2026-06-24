@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -7,14 +7,24 @@ import ScreenHeader from '@/components/ScreenHeader';
 import ProductRow from '@/components/ProductRow';
 import Button from '@/components/Button';
 import { useCart } from '@/lib/cartStore';
+import { products } from '@/lib/mockData';
 
 const DELIVERY = 25;
 
 export default function CartScreen() {
   const insets = useSafeAreaInsets();
-  const lines = useCart((s) => s.lines());
-  const subtotal = useCart((s) => s.subtotal());
-  const savings = useCart((s) => s.savings());
+  const items = useCart((s) => s.items);
+  const { lines, subtotal, savings } = useMemo(() => {
+    const ls = Object.entries(items)
+      .map(([id, qty]) => {
+        const product = products.find((p) => p.id === id);
+        return product ? { product, qty } : null;
+      })
+      .filter(Boolean) as { product: typeof products[number]; qty: number }[];
+    const sub = ls.reduce((a, l) => a + l.product.price * l.qty, 0);
+    const sav = ls.reduce((a, l) => a + (l.product.mrp - l.product.price) * l.qty, 0);
+    return { lines: ls, subtotal: sub, savings: sav };
+  }, [items]);
   const delivery = subtotal >= 199 || subtotal === 0 ? 0 : DELIVERY;
   const total = subtotal + delivery;
 
