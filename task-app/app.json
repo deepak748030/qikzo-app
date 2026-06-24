@@ -1,0 +1,90 @@
+{
+  "expo": {
+    "name": "Self Task",
+    "slug": "self-task",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "selftask",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#2D6BFF"
+    },
+    "android": {
+      "package": "com.selftask.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#2D6BFF"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.VIBRATE",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.selftask.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Self Task needs camera access to upload task proof.",
+        "NSPhotoLibraryUsageDescription": "Self Task needs photo library access to upload task proof."
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2D6BFF"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Self Task needs camera access to upload task proof."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Self Task needs photo library access to upload task proof.",
+          "cameraPermission": "Self Task needs camera access to upload task proof."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "newArchEnabled": true,
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5105d798-655a-478f-9ff0-062ac18b4e0e"
+      }
+    }
+  }
+}
