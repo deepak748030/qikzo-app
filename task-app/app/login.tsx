@@ -1,62 +1,68 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { colors } from '@/lib/theme';
-import { Gift } from 'lucide-react-native';
+import { colors, fonts } from '@/lib/theme';
+import Brand from '@/components/Brand';
+import Input from '@/components/Input';
+import Button from '@/components/Button';
+import BottomSheet from '@/components/BottomSheet';
+import { useSheet } from '@/lib/useSheet';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const sheet = useSheet();
+
+  const onContinue = () => {
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      sheet.show({ variant: 'error', title: 'Invalid number', message: 'Enter a valid 10-digit Indian mobile number.' });
+      return;
+    }
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      router.push({ pathname: '/otp', params: { phone } });
+    }, 700);
+  };
+
   return (
-    <LinearGradient
-      colors={['#3B5BFF', '#5B3BFF']}
-      style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 }]}
-    >
-      <View style={styles.top}>
-        <Text style={styles.title}>Self Task</Text>
-        <Text style={styles.subtitle}>Complete Tasks, Earn Rewards{'\n'}& Get Real Cash</Text>
-      </View>
-      <View style={styles.illustration}>
-        <View style={styles.giftCircle}>
-          <Gift size={90} color="#FFFFFF" strokeWidth={1.6} />
+    <View style={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 16 }]}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Brand size={38} />
+        <Text style={styles.headline}>Fresh groceries,{'\n'}delivered fast.</Text>
+        <Text style={styles.sub}>Login or sign up with your mobile number to start ordering.</Text>
+
+        <View style={styles.form}>
+          <Input
+            label="Mobile number"
+            prefix="+91"
+            placeholder="98765 43210"
+            keyboardType="number-pad"
+            maxLength={10}
+            value={phone}
+            onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
+          />
+          <Button label="Continue" loading={loading} onPress={onContinue} style={styles.btn} />
         </View>
-      </View>
-      <View style={styles.actions}>
-        <Pressable style={styles.primaryBtn} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.primaryBtnText}>Get Started</Text>
-        </Pressable>
-        <Pressable style={styles.outlineBtn} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.outlineBtnText}>Login</Text>
-        </Pressable>
-        <Text style={styles.trust}>✓  Trusted by 50K+ Users</Text>
-      </View>
-    </LinearGradient>
+      </ScrollView>
+
+      <Text style={styles.terms}>
+        By continuing you agree to our Terms & Privacy Policy.
+      </Text>
+
+      <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 6, justifyContent: 'space-between' },
-  top: { alignItems: 'center', marginTop: 30 },
-  title: { fontSize: 28, fontWeight: '800', color: '#FFFFFF', marginBottom: 8 },
-  subtitle: { fontSize: 13, color: 'rgba(255,255,255,0.85)', textAlign: 'center', lineHeight: 18 },
-  illustration: { alignItems: 'center', justifyContent: 'center' },
-  giftCircle: {
-    width: 180, height: 180, borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  actions: { paddingHorizontal: 6, gap: 8 },
-  primaryBtn: {
-    backgroundColor: '#FFFFFF', paddingVertical: 12, borderRadius: 6,
-    alignItems: 'center',
-  },
-  primaryBtnText: { color: colors.primary, fontWeight: '700', fontSize: 15 },
-  outlineBtn: {
-    paddingVertical: 12, borderRadius: 6, alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-  },
-  outlineBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
-  trust: { color: 'rgba(255,255,255,0.85)', textAlign: 'center', fontSize: 12, marginTop: 4 },
+  container: { flex: 1, paddingHorizontal: 6, backgroundColor: colors.background },
+  scroll: { flexGrow: 1, justifyContent: 'center' },
+  headline: { fontSize: 30, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 28, letterSpacing: -0.5 },
+  sub: { fontSize: 14, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 8, lineHeight: 20 },
+  form: { marginTop: 28, gap: 6 },
+  btn: { marginTop: 6 },
+  terms: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, textAlign: 'center' },
 });
