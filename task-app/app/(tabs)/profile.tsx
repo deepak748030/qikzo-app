@@ -1,109 +1,93 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ShieldCheck, User as UserIcon, CreditCard, Clock, HelpCircle, Info, LogOut, ChevronRight, Pencil } from 'lucide-react-native';
-import { router } from 'expo-router';
-import { colors } from '@/lib/theme';
-import { user } from '@/lib/mockData';
+import { router, Href } from 'expo-router';
+import { User, MapPin, ClipboardList, HelpCircle, Info, Shield, FileText, ChevronRight, LogOut } from 'lucide-react-native';
+import { colors, fonts } from '@/lib/theme';
+import ScreenHeader from '@/components/ScreenHeader';
+import BottomSheet from '@/components/BottomSheet';
+import { useSheet } from '@/lib/useSheet';
+import { useAuth } from '@/lib/authStore';
+import { useCart } from '@/lib/cartStore';
 
-const ITEMS = [
-  { key: 'kyc', label: 'KYC Verification', Icon: ShieldCheck, color: '#22C55E', bg: '#DCFCE7', badge: 'Verified', route: '/kyc-verification' as const },
-  { key: 'info', label: 'Personal Information', Icon: UserIcon, color: '#8B5CF6', bg: '#F3E8FF', route: '/personal-info' as const },
-  { key: 'pay', label: 'Payment Details', Icon: CreditCard, color: '#F97316', bg: '#FFEDD5', route: '/payment-details' as const },
-  { key: 'txn', label: 'Transaction History', Icon: Clock, color: '#2D6BFF', bg: '#DBEAFE', route: '/transaction-history' as const },
-  { key: 'help', label: 'Help & Support', Icon: HelpCircle, color: '#EF4444', bg: '#FEE2E2', route: '/help-support' as const },
-  { key: 'about', label: 'About Us', Icon: Info, color: '#6B7280', bg: '#F1F5F9', route: '/about-us' as const },
+type Item = { icon: any; label: string; route?: Href };
+
+const ITEMS: Item[] = [
+  { icon: User, label: 'Personal information', route: '/personal-info' },
+  { icon: ClipboardList, label: 'My orders', route: '/(tabs)/orders' },
+  { icon: HelpCircle, label: 'Help & support', route: '/help-support' },
+  { icon: Info, label: 'About us', route: '/about-us' },
+  { icon: Shield, label: 'Privacy policy', route: '/privacy-policy' },
+  { icon: FileText, label: 'Terms & conditions', route: '/terms-conditions' },
 ];
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
+  const sheet = useSheet();
+  const name = useAuth((s) => s.name);
+  const phone = useAuth((s) => s.phone);
+  const signOut = useAuth((s) => s.signOut);
+  const clear = useCart((s) => s.clear);
+
+  const confirmLogout = () => {
+    sheet.show({
+      variant: 'warning',
+      title: 'Log out?',
+      message: 'You will need to verify your number again to log back in.',
+      confirmText: 'Log out',
+      cancelText: 'Cancel',
+      onConfirm: () => { signOut(); clear(); router.replace('/login'); },
+    });
+  };
+
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 6, paddingBottom: 24 }}>
-        <View style={styles.profileCard}>
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
-            </View>
-            <View style={styles.editBadge}><Pencil size={10} color="#FFFFFF" /></View>
+      <ScreenHeader title="Profile" showBack={false} />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+        <View style={styles.head}>
+          <View style={styles.avatar}><Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text></View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.name}>{name}</Text>
+            <Text style={styles.phone}>{phone || 'Not signed in'}</Text>
           </View>
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.meta}>{user.email}</Text>
-          <Text style={styles.meta}>{user.phone}</Text>
+          <Pressable style={styles.addrChip}>
+            <MapPin size={14} color={colors.foreground} />
+            <Text style={styles.addrText}>Home</Text>
+          </Pressable>
         </View>
 
-        <View style={styles.menuCard}>
-          {ITEMS.map((it, idx) => (
-            <React.Fragment key={it.key}>
-              {idx > 0 && <View style={styles.divider} />}
-              <Pressable style={styles.row} onPress={() => it.route && router.push(it.route)}>
-                <View style={[styles.rowIcon, { backgroundColor: it.bg }]}>
-                  <it.Icon size={16} color={it.color} />
-                </View>
-                <Text style={styles.rowLabel}>{it.label}</Text>
-                {it.badge && (
-                  <View style={styles.verifiedPill}>
-                    <Text style={styles.verifiedText}>{it.badge}</Text>
-                  </View>
-                )}
-                <ChevronRight size={16} color={colors.mutedForeground} />
-              </Pressable>
-            </React.Fragment>
+        <View style={styles.menu}>
+          {ITEMS.map((it) => (
+            <Pressable key={it.label} style={styles.menuRow} onPress={() => it.route && router.push(it.route)}>
+              <it.icon size={18} color={colors.foreground} />
+              <Text style={styles.menuLabel}>{it.label}</Text>
+              <ChevronRight size={18} color={colors.mutedForeground} />
+            </Pressable>
           ))}
+          <Pressable style={styles.menuRow} onPress={confirmLogout}>
+            <LogOut size={18} color={colors.danger} />
+            <Text style={[styles.menuLabel, { color: colors.danger }]}>Log out</Text>
+            <ChevronRight size={18} color={colors.mutedForeground} />
+          </Pressable>
         </View>
 
-        <Pressable style={styles.logoutRow} onPress={() => router.replace('/login')}>
-          <View style={[styles.rowIcon, { backgroundColor: '#FEE2E2' }]}>
-            <LogOut size={16} color={colors.danger} />
-          </View>
-          <Text style={[styles.rowLabel, { color: colors.danger }]}>Logout</Text>
-        </Pressable>
+        <Text style={styles.version}>Qizko v1.0.0</Text>
       </ScrollView>
+
+      <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { backgroundColor: colors.primary, paddingHorizontal: 6, paddingBottom: 12, alignItems: 'center' },
-  headerTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
-  profileCard: {
-    backgroundColor: colors.card, alignItems: 'center', paddingVertical: 16,
-    borderRadius: 6, borderWidth: 1, borderColor: colors.border, marginTop: 6,
-  },
-  avatarWrap: { position: 'relative' },
-  avatar: {
-    width: 72, height: 72, borderRadius: 36, backgroundColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#FFFFFF',
-  },
-  avatarText: { color: '#FFFFFF', fontWeight: '800', fontSize: 28 },
-  editBadge: {
-    position: 'absolute', bottom: 0, right: -2, width: 22, height: 22, borderRadius: 11,
-    backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#FFFFFF',
-  },
-  name: { color: colors.foreground, fontWeight: '800', fontSize: 16, marginTop: 6 },
-  meta: { color: colors.mutedForeground, fontSize: 12, marginTop: 1 },
-  menuCard: {
-    backgroundColor: colors.card, borderRadius: 6, borderWidth: 1,
-    borderColor: colors.border, marginTop: 6, overflow: 'hidden',
-  },
-  divider: { height: 1, backgroundColor: colors.border, marginLeft: 50 },
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 10, paddingHorizontal: 10, gap: 10,
-  },
-  rowIcon: { width: 30, height: 30, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  rowLabel: { flex: 1, color: colors.foreground, fontSize: 13, fontWeight: '600' },
-  verifiedPill: { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  verifiedText: { color: colors.success, fontSize: 10, fontWeight: '700' },
-  logoutRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card,
-    padding: 10, borderRadius: 6, borderWidth: 1, borderColor: colors.border,
-    marginTop: 6, gap: 10,
-  },
+  head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  avatar: { width: 48, height: 48, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+  avatarText: { color: colors.primaryForeground, fontFamily: fonts.displayBold, fontSize: 20 },
+  name: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground },
+  phone: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
+  addrChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 0 },
+  addrText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
+  menu: { marginTop: 6 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  menuLabel: { flex: 1, fontSize: 14, fontFamily: fonts.body, color: colors.foreground },
+  version: { textAlign: 'center', fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 16 },
 });

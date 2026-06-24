@@ -1,85 +1,76 @@
-import { Youtube, Calendar, Smartphone, MessageSquare, Users, BookOpen, Gift, CreditCard, Bell, Package } from 'lucide-react-native';
+// Qizko grocery catalog — mock data (no backend yet).
 
-export type Task = {
+export type Category = {
   id: string;
-  title: string;
-  subtitle: string;
-  reward: number;
-  category: 'video' | 'checkin' | 'install' | 'survey' | 'refer' | 'read';
-  description?: string;
-  steps?: string[];
-  notes?: string[];
-  tag?: 'trending' | 'high' | 'bonus';
+  name: string;
+  emoji: string;
 };
 
-export const mockTasks: Task[] = [
-  {
-    id: '1', title: 'Watch YouTube Video', subtitle: 'Watch a video for 60 sec',
-    reward: 5, category: 'video', tag: 'trending',
-    description: 'Watch the YouTube video for at least 60 seconds and earn reward instantly.',
-    steps: ['Click on Start Task', 'Watch the video for 60 seconds', 'Click on Submit', 'Get your reward'],
-    notes: ["Don't skip the video", 'Make sure you watch complete 60 sec', 'Only one attempt per day'],
-  },
-  { id: '2', title: 'Daily Check-in', subtitle: 'Check-in daily and earn', reward: 2, category: 'checkin' },
-  { id: '3', title: 'Install & Open App', subtitle: 'Install & open any app', reward: 10, category: 'install', tag: 'high' },
-  { id: '4', title: 'Complete Survey', subtitle: 'Complete survey and earn', reward: 15, category: 'survey', tag: 'high' },
-  { id: '5', title: 'Refer & Earn', subtitle: 'Invite friends and earn', reward: 20, category: 'refer', tag: 'bonus' },
-  { id: '6', title: 'Read Articles', subtitle: 'Read article for 30 sec', reward: 3, category: 'read' },
+export type Product = {
+  id: string;
+  name: string;
+  unit: string;
+  price: number;
+  mrp: number;
+  categoryId: string;
+  emoji: string;
+  inStock: boolean;
+};
+
+export const categories: Category[] = [
+  { id: 'all', name: 'All', emoji: '🛒' },
+  { id: 'fruits', name: 'Fruits', emoji: '🍎' },
+  { id: 'vegetables', name: 'Vegetables', emoji: '🥦' },
+  { id: 'dairy', name: 'Dairy', emoji: '🥛' },
+  { id: 'bakery', name: 'Bakery', emoji: '🍞' },
+  { id: 'snacks', name: 'Snacks', emoji: '🍪' },
+  { id: 'beverages', name: 'Beverages', emoji: '🧃' },
+  { id: 'staples', name: 'Staples', emoji: '🌾' },
 ];
 
-export const taskIconMap: Record<Task['category'], { Icon: any; bg: string; color: string }> = {
-  video: { Icon: Youtube, bg: '#FEE2E2', color: '#EF4444' },
-  checkin: { Icon: Calendar, bg: '#DBEAFE', color: '#2D6BFF' },
-  install: { Icon: Smartphone, bg: '#DCFCE7', color: '#22C55E' },
-  survey: { Icon: MessageSquare, bg: '#F3E8FF', color: '#8B5CF6' },
-  refer: { Icon: Users, bg: '#FFEDD5', color: '#F97316' },
-  read: { Icon: BookOpen, bg: '#DBEAFE', color: '#2D6BFF' },
-};
+export const products: Product[] = [
+  { id: 'p1', name: 'Fresh Bananas', unit: '1 dozen', price: 49, mrp: 60, categoryId: 'fruits', emoji: '🍌', inStock: true },
+  { id: 'p2', name: 'Red Apples', unit: '1 kg', price: 129, mrp: 160, categoryId: 'fruits', emoji: '🍎', inStock: true },
+  { id: 'p3', name: 'Alphonso Mango', unit: '1 kg', price: 199, mrp: 240, categoryId: 'fruits', emoji: '🥭', inStock: true },
+  { id: 'p4', name: 'Green Grapes', unit: '500 g', price: 79, mrp: 99, categoryId: 'fruits', emoji: '🍇', inStock: true },
+  { id: 'p5', name: 'Fresh Tomato', unit: '1 kg', price: 39, mrp: 55, categoryId: 'vegetables', emoji: '🍅', inStock: true },
+  { id: 'p6', name: 'Broccoli', unit: '500 g', price: 69, mrp: 90, categoryId: 'vegetables', emoji: '🥦', inStock: true },
+  { id: 'p7', name: 'Carrots', unit: '1 kg', price: 45, mrp: 60, categoryId: 'vegetables', emoji: '🥕', inStock: true },
+  { id: 'p8', name: 'Green Capsicum', unit: '500 g', price: 35, mrp: 50, categoryId: 'vegetables', emoji: '🫑', inStock: false },
+  { id: 'p9', name: 'Full Cream Milk', unit: '1 L', price: 66, mrp: 70, categoryId: 'dairy', emoji: '🥛', inStock: true },
+  { id: 'p10', name: 'Farm Eggs', unit: '6 pcs', price: 59, mrp: 72, categoryId: 'dairy', emoji: '🥚', inStock: true },
+  { id: 'p11', name: 'Cheese Slices', unit: '200 g', price: 119, mrp: 145, categoryId: 'dairy', emoji: '🧀', inStock: true },
+  { id: 'p12', name: 'Salted Butter', unit: '100 g', price: 54, mrp: 62, categoryId: 'dairy', emoji: '🧈', inStock: true },
+  { id: 'p13', name: 'Brown Bread', unit: '400 g', price: 45, mrp: 55, categoryId: 'bakery', emoji: '🍞', inStock: true },
+  { id: 'p14', name: 'Croissant', unit: '2 pcs', price: 89, mrp: 110, categoryId: 'bakery', emoji: '🥐', inStock: true },
+  { id: 'p15', name: 'Potato Chips', unit: '90 g', price: 30, mrp: 40, categoryId: 'snacks', emoji: '🍟', inStock: true },
+  { id: 'p16', name: 'Choco Cookies', unit: '250 g', price: 65, mrp: 80, categoryId: 'snacks', emoji: '🍪', inStock: true },
+  { id: 'p17', name: 'Orange Juice', unit: '1 L', price: 99, mrp: 120, categoryId: 'beverages', emoji: '🧃', inStock: true },
+  { id: 'p18', name: 'Cold Coffee', unit: '200 ml', price: 49, mrp: 60, categoryId: 'beverages', emoji: '☕', inStock: true },
+  { id: 'p19', name: 'Basmati Rice', unit: '5 kg', price: 549, mrp: 650, categoryId: 'staples', emoji: '🍚', inStock: true },
+  { id: 'p20', name: 'Wheat Atta', unit: '5 kg', price: 269, mrp: 320, categoryId: 'staples', emoji: '🌾', inStock: true },
+  { id: 'p21', name: 'Toor Dal', unit: '1 kg', price: 149, mrp: 180, categoryId: 'staples', emoji: '🫘', inStock: true },
+  { id: 'p22', name: 'Strawberry', unit: '250 g', price: 99, mrp: 130, categoryId: 'fruits', emoji: '🍓', inStock: true },
+  { id: 'p23', name: 'Onion', unit: '1 kg', price: 35, mrp: 48, categoryId: 'vegetables', emoji: '🧅', inStock: true },
+  { id: 'p24', name: 'Curd', unit: '400 g', price: 40, mrp: 50, categoryId: 'dairy', emoji: '🥣', inStock: true },
+];
 
-export type Transaction = {
+export type OrderStatus = 'Placed' | 'Packed' | 'Out for delivery' | 'Delivered';
+
+export type Order = {
   id: string;
-  type: 'credit' | 'debit';
-  title: string;
-  subtitle: string;
-  amount: number;
   date: string;
-  status: 'Success' | 'Pending' | 'Failed';
-  icon: 'task' | 'survey' | 'withdraw' | 'refer' | 'read';
+  items: number;
+  total: number;
+  status: OrderStatus;
 };
 
-export const mockTransactions: Transaction[] = [
-  { id: 't1', type: 'credit', title: 'Task Reward', subtitle: 'Watch YouTube Video', amount: 5, date: '20 May 2024, 10:30 AM', status: 'Success', icon: 'task' },
-  { id: 't2', type: 'credit', title: 'Survey Reward', subtitle: 'Complete Survey', amount: 15, date: '20 May 2024, 09:15 AM', status: 'Success', icon: 'survey' },
-  { id: 't3', type: 'debit', title: 'Withdraw to UPI', subtitle: 'rahul@upi', amount: 200, date: '19 May 2024, 08:45 PM', status: 'Success', icon: 'withdraw' },
-  { id: 't4', type: 'credit', title: 'Refer Reward', subtitle: 'Referral Bonus', amount: 20, date: '19 May 2024, 06:20 PM', status: 'Success', icon: 'refer' },
-  { id: 't5', type: 'credit', title: 'Task Reward', subtitle: 'Read Article', amount: 3, date: '18 May 2024, 11:10 AM', status: 'Success', icon: 'read' },
+export const mockOrders: Order[] = [
+  { id: 'QZ1042', date: '24 Jun 2026, 10:20 AM', items: 6, total: 642, status: 'Out for delivery' },
+  { id: 'QZ1038', date: '21 Jun 2026, 06:45 PM', items: 3, total: 218, status: 'Delivered' },
+  { id: 'QZ1031', date: '17 Jun 2026, 09:10 AM', items: 9, total: 1124, status: 'Delivered' },
 ];
 
-export type AppNotification = {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  type: 'earn' | 'withdraw' | 'task' | 'refer';
-};
-
-export const mockNotifications: AppNotification[] = [
-  { id: 'n1', title: 'You earned ₹5.00', message: 'for Watching Video', time: '2 min ago', type: 'earn' },
-  { id: 'n2', title: 'You earned ₹15.00', message: 'for Completing Survey', time: '10 min ago', type: 'earn' },
-  { id: 'n3', title: '₹200.00 Withdraw Success', message: 'to rahul@upi', time: '1 day ago', type: 'withdraw' },
-  { id: 'n4', title: 'New Task Available', message: 'Check new tasks and earn', time: '2 days ago', type: 'task' },
-  { id: 'n5', title: 'Refer Bonus ₹20.00', message: 'You earned referral bonus', time: '3 days ago', type: 'refer' },
-];
-
-export const user = {
-  name: 'Rahul Kumar',
-  email: 'rahulkumar@gmail.com',
-  phone: '+91 9876543210',
-  referralCode: 'RAHUL1234',
-  totalReferrals: 120,
-  referralEarnings: 2400,
-  balance: 1250.5,
-  todayEarnings: 120.5,
-  totalPoints: 8450,
-  kycVerified: true,
-};
+export function getProductById(id: string) {
+  return products.find((p) => p.id === id);
+}
