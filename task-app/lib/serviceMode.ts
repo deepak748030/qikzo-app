@@ -8,7 +8,8 @@ type State = {
 };
 
 export const useServiceMode = create<State>((set) => ({
-    mode: 'delivery',
+    // Default landing experience is Rides (not Delivery).
+    mode: 'ride',
     setMode: (m) => set({ mode: m }),
 }));
 

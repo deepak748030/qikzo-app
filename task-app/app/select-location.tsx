@@ -23,6 +23,9 @@ export default function SelectLocationScreen() {
     const setDraft = useBooking((s) => s.setDraft);
     const draft = useBooking((s) => s.draft);
 
+    const hasSavedCoord =
+        which === 'pickup' ? !!draft.pickupCoord : !!(draft.dropCoord || draft.pickupCoord);
+
     const initial =
         which === 'pickup'
             ? draft.pickupCoord || DEFAULT_CENTER
@@ -33,8 +36,33 @@ export default function SelectLocationScreen() {
         which === 'pickup' ? draft.pickup : draft.drop
     );
     const [resolving, setResolving] = useState(false);
-    const [locating, setLocating] = useState(false);
+    const [locating, setLocating] = useState(!hasSavedCoord);
     const [confirming, setConfirming] = useState(false);
+
+    // Auto-detect user's current location on first open when no saved coord exists.
+    useEffect(() => {
+        if (hasSavedCoord) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    if (!cancelled) setLocating(false);
+                    return;
+                }
+                const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                if (cancelled) return;
+                setCenter({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+            } catch {
+                // keep default center silently
+            } finally {
+                if (!cancelled) setLocating(false);
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
 
     // Reverse geocode the current map center (debounced).
     useEffect(() => {

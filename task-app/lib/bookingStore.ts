@@ -15,8 +15,9 @@ type Draft = {
 };
 
 const initialDraft: Draft = {
-    mode: 'delivery',
-    categoryId: 'groceries',
+    // Default to a ride experience (matches the home screen default toggle).
+    mode: 'ride',
+    categoryId: 'bike',
     pickup: '',
     drop: '',
     pickupCoord: null,

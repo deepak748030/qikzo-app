@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
 import { Search, Bell, MapPin, ChevronRight, Package, Navigation } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
 import Brand from '@/components/Brand';
@@ -14,6 +15,7 @@ import { useServiceMode, rideOptions } from '@/lib/serviceMode';
 
 const DEFAULT_CENTER = { lat: 28.6139, lng: 77.209 };
 
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -24,18 +26,51 @@ export default function HomeScreen() {
   const mode = useServiceMode((s) => s.mode);
   const setMode = useServiceMode((s) => s.setMode);
 
+  // IMPORTANT: only patch the fields we actually want to change.
+  // Passing `drop: ''` here would wipe a drop the user already pinned on the map,
+  // forcing them back into location selection — that's the bug we're fixing.
   const openWithCategory = (categoryId: string, drop?: string) => {
-    setDraft({ mode, categoryId, drop: drop || '' });
+    const patch: Parameters<typeof setDraft>[0] = { mode, categoryId };
+    if (drop) patch.drop = drop;
+    setDraft(patch);
     router.push('/book-delivery');
   };
 
   const openMap = (field: 'pickup' | 'drop') => {
+    // Don't reset existing pickup/drop here — just remember the active mode.
     setDraft({ mode });
     router.push({ pathname: '/select-location', params: { field } });
   };
 
   const recent = bookings.slice(0, 3);
-  const mapCenter = draft.pickupCoord || DEFAULT_CENTER;
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Auto-detect current location for the home map preview (silent — no prompts on home).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        let granted = status === 'granted';
+        if (!granted) {
+          const req = await Location.requestForegroundPermissionsAsync();
+          granted = req.status === 'granted';
+        }
+        if (!granted) return;
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (cancelled) return;
+        const coord = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        setMyLoc(coord);
+        if (!draft.pickupCoord) setDraft({ pickupCoord: coord });
+      } catch { }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const mapCenter = draft.pickupCoord || myLoc || DEFAULT_CENTER;
+  const mapPickup = draft.pickupCoord || myLoc || undefined;
+
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 6 }]}>
@@ -68,7 +103,7 @@ export default function HomeScreen() {
         <View style={styles.mapBox}>
           <LeafletMap
             center={mapCenter}
-            pickup={draft.pickupCoord || undefined}
+            pickup={mapPickup}
             drop={draft.dropCoord || undefined}
             style={{ height: 170 }}
           />

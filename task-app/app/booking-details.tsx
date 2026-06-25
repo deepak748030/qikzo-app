@@ -153,15 +153,16 @@ export default function BookingDetailsScreen() {
                         {FLOW.map((step, i) => {
                             const done = i <= currentIdx;
                             const current = i === currentIdx;
+                            const isLast = i === FLOW.length - 1;
                             return (
-                                <View key={step} style={styles.timelineRow}>
+                                <View key={step} style={[styles.timelineRow, isLast && { minHeight: 0 }]}>
                                     <View style={styles.timelineLeft}>
                                         <View style={[styles.timelineDot, done && styles.timelineDotDone, current && styles.timelineDotCurrent]} />
-                                        {i < FLOW.length - 1 ? (
+                                        {!isLast ? (
                                             <View style={[styles.timelineBar, done && styles.timelineBarDone]} />
                                         ) : null}
                                     </View>
-                                    <Text style={[styles.timelineText, done && styles.timelineTextDone]}>{step}</Text>
+                                    <Text style={[styles.timelineText, done && styles.timelineTextDone, isLast && { paddingBottom: 0 }]}>{step}</Text>
                                 </View>
                             );
                         })}
@@ -182,9 +183,6 @@ export default function BookingDetailsScreen() {
                         </View>
                         <Pressable style={styles.callBtn} onPress={onCallRider}>
                             <Phone size={16} color={colors.foreground} />
-                        </Pressable>
-                        <Pressable style={styles.callBtn}>
-                            <MessageCircle size={16} color={colors.foreground} />
                         </Pressable>
                     </View>
                 ) : null}
@@ -277,14 +275,14 @@ const styles = StyleSheet.create({
     statusSub: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
 
     timeline: { marginTop: 8, marginHorizontal: 6, paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
-    timelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, minHeight: 26 },
-    timelineLeft: { alignItems: 'center', width: 12 },
-    timelineDot: { width: 10, height: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: 0 },
+    timelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, minHeight: 28 },
+    timelineLeft: { alignItems: 'center', width: 10, alignSelf: 'stretch' },
+    timelineDot: { width: 10, height: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: 0, marginTop: 3 },
     timelineDotDone: { backgroundColor: colors.foreground, borderColor: colors.foreground },
     timelineDotCurrent: { backgroundColor: colors.accent, borderColor: colors.accent },
-    timelineBar: { flex: 1, width: 1, backgroundColor: colors.border, marginVertical: 2 },
+    timelineBar: { flex: 1, width: 1, backgroundColor: colors.border, marginTop: 2, marginBottom: 0 },
     timelineBarDone: { backgroundColor: colors.foreground },
-    timelineText: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, paddingBottom: 10 },
+    timelineText: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, paddingBottom: 12, flex: 1, lineHeight: 16 },
     timelineTextDone: { color: colors.foreground, fontFamily: fonts.bodyBold },
 
     riderCard: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
