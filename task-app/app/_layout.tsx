@@ -45,6 +45,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="book-delivery" />
         <Stack.Screen name="booking-details" />
+        <Stack.Screen name="select-location" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="personal-info" />
         <Stack.Screen name="help-support" />

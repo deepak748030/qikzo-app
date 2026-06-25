@@ -2,14 +2,16 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Banknote, Wallet, Phone, FileText, Bike } from 'lucide-react-native';
+import { Banknote, Wallet, Phone, FileText, Bike, ChevronRight } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
+import LeafletMap from '@/components/LeafletMap';
 import { useSheet } from '@/lib/useSheet';
 import { categories, estimateTrip, savedPlaces } from '@/lib/mockData';
+import { rideOptions, estimateRide } from '@/lib/serviceMode';
 import { newBookingId, useBooking } from '@/lib/bookingStore';
 
 export default function BookDeliveryScreen() {
@@ -21,17 +23,28 @@ export default function BookDeliveryScreen() {
     const sheet = useSheet();
     const [loading, setLoading] = useState(false);
 
+    const isRide = draft.mode === 'ride';
+
     const trip = useMemo(() => {
         if (!draft.pickup.trim() || !draft.drop.trim()) return null;
-        return estimateTrip(draft.pickup, draft.drop);
-    }, [draft.pickup, draft.drop]);
+        const base = estimateTrip(draft.pickup, draft.drop);
+        if (isRide) {
+            const r = estimateRide(base.distanceKm, draft.categoryId);
+            return { ...base, ...r };
+        }
+        return base;
+    }, [draft.pickup, draft.drop, draft.categoryId, isRide]);
+
+    const openMap = (field: 'pickup' | 'drop') => {
+        router.push({ pathname: '/select-location', params: { field } });
+    };
 
     const confirm = () => {
         if (!draft.pickup.trim() || !draft.drop.trim()) {
             sheet.show({ variant: 'error', title: 'Locations required', message: 'Please set both pickup and drop locations.' });
             return;
         }
-        if (!draft.notes.trim()) {
+        if (!isRide && !draft.notes.trim()) {
             sheet.show({ variant: 'error', title: 'Add a note', message: 'Tell the rider what to pick up — e.g. "2L milk, bread, dal".' });
             return;
         }
@@ -43,7 +56,7 @@ export default function BookDeliveryScreen() {
             categoryId: draft.categoryId,
             pickup: draft.pickup.trim(),
             drop: draft.drop.trim(),
-            notes: draft.notes.trim(),
+            notes: draft.notes.trim() || (isRide ? 'Passenger ride' : ''),
             recipientPhone: draft.recipientPhone.trim() || undefined,
             payment: draft.payment,
             distanceKm: trip.distanceKm,
@@ -59,25 +72,39 @@ export default function BookDeliveryScreen() {
         }, 600);
     };
 
+    const categoryList = isRide ? rideOptions : categories;
+
     return (
         <View style={styles.container}>
-            <ScreenHeader title="Book a delivery" />
+            <ScreenHeader title={isRide ? 'Book a ride' : 'Book a delivery'} />
             <ScrollView
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 140 }}
+                contentContainerStyle={{ paddingBottom: 160 }}
             >
-                {/* Category chips */}
+                {/* Route map preview — full-bleed */}
+                {(draft.pickupCoord || draft.dropCoord) ? (
+                    <View style={styles.mapWrap}>
+                        <LeafletMap
+                            center={draft.pickupCoord || draft.dropCoord!}
+                            pickup={draft.pickupCoord || undefined}
+                            drop={draft.dropCoord || undefined}
+                            style={{ height: 150 }}
+                        />
+                    </View>
+                ) : null}
+
+                {/* Category / Ride option chips */}
                 <View style={styles.section}>
-                    <Text style={styles.label}>What are you sending?</Text>
+                    <Text style={styles.label}>{isRide ? 'Ride type' : 'What are you sending?'}</Text>
                     <FlatList
                         horizontal
-                        data={categories}
-                        keyExtractor={(c) => c.id}
+                        data={categoryList}
+                        keyExtractor={(c: any) => c.id}
                         showsHorizontalScrollIndicator={false}
                         ItemSeparatorComponent={() => <View style={{ width: 6 }} />}
                         contentContainerStyle={{ paddingHorizontal: 6 }}
-                        renderItem={({ item }) => {
+                        renderItem={({ item }: any) => {
                             const active = draft.categoryId === item.id;
                             return (
                                 <Pressable
@@ -92,27 +119,37 @@ export default function BookDeliveryScreen() {
                     />
                 </View>
 
-                {/* Locations */}
+                {/* Trip — map-based location picker */}
                 <View style={styles.section}>
                     <Text style={styles.label}>Trip</Text>
                     <View style={styles.tripCard}>
-                        <View style={styles.tripRow}>
+                        <Pressable style={styles.tripRow} onPress={() => openMap('pickup')}>
                             <View style={[styles.pinDot, { backgroundColor: colors.accent }]} />
-                            <Input
-                                placeholder="Pickup location"
-                                value={draft.pickup}
-                                onChangeText={(v) => setDraft({ pickup: v })}
-                            />
-                        </View>
+                            <View style={styles.tripTextWrap}>
+                                <Text style={styles.tripFieldLabel}>PICK UP</Text>
+                                <Text
+                                    style={[styles.tripValue, !draft.pickup && styles.tripPlaceholder]}
+                                    numberOfLines={2}
+                                >
+                                    {draft.pickup || 'Tap to set on the map'}
+                                </Text>
+                            </View>
+                            <ChevronRight size={16} color={colors.mutedForeground} />
+                        </Pressable>
                         <View style={styles.tripDivider} />
-                        <View style={styles.tripRow}>
+                        <Pressable style={styles.tripRow} onPress={() => openMap('drop')}>
                             <View style={[styles.pinDot, { backgroundColor: colors.foreground }]} />
-                            <Input
-                                placeholder="Drop location"
-                                value={draft.drop}
-                                onChangeText={(v) => setDraft({ drop: v })}
-                            />
-                        </View>
+                            <View style={styles.tripTextWrap}>
+                                <Text style={styles.tripFieldLabel}>{isRide ? 'DROP / DESTINATION' : 'DROP'}</Text>
+                                <Text
+                                    style={[styles.tripValue, !draft.drop && styles.tripPlaceholder]}
+                                    numberOfLines={2}
+                                >
+                                    {draft.drop || 'Tap to set on the map'}
+                                </Text>
+                            </View>
+                            <ChevronRight size={16} color={colors.mutedForeground} />
+                        </Pressable>
                     </View>
 
                     {/* Saved places shortcut */}
@@ -121,44 +158,52 @@ export default function BookDeliveryScreen() {
                             <Pressable
                                 key={p.id}
                                 style={styles.savedChip}
-                                onPress={() => setDraft({ drop: p.address })}
+                                onPress={() => setDraft({ drop: p.address, dropCoord: null })}
                             >
                                 <Text style={{ fontSize: 12 }}>{p.emoji}</Text>
-                                <Text style={styles.savedChipText}>Drop at {p.label}</Text>
+                                <Text style={styles.savedChipText} numberOfLines={1}>Drop at {p.label}</Text>
                             </Pressable>
                         ))}
                     </View>
                 </View>
 
-                {/* Items / notes */}
-                <View style={styles.section}>
-                    <Text style={styles.label}>What needs to be picked up?</Text>
-                    <View style={styles.noteWrap}>
-                        <FileText size={14} color={colors.mutedForeground} style={{ marginTop: 8 }} />
-                        <Input
-                            placeholder={'List the items, sizes, brand notes...\ne.g. 2L Amul milk, brown bread, 6 eggs'}
-                            value={draft.notes}
-                            onChangeText={(v) => setDraft({ notes: v })}
-                            multiline
-                            numberOfLines={4}
-                            style={{ minHeight: 70, textAlignVertical: 'top' }}
-                        />
+                {/* Notes — only for deliveries */}
+                {!isRide ? (
+                    <View style={styles.section}>
+                        <Text style={styles.label}>What needs to be picked up?</Text>
+                        <View style={styles.noteWrap}>
+                            <FileText size={14} color={colors.mutedForeground} style={{ marginTop: 10, marginRight: 4 }} />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Input
+                                    placeholder={'List the items, sizes, brand notes...\ne.g. 2L Amul milk, brown bread, 6 eggs'}
+                                    value={draft.notes}
+                                    onChangeText={(v) => setDraft({ notes: v })}
+                                    multiline
+                                    numberOfLines={4}
+                                    style={{ minHeight: 70, textAlignVertical: 'top' }}
+                                />
+                            </View>
+                        </View>
                     </View>
-                </View>
+                ) : null}
 
                 {/* Recipient phone */}
                 <View style={styles.section}>
-                    <Text style={styles.label}>Recipient contact (optional)</Text>
+                    <Text style={styles.label}>
+                        {isRide ? 'Co-passenger contact (optional)' : 'Recipient contact (optional)'}
+                    </Text>
                     <View style={styles.noteWrap}>
-                        <Phone size={14} color={colors.mutedForeground} style={{ marginTop: 10 }} />
-                        <Input
-                            prefix="+91"
-                            placeholder="98765 43210"
-                            keyboardType="number-pad"
-                            maxLength={10}
-                            value={draft.recipientPhone}
-                            onChangeText={(v) => setDraft({ recipientPhone: v.replace(/[^0-9]/g, '') })}
-                        />
+                        <Phone size={14} color={colors.mutedForeground} style={{ marginTop: 12, marginRight: 4 }} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Input
+                                prefix="+91"
+                                placeholder="98765 43210"
+                                keyboardType="number-pad"
+                                maxLength={10}
+                                value={draft.recipientPhone}
+                                onChangeText={(v) => setDraft({ recipientPhone: v.replace(/[^0-9]/g, '') })}
+                            />
+                        </View>
                     </View>
                 </View>
 
@@ -189,22 +234,27 @@ export default function BookDeliveryScreen() {
                         <Text style={styles.label}>Fare estimate</Text>
                         <View style={styles.bill}>
                             <Row label={`Base fare`} value={`₹${trip.base}`} />
-                            <Row label={`Distance · ${trip.distanceKm.toFixed(1)} km × ₹${trip.perKm}`} value={`₹${Math.round(trip.distanceKm * trip.perKm)}`} />
+                            <Row
+                                label={`Distance · ${trip.distanceKm.toFixed(1)} km × ₹${trip.perKm}`}
+                                value={`₹${Math.round(trip.distanceKm * trip.perKm)}`}
+                            />
                             <View style={styles.billDivider} />
                             <Row label="Total" value={`₹${trip.price}`} bold />
-                            <Text style={styles.etaText}>Estimated arrival in {trip.etaMin} min after pickup</Text>
+                            <Text style={styles.etaText}>
+                                {isRide ? `Rider arrives in ~${trip.etaMin} min` : `Estimated arrival in ${trip.etaMin} min after pickup`}
+                            </Text>
                         </View>
                     </View>
                 ) : null}
             </ScrollView>
 
             {/* Sticky footer */}
-            <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
-                <View style={{ flex: 1 }}>
+            <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                     {trip ? (
                         <>
                             <Text style={styles.footPrice}>₹{trip.price}</Text>
-                            <Text style={styles.footMeta}>
+                            <Text style={styles.footMeta} numberOfLines={1}>
                                 <Bike size={11} color={colors.mutedForeground} />{'  '}
                                 {trip.distanceKm.toFixed(1)} km · ~{trip.etaMin} min
                             </Text>
@@ -212,11 +262,16 @@ export default function BookDeliveryScreen() {
                     ) : (
                         <>
                             <Text style={styles.footPrice}>—</Text>
-                            <Text style={styles.footMeta}>Enter pickup & drop to see fare</Text>
+                            <Text style={styles.footMeta} numberOfLines={1}>Set pickup & drop to see fare</Text>
                         </>
                     )}
                 </View>
-                <Button label="Confirm booking" loading={loading} onPress={confirm} style={styles.confirmBtn} />
+                <Button
+                    label={isRide ? 'Confirm ride' : 'Confirm booking'}
+                    loading={loading}
+                    onPress={confirm}
+                    style={styles.confirmBtn}
+                />
             </View>
 
             <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
@@ -227,7 +282,7 @@ export default function BookDeliveryScreen() {
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
     return (
         <View style={styles.billRow}>
-            <Text style={[styles.billLabel, bold && styles.billBold]}>{label}</Text>
+            <Text style={[styles.billLabel, bold && styles.billBold]} numberOfLines={1}>{label}</Text>
             <Text style={[styles.billValue, bold && styles.billBold]}>{value}</Text>
         </View>
     );
@@ -235,6 +290,9 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
+    // Full-bleed map at the top
+    mapWrap: { borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: '#f3f3f3' },
+
     section: { paddingHorizontal: 6, marginTop: 10 },
     label: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.4, marginBottom: 6, textTransform: 'uppercase' },
 
@@ -245,15 +303,21 @@ const styles = StyleSheet.create({
     catChipLabelActive: { color: colors.primaryForeground },
 
     tripCard: { borderWidth: 1, borderColor: colors.foreground, padding: 6, borderRadius: 0, backgroundColor: colors.card },
-    tripRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    tripDivider: { height: 1, backgroundColor: colors.divider, marginLeft: 20, marginVertical: 4 },
+    tripRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 2 },
+    tripTextWrap: { flex: 1, minWidth: 0 },
+    tripFieldLabel: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: colors.mutedForeground },
+    tripValue: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground, marginTop: 2 },
+    tripPlaceholder: { color: colors.mutedForeground },
+    tripDivider: { height: 1, backgroundColor: colors.divider, marginLeft: 20, marginVertical: 2 },
     pinDot: { width: 10, height: 10, marginLeft: 2 },
 
     savedRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-    savedChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 0, backgroundColor: colors.card },
-    savedChipText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground },
+    savedChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 0, backgroundColor: colors.card, maxWidth: '100%' },
+    savedChipText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground, flexShrink: 1 },
 
-    noteWrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+    // Important fix: noteWrap was letting Input overflow the right edge. Now the Input
+    // sits inside a flex:1, minWidth:0 wrapper so it never escapes the parent width.
+    noteWrap: { flexDirection: 'row', alignItems: 'flex-start' },
 
     payRow: { flexDirection: 'row', gap: 6 },
     payBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
@@ -261,14 +325,17 @@ const styles = StyleSheet.create({
     payText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
 
     bill: { borderWidth: 1, borderColor: colors.border, padding: 10, borderRadius: 0, backgroundColor: colors.card },
-    billRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
-    billLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, flex: 1 },
+    billRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, gap: 8 },
+    billLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, flex: 1, minWidth: 0 },
     billValue: { fontSize: 12, color: colors.foreground, fontFamily: fonts.bodyBold },
     billBold: { fontSize: 15, color: colors.foreground, fontFamily: fonts.displayBold },
     billDivider: { height: 1, backgroundColor: colors.divider, marginVertical: 4 },
     etaText: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 4 },
 
-    footer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
+    footer: {
+        flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 6, paddingTop: 8,
+        borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card,
+    },
     footPrice: { fontSize: 18, fontFamily: fonts.displayBold, color: colors.foreground },
     footMeta: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
     confirmBtn: { flex: 1.2 },

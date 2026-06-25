@@ -1,19 +1,26 @@
 import { create } from 'zustand';
 import { Booking, BookingStatus, pickRider, seedBookings } from './mockData';
+import { LatLng } from '@/components/LeafletMap';
 
 type Draft = {
-    categoryId: string;
+    mode: 'ride' | 'delivery';
+    categoryId: string;     // delivery category OR ride option id
     pickup: string;
     drop: string;
+    pickupCoord: LatLng | null;
+    dropCoord: LatLng | null;
     notes: string;
     recipientPhone: string;
     payment: 'cash' | 'upi';
 };
 
 const initialDraft: Draft = {
+    mode: 'delivery',
     categoryId: 'groceries',
     pickup: '',
     drop: '',
+    pickupCoord: null,
+    dropCoord: null,
     notes: '',
     recipientPhone: '',
     payment: 'cash',

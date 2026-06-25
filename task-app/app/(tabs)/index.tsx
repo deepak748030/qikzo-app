@@ -2,26 +2,40 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Search, Bell, MapPin, ChevronRight, Package } from 'lucide-react-native';
+import { Search, Bell, MapPin, ChevronRight, Package, Navigation } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
 import Brand from '@/components/Brand';
+import ServiceToggle from '@/components/ServiceToggle';
+import LeafletMap from '@/components/LeafletMap';
 import { categories, savedPlaces, DeliveryCategory } from '@/lib/mockData';
 import { useBooking } from '@/lib/bookingStore';
 import { useAuth } from '@/lib/authStore';
+import { useServiceMode, rideOptions } from '@/lib/serviceMode';
+
+const DEFAULT_CENTER = { lat: 28.6139, lng: 77.209 };
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const setDraft = useBooking((s) => s.setDraft);
+  const draft = useBooking((s) => s.draft);
   const bookings = useBooking((s) => s.bookings);
   const name = useAuth((s) => s.name);
+  const mode = useServiceMode((s) => s.mode);
+  const setMode = useServiceMode((s) => s.setMode);
 
   const openWithCategory = (categoryId: string, drop?: string) => {
-    setDraft({ categoryId, drop: drop || '' });
+    setDraft({ mode, categoryId, drop: drop || '' });
     router.push('/book-delivery');
   };
 
+  const openMap = (field: 'pickup' | 'drop') => {
+    setDraft({ mode });
+    router.push({ pathname: '/select-location', params: { field } });
+  };
+
   const recent = bookings.slice(0, 3);
+  const mapCenter = draft.pickupCoord || DEFAULT_CENTER;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 6 }]}>
@@ -34,52 +48,101 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
+      {/* Service toggle (Rides | Delivery) */}
+      <View style={styles.toggleWrap}>
+        <ServiceToggle value={mode} onChange={(m) => { setMode(m); setDraft({ mode: m }); }} />
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Greeting */}
         <View style={styles.greet}>
           <Text style={styles.hi}>Hey {name === 'Guest' ? 'there' : name.split(' ')[0]} 👋</Text>
-          <Text style={styles.headline}>Where do we need{'\n'}to deliver today?</Text>
+          <Text style={styles.headline}>
+            {mode === 'ride'
+              ? `Where to,\nlet's get you moving?`
+              : `Where do we need\nto deliver today?`}
+          </Text>
         </View>
 
-        {/* Where-to card (Uber-style) */}
-        <Pressable style={styles.whereCard} onPress={() => openWithCategory('groceries')}>
-          <View style={styles.whereRow}>
+        {/* Live map preview */}
+        <View style={styles.mapBox}>
+          <LeafletMap
+            center={mapCenter}
+            pickup={draft.pickupCoord || undefined}
+            drop={draft.dropCoord || undefined}
+            style={{ height: 170 }}
+          />
+          <Pressable style={styles.mapOverlayBtn} onPress={() => openMap('pickup')} hitSlop={6}>
+            <Navigation size={12} color={colors.foreground} />
+            <Text style={styles.mapOverlayText}>Use my location</Text>
+          </Pressable>
+        </View>
+
+        {/* Where-to card */}
+        <View style={styles.whereCard}>
+          <Pressable style={styles.whereRow} onPress={() => openMap('pickup')}>
             <View style={[styles.pinDot, styles.pinPickup]} />
             <View style={styles.whereTextWrap}>
               <Text style={styles.whereLabel}>PICK UP FROM</Text>
-              <Text style={styles.wherePlaceholder}>Tap to set pickup location</Text>
+              <Text style={[styles.wherePlaceholder, !draft.pickup && styles.muted]} numberOfLines={1}>
+                {draft.pickup || 'Tap to set pickup location'}
+              </Text>
             </View>
-          </View>
+            <ChevronRight size={16} color={colors.mutedForeground} />
+          </Pressable>
           <View style={styles.whereDivider} />
-          <View style={styles.whereRow}>
+          <Pressable style={styles.whereRow} onPress={() => openMap('drop')}>
             <View style={[styles.pinDot, styles.pinDrop]} />
             <View style={styles.whereTextWrap}>
-              <Text style={styles.whereLabel}>DELIVER TO</Text>
-              <Text style={styles.wherePlaceholder}>Where should the rider drop it?</Text>
+              <Text style={styles.whereLabel}>{mode === 'ride' ? 'GOING TO' : 'DELIVER TO'}</Text>
+              <Text style={[styles.wherePlaceholder, !draft.drop && styles.muted]} numberOfLines={1}>
+                {draft.drop || (mode === 'ride' ? 'Where are you headed?' : 'Where should the rider drop it?')}
+              </Text>
             </View>
-            <ChevronRight size={18} color={colors.mutedForeground} />
-          </View>
+            <ChevronRight size={16} color={colors.mutedForeground} />
+          </Pressable>
           <View style={styles.searchHint}>
             <Search size={14} color={colors.mutedForeground} />
-            <Text style={styles.searchHintText}>Search any address or landmark</Text>
+            <Text style={styles.searchHintText}>Search any address, landmark or area</Text>
           </View>
-        </Pressable>
-
-        {/* Categories */}
-        <Text style={styles.section}>What do you want to send?</Text>
-        <View style={styles.catGrid}>
-          {categories.map((c: DeliveryCategory) => (
-            <Pressable
-              key={c.id}
-              style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
-              onPress={() => openWithCategory(c.id)}
-            >
-              <Text style={styles.catEmoji}>{c.emoji}</Text>
-              <Text style={styles.catName}>{c.name}</Text>
-              <Text style={styles.catHint} numberOfLines={1}>{c.hint}</Text>
-            </Pressable>
-          ))}
         </View>
+
+        {/* Mode-specific section */}
+        {mode === 'ride' ? (
+          <>
+            <Text style={styles.section}>Choose your ride</Text>
+            <View style={styles.catGrid}>
+              {rideOptions.map((r) => (
+                <Pressable
+                  key={r.id}
+                  style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
+                  onPress={() => openWithCategory(r.id)}
+                >
+                  <Text style={styles.catEmoji}>{r.emoji}</Text>
+                  <Text style={styles.catName}>{r.name}</Text>
+                  <Text style={styles.catHint} numberOfLines={1}>{r.hint}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.section}>What do you want to send?</Text>
+            <View style={styles.catGrid}>
+              {categories.map((c: DeliveryCategory) => (
+                <Pressable
+                  key={c.id}
+                  style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
+                  onPress={() => openWithCategory(c.id)}
+                >
+                  <Text style={styles.catEmoji}>{c.emoji}</Text>
+                  <Text style={styles.catName}>{c.name}</Text>
+                  <Text style={styles.catHint} numberOfLines={1}>{c.hint}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* Saved places */}
         <Text style={styles.section}>Saved places</Text>
@@ -91,7 +154,7 @@ export default function HomeScreen() {
           ItemSeparatorComponent={() => <View style={{ width: 6 }} />}
           contentContainerStyle={{ paddingHorizontal: 6 }}
           renderItem={({ item }) => (
-            <Pressable style={styles.placeChip} onPress={() => openWithCategory('parcel', item.address)}>
+            <Pressable style={styles.placeChip} onPress={() => openWithCategory(mode === 'ride' ? 'bike' : 'parcel', item.address)}>
               <Text style={styles.placeEmoji}>{item.emoji}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.placeLabel}>{item.label}</Text>
@@ -111,7 +174,7 @@ export default function HomeScreen() {
         {recent.length === 0 ? (
           <View style={styles.emptyRecent}>
             <Package size={28} color={colors.mutedForeground} strokeWidth={1.5} />
-            <Text style={styles.emptyText}>No bookings yet. Book your first delivery above.</Text>
+            <Text style={styles.emptyText}>No bookings yet. Pick a destination above to begin.</Text>
           </View>
         ) : (
           <View>
@@ -123,7 +186,9 @@ export default function HomeScreen() {
               >
                 <View style={styles.recentIcon}>
                   <Text style={{ fontSize: 18 }}>
-                    {categories.find((c) => c.id === b.categoryId)?.emoji || '📦'}
+                    {categories.find((c) => c.id === b.categoryId)?.emoji
+                      || rideOptions.find((r) => r.id === b.categoryId)?.emoji
+                      || '📦'}
                   </Text>
                 </View>
                 <View style={{ flex: 1, marginLeft: 8 }}>
@@ -151,9 +216,25 @@ const styles = StyleSheet.create({
   bellBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
   bellDot: { position: 'absolute', top: 7, right: 8, width: 6, height: 6, backgroundColor: colors.accent },
 
+  toggleWrap: { marginTop: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+
   greet: { paddingHorizontal: 6, paddingTop: 10 },
   hi: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body },
-  headline: { fontSize: 24, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 4, lineHeight: 30, letterSpacing: -0.5 },
+  headline: { fontSize: 22, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 4, lineHeight: 28, letterSpacing: -0.5 },
+
+  // Banners and full-bleed elements stick to the screen edges.
+  mapBox: {
+    marginTop: 12,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border,
+    backgroundColor: '#f3f3f3', position: 'relative',
+  },
+  mapOverlayBtn: {
+    position: 'absolute', right: 8, bottom: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.foreground,
+    paddingHorizontal: 8, paddingVertical: 5,
+  },
+  mapOverlayText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground },
 
   whereCard: {
     marginHorizontal: 6, marginTop: 12, borderWidth: 1, borderColor: colors.foreground,
@@ -163,6 +244,7 @@ const styles = StyleSheet.create({
   whereTextWrap: { flex: 1 },
   whereLabel: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: colors.mutedForeground },
   wherePlaceholder: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground, marginTop: 2 },
+  muted: { color: colors.mutedForeground },
   pinDot: { width: 10, height: 10, marginLeft: 2 },
   pinPickup: { backgroundColor: colors.accent },
   pinDrop: { backgroundColor: colors.foreground },
