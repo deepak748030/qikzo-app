@@ -4,11 +4,12 @@ import { colors, fonts } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 
 const FAQS = [
-  { q: 'How fast is delivery?', a: 'Most orders are delivered within 30 minutes depending on your location.' },
-  { q: 'What are the delivery charges?', a: 'Delivery is free on orders above ₹199. Below that a flat ₹25 fee applies.' },
-  { q: 'How do I track my order?', a: 'Open the Orders tab to see live status of every order you place.' },
-  { q: 'What payment methods are accepted?', a: 'Cash on delivery, UPI, and credit/debit cards are supported.' },
-  { q: 'Can I cancel an order?', a: 'Orders can be cancelled before they are packed from the Orders tab.' },
+  { q: 'How does Qizko work?', a: 'Set your pickup and drop locations, add a note for what to fetch, confirm — and a nearby rider picks it up and delivers it to you.' },
+  { q: 'How is the price calculated?', a: 'A base fare of ₹25 plus ₹8 per kilometre of distance between pickup and drop. The total is shown before you confirm.' },
+  { q: 'Can I send anything?', a: 'Yes — groceries, food, medicines, parcels and documents. Illegal items, hazardous materials and alcohol are not allowed.' },
+  { q: 'How do I track my booking?', a: 'Open the Activity tab and tap your booking to see live status, rider details and trip timeline.' },
+  { q: 'Can I cancel a booking?', a: 'Yes, you can cancel before the rider picks up your items, from the booking details screen.' },
+  { q: 'Which payment methods are accepted?', a: 'Cash and UPI are supported today. Card payments are coming soon.' },
 ];
 
 export default function HelpSupport() {

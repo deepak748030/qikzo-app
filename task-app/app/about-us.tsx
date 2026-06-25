@@ -11,15 +11,21 @@ export default function AboutUs() {
       <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <View style={{ marginVertical: 10 }}><Brand size={34} /></View>
         <Text style={styles.p}>
-          Qizko is a fresh-grocery booking app built to make everyday shopping effortless. Order fruits,
-          vegetables, dairy, bakery and pantry staples in a few taps and get them delivered to your door in minutes.
+          Qizko is an on-demand point-to-point delivery app. Book a rider to pick up anything — groceries,
+          food, medicines, parcels — from any address in your city and drop it wherever you want, with live tracking
+          and transparent distance-based pricing.
         </Text>
         <Text style={styles.h}>Our mission</Text>
         <Text style={styles.p}>
-          To bring farm-fresh quality and honest pricing to every Indian household, with a simple and delightful app experience.
+          To make city logistics effortless for every Indian. Tap, set pickup & drop, and a captain on a bike does the rest.
         </Text>
         <Text style={styles.h}>Why Qizko</Text>
-        <Text style={styles.p}>• Fresh, quality-checked products{'\n'}• Fast 30-minute delivery{'\n'}• Transparent pricing & easy returns{'\n'}• Friendly customer support</Text>
+        <Text style={styles.p}>
+          • Anything, anywhere — pickup from any shop or address{'\n'}
+          • Verified riders, live trip tracking{'\n'}
+          • Honest distance-based fares with no surprises{'\n'}
+          • Cash or UPI — pay your way
+        </Text>
         <Text style={styles.muted}>Made with care in India 🇮🇳</Text>
       </ScrollView>
     </View>

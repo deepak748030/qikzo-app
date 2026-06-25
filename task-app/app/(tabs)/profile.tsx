@@ -1,19 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { router, Href } from 'expo-router';
-import { User, MapPin, ClipboardList, HelpCircle, Info, Shield, FileText, ChevronRight, LogOut } from 'lucide-react-native';
+import { User, MapPin, Activity, HelpCircle, Info, Shield, FileText, ChevronRight, LogOut, Bell } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useAuth } from '@/lib/authStore';
-import { useCart } from '@/lib/cartStore';
 
 type Item = { icon: any; label: string; route?: Href };
 
 const ITEMS: Item[] = [
   { icon: User, label: 'Personal information', route: '/personal-info' },
-  { icon: ClipboardList, label: 'My orders', route: '/(tabs)/orders' },
+  { icon: Activity, label: 'My bookings', route: '/(tabs)/activity' },
+  { icon: Bell, label: 'Notifications', route: '/notifications' },
   { icon: HelpCircle, label: 'Help & support', route: '/help-support' },
   { icon: Info, label: 'About us', route: '/about-us' },
   { icon: Shield, label: 'Privacy policy', route: '/privacy-policy' },
@@ -25,7 +25,6 @@ export default function ProfileScreen() {
   const name = useAuth((s) => s.name);
   const phone = useAuth((s) => s.phone);
   const signOut = useAuth((s) => s.signOut);
-  const clear = useCart((s) => s.clear);
 
   const confirmLogout = () => {
     sheet.show({
@@ -34,7 +33,7 @@ export default function ProfileScreen() {
       message: 'You will need to verify your number again to log back in.',
       confirmText: 'Log out',
       cancelText: 'Cancel',
-      onConfirm: () => { signOut(); clear(); router.replace('/login'); },
+      onConfirm: () => { signOut(); router.replace('/login'); },
     });
   };
 

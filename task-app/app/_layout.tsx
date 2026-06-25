@@ -42,11 +42,9 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="login" />
         <Stack.Screen name="otp" />
-
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="product-details" />
-        <Stack.Screen name="checkout" />
-        <Stack.Screen name="order-success" />
+        <Stack.Screen name="book-delivery" />
+        <Stack.Screen name="booking-details" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="personal-info" />
         <Stack.Screen name="help-support" />

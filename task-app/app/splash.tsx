@@ -61,8 +61,9 @@ export default function SplashAnimated() {
                 <Animated.Text style={[styles.word, { opacity: wordOpacity, transform: [{ translateY: wordTranslate }] }]}>
                     Qizko
                 </Animated.Text>
+                {/* Updated tagline for on-demand delivery positioning */}
                 <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
-                    fresh. fast. delivered.
+                    anything. anywhere. now.
                 </Animated.Text>
             </View>
             <Animated.Text style={[styles.foot, { opacity: taglineOpacity }]}>made in india</Animated.Text>

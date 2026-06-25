@@ -18,12 +18,12 @@ const ICONS = {
 } as const;
 
 const SEED: N[] = [
-    { id: '1', type: 'order', title: 'Order placed', body: 'Your order #QZ10293 has been confirmed and is being packed.', time: '2m ago', read: false },
-    { id: '2', type: 'delivery', title: 'Out for delivery', body: 'Rider Aman is on the way with your groceries.', time: '15m ago', read: false },
-    { id: '3', type: 'offer', title: '30% off on fruits', body: 'Fresh picks of the day, only for today. Tap to shop now.', time: '1h ago', read: true },
-    { id: '4', type: 'reward', title: 'You earned ₹20 cashback', body: 'Cashback credited to your Qizko wallet for order #QZ10250.', time: '3h ago', read: true },
-    { id: '5', type: 'info', title: 'New address added', body: 'Home address has been saved successfully.', time: 'Yesterday', read: true },
-    { id: '6', type: 'order', title: 'Order delivered', body: 'Order #QZ10180 was delivered. Hope you enjoy your groceries!', time: '2d ago', read: true },
+    { id: '1', type: 'order', title: 'Booking confirmed', body: 'Your booking #QZ2104 has been placed. Searching for a rider near you.', time: '2m ago', read: false },
+    { id: '2', type: 'delivery', title: 'Rider on the way', body: 'Rohit is arriving at your pickup location on Honda Activa.', time: '15m ago', read: false },
+    { id: '3', type: 'offer', title: 'Flat ₹30 off your next ride', body: 'Use code QIZ30 on your next delivery booking. Valid today only.', time: '1h ago', read: true },
+    { id: '4', type: 'reward', title: 'You earned ₹15 cashback', body: 'Cashback credited to your Qizko wallet for booking #QZ2018.', time: '3h ago', read: true },
+    { id: '5', type: 'info', title: 'New saved place added', body: 'Office address has been saved successfully.', time: 'Yesterday', read: true },
+    { id: '6', type: 'order', title: 'Booking delivered', body: 'Booking #QZ2014 was delivered. Hope everything reached safely!', time: '2d ago', read: true },
 ];
 
 export default function NotificationsScreen() {
@@ -76,7 +76,7 @@ export default function NotificationsScreen() {
                     <View style={styles.empty}>
                         <BellRing size={42} color={colors.mutedForeground} strokeWidth={1.4} />
                         <Text style={styles.emptyTitle}>No notifications yet</Text>
-                        <Text style={styles.emptySub}>Order updates and offers will show up here.</Text>
+                        <Text style={styles.emptySub}>Booking updates and offers will show up here.</Text>
                     </View>
                 }
             />

@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, useWindowDimensions, Pressable, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ShoppingBasket, Truck, ShieldCheck } from 'lucide-react-native';
+import { Bike, MapPin, Package } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
 import Button from '@/components/Button';
 import { useAuth } from '@/lib/authStore';
@@ -11,27 +11,28 @@ type Slide = {
     key: string;
     title: string;
     sub: string;
-    Icon: typeof ShoppingBasket;
+    Icon: typeof Bike;
 };
 
+// Onboarding copy: position Qizko as "get ANYTHING delivered" — not just groceries.
 const SLIDES: Slide[] = [
     {
         key: 's1',
-        title: 'Daily groceries\nat your door',
-        sub: 'Shop fresh fruits, vegetables, dairy and staples — handpicked every morning.',
-        Icon: ShoppingBasket,
+        title: 'Anything you need,\nat your doorstep',
+        sub: 'Groceries, food, medicines, parcels — book a rider and we will pick it up from anywhere in the city.',
+        Icon: Package,
     },
     {
         key: 's2',
-        title: 'Delivered in\nminutes',
-        sub: 'Riders near you pick and pack your order, so it reaches you while it is still fresh.',
-        Icon: Truck,
+        title: 'You choose where\nto pick & drop',
+        sub: 'Just enter the pickup and drop location. Add a note for what to bring. We handle the rest.',
+        Icon: MapPin,
     },
     {
         key: 's3',
-        title: 'Safe payments,\nzero hassle',
-        sub: 'UPI, cards or cash on delivery — pay the way that suits you, with full order tracking.',
-        Icon: ShieldCheck,
+        title: 'Riders nearby,\nlive tracking',
+        sub: 'Nearest captain accepts your booking in seconds. Track the trip live until it reaches you.',
+        Icon: Bike,
     },
 ];
 

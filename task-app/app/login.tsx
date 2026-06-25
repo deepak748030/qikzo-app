@@ -31,8 +31,9 @@ export default function LoginScreen() {
     <View style={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 16 }]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Brand size={38} />
-        <Text style={styles.headline}>Fresh groceries,{'\n'}delivered fast.</Text>
-        <Text style={styles.sub}>Login or sign up with your mobile number to start ordering.</Text>
+        {/* Updated copy: this is a Rapido/Uber-style on-demand delivery app, not a grocery store. */}
+        <Text style={styles.headline}>Get anything,{'\n'}delivered to your door.</Text>
+        <Text style={styles.sub}>Groceries, food, medicines, parcels — book a rider in seconds. Login with your mobile number to start.</Text>
 
         <View style={styles.form}>
           <Input
@@ -60,7 +61,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 6, backgroundColor: colors.background },
   scroll: { flexGrow: 1, justifyContent: 'center' },
-  headline: { fontSize: 30, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 28, letterSpacing: -0.5 },
+  headline: { fontSize: 30, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 28, letterSpacing: -0.5, lineHeight: 36 },
   sub: { fontSize: 14, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 8, lineHeight: 20 },
   form: { marginTop: 28, gap: 6 },
   btn: { marginTop: 6 },
