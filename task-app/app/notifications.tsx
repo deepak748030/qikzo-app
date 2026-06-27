@@ -21,7 +21,7 @@ const SEED: N[] = [
     { id: '1', type: 'order', title: 'Booking confirmed', body: 'Your booking #QZ2104 has been placed. Searching for a rider near you.', time: '2m ago', read: false },
     { id: '2', type: 'delivery', title: 'Rider on the way', body: 'Rohit is arriving at your pickup location on Honda Activa.', time: '15m ago', read: false },
     { id: '3', type: 'offer', title: 'Flat ₹30 off your next ride', body: 'Use code QIZ30 on your next delivery booking. Valid today only.', time: '1h ago', read: true },
-    { id: '4', type: 'reward', title: 'You earned ₹15 cashback', body: 'Cashback credited to your Qizko wallet for booking #QZ2018.', time: '3h ago', read: true },
+    { id: '4', type: 'reward', title: 'You earned ₹15 cashback', body: 'Cashback credited to your Qikzo wallet for booking #QZ2018.', time: '3h ago', read: true },
     { id: '5', type: 'info', title: 'New saved place added', body: 'Office address has been saved successfully.', time: 'Yesterday', read: true },
     { id: '6', type: 'order', title: 'Booking delivered', body: 'Booking #QZ2014 was delivered. Hope everything reached safely!', time: '2d ago', read: true },
 ];

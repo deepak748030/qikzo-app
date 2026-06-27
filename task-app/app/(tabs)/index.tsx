@@ -89,15 +89,7 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* Greeting */}
-        <View style={styles.greet}>
-          <Text style={styles.hi}>Hey {name === 'Guest' ? 'there' : name.split(' ')[0]} 👋</Text>
-          <Text style={styles.headline}>
-            {mode === 'ride'
-              ? `Where to,\nlet's get you moving?`
-              : `Where do we need\nto deliver today?`}
-          </Text>
-        </View>
+
 
         {/* Live map preview */}
         <View style={styles.mapBox}>

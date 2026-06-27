@@ -1,4 +1,4 @@
-// Qizko — point-to-point on-demand delivery (Rapido/Uber-style).
+// Qikzo — point-to-point on-demand delivery (Rapido/Uber-style).
 // Users book a rider to pick up anything (groceries, food, medicines, parcels)
 // from one location and drop it at another. Pricing is distance-based.
 

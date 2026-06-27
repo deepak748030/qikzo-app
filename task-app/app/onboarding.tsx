@@ -14,7 +14,7 @@ type Slide = {
     Icon: typeof Bike;
 };
 
-// Onboarding copy: position Qizko as "get ANYTHING delivered" — not just groceries.
+// Onboarding copy: position Qikzo as "get ANYTHING delivered" — not just groceries.
 const SLIDES: Slide[] = [
     {
         key: 's1',
@@ -60,7 +60,7 @@ export default function Onboarding() {
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 12 }]}>
             <View style={styles.topBar}>
-                <Text style={styles.brand}>Qizko</Text>
+                <Text style={styles.brand}>Qikzo</Text>
                 {index < SLIDES.length - 1 ? (
                     <Pressable onPress={finish} hitSlop={10}><Text style={styles.skip}>Skip</Text></Pressable>
                 ) : (

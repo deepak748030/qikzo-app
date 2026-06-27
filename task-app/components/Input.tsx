@@ -35,3 +35,4 @@ const styles = StyleSheet.create({
   prefix: { fontSize: 14, color: colors.foreground, fontFamily: fonts.bodyBold, marginRight: 6 },
   input: { flex: 1, paddingVertical: 8, fontSize: 14, color: colors.foreground, fontFamily: fonts.body },
 });
+

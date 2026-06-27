@@ -59,9 +59,11 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   var map = L.map('map', { zoomControl: false, attributionControl: true })
     .setView([${center.lat}, ${center.lng}], 15);
   L.control.zoom({ position: 'topright' }).addTo(map);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '© OpenStreetMap'
+  // Clean, modern basemap (CartoDB Voyager) — closer to the Uber/Rapido look than raw OSM.
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20,
+    subdomains: 'abcd',
+    attribution: '© OpenStreetMap © CARTO'
   }).addTo(map);
 
   function pinIcon(color){
@@ -74,8 +76,9 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   ${pickup ? `L.marker([${pickup.lat},${pickup.lng}], { icon: pinIcon('${colors.accent}') }).addTo(map);` : ''}
   ${drop ? `L.marker([${drop.lat},${drop.lng}], { icon: pinIcon('${colors.foreground}') }).addTo(map);` : ''}
   ${pickup && drop ? `
-    var line = L.polyline([[${pickup.lat},${pickup.lng}],[${drop.lat},${drop.lng}]], { color:'${colors.foreground}', weight:3, dashArray:'6,6' }).addTo(map);
-    map.fitBounds(line.getBounds(), { padding:[40,40] });
+    var lineBg = L.polyline([[${pickup.lat},${pickup.lng}],[${drop.lat},${drop.lng}]], { color:'${colors.primary}', weight:6, opacity:.9 }).addTo(map);
+    var line = L.polyline([[${pickup.lat},${pickup.lng}],[${drop.lat},${drop.lng}]], { color:'${colors.accent}', weight:3 }).addTo(map);
+    map.fitBounds(line.getBounds(), { padding:[50,50] });
   ` : ''}
 
   ${pickerMode ? `

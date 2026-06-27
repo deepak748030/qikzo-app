@@ -4,7 +4,7 @@ import { colors, fonts } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 
 const FAQS = [
-  { q: 'How does Qizko work?', a: 'Set your pickup and drop locations, add a note for what to fetch, confirm — and a nearby rider picks it up and delivers it to you.' },
+  { q: 'How does Qikzo work?', a: 'Set your pickup and drop locations, add a note for what to fetch, confirm — and a nearby rider picks it up and delivers it to you.' },
   { q: 'How is the price calculated?', a: 'A base fare of ₹25 plus ₹8 per kilometre of distance between pickup and drop. The total is shown before you confirm.' },
   { q: 'Can I send anything?', a: 'Yes — groceries, food, medicines, parcels and documents. Illegal items, hazardous materials and alcohol are not allowed.' },
   { q: 'How do I track my booking?', a: 'Open the Activity tab and tap your booking to see live status, rider details and trip timeline.' },
@@ -17,7 +17,7 @@ export default function HelpSupport() {
     <View style={styles.container}>
       <ScreenHeader title="Help & support" />
       <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <Text style={styles.lead}>Need a hand? Reach us anytime at support@qizko.in or call +91 1800 123 456.</Text>
+        <Text style={styles.lead}>Need a hand? Reach us anytime at support@qikzo.in or call +91 1800 123 456.</Text>
         <Text style={styles.section}>Frequently asked</Text>
         {FAQS.map((f) => (
           <View key={f.q} style={styles.card}>

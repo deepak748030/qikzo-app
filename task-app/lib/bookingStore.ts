@@ -58,3 +58,4 @@ export const useBooking = create<State>((set, get) => ({
 export function newBookingId() {
     return 'QZ' + String(2100 + Math.floor(Math.random() * 9000));
 }
+

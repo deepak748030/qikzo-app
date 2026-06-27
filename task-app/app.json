@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Qizko",
-    "slug": "qizko",
+    "name": "Qikzo",
+    "slug": "qikzo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "qizko",
+    "scheme": "qikzo",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/images/splash.png",
@@ -13,7 +13,7 @@
       "backgroundColor": "#FFFFFF"
     },
     "android": {
-      "package": "com.qizko.app",
+      "package": "com.qikzo.app",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
@@ -29,9 +29,9 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.qizko.app",
+      "bundleIdentifier": "com.qikzo.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Qizko uses your location to deliver groceries to your address."
+        "NSLocationWhenInUseUsageDescription": "Qikzo uses your location to deliver groceries to your address."
       }
     },
     "web": {
@@ -56,7 +56,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Qizko uses your location to deliver groceries to your address."
+          "locationWhenInUsePermission": "Qikzo uses your location to deliver groceries to your address."
         }
       ]
     ],
@@ -67,7 +67,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7c841ebd-ed43-431b-bd7a-28a714c9db50"
+        "projectId": "7f40b796-fdaf-4954-9eb2-76fb8993fe97"
       }
     }
   }

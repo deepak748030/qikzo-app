@@ -141,7 +141,7 @@ export default function BookingDetailsScreen() {
                             {booking.status === 'Arriving for pickup' && 'Rider has reached the pickup spot'}
                             {booking.status === 'Picked up' && 'Items picked up, on the way to drop'}
                             {booking.status === 'On the way' && `Arriving in ~${booking.etaMin} min`}
-                            {booking.status === 'Delivered' && 'Successfully delivered. Thanks for using Qizko!'}
+                            {booking.status === 'Delivered' && 'Successfully delivered. Thanks for using Qikzo!'}
                             {booking.status === 'Cancelled' && 'This booking was cancelled.'}
                         </Text>
                     </View>

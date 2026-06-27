@@ -59,7 +59,7 @@ export default function SplashAnimated() {
                     </Animated.View>
                 </View>
                 <Animated.Text style={[styles.word, { opacity: wordOpacity, transform: [{ translateY: wordTranslate }] }]}>
-                    Qizko
+                    Qikzo
                 </Animated.Text>
                 {/* Updated tagline for on-demand delivery positioning */}
                 <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>

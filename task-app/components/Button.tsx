@@ -44,3 +44,4 @@ const styles = StyleSheet.create({
   solidLabel: { color: colors.primaryForeground },
   outlineLabel: { color: colors.foreground },
 });
+

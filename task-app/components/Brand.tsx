@@ -9,7 +9,7 @@ export default function Brand({ size = 30 }: { size?: number }) {
         <Text style={[styles.markText, { fontSize: size * 0.6 }]}>Q</Text>
         <View style={styles.dot} />
       </View>
-      <Text style={[styles.word, { fontSize: size * 0.78 }]}>Qizko</Text>
+      <Text style={[styles.word, { fontSize: size * 0.78 }]}>Qikzo</Text>
     </View>
   );
 }

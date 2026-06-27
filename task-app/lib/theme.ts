@@ -1,36 +1,37 @@
-// Qizko — grocery booking customer app theme.
-// Minimal black & white aesthetic with a single warm accent (inspired by reference UI kit).
+// Qizko — on-demand delivery/ride booking customer app theme.
+// "Black & Gold Elegance" palette: deep navy + warm gold accent on clean white.
+// Reference palette: #FFFFFF, #E5E5E5, #FCA311, #14213D, #000000
 
 export const colors = {
-  primary: '#111111',
-  primaryDark: '#000000',
+  primary: '#14213D',          // deep navy — primary surfaces, buttons, brand
+  primaryDark: '#004643',
   primaryForeground: '#FFFFFF',
-  accent: '#F97316',
-  accentForeground: '#FFFFFF',
+  accent: '#FCA311',           // warm gold — highlights, active pins, CTAs
+  accentForeground: '#14213D',
   background: '#FFFFFF',
   card: '#FFFFFF',
-  foreground: '#111111',
+  foreground: '#14213D',       // primary text
   mutedForeground: '#6B7280',
-  border: '#E5E7EB',
-  divider: '#EFEFEF',
+  border: '#E5E5E5',
+  divider: '#ECECEC',
   success: '#16A34A',
   danger: '#DC2626',
-  warning: '#D97706',
+  warning: '#FCA311',
   inputBg: '#FFFFFF',
-  inputBorder: '#D1D5DB',
+  inputBorder: '#D8D8D8',
   chipBg: '#F4F4F5',
   // legacy keys kept for backward compatibility with any remaining screens
   green: '#16A34A',
   red: '#DC2626',
-  purple: '#111111',
-  orange: '#F97316',
+  purple: '#14213D',
+  orange: '#FCA311',
 };
 
-// Strict rule: border radius is 0 everywhere.
+// Small, professional border radii (max 4) — soft edges, not bubbly boxes.
 export const radius = {
-  sm: 0,
-  md: 0,
-  lg: 0,
+  sm: 2,
+  md: 3,
+  lg: 4,
 };
 
 // Strict rule: horizontal padding is always 6; vertical gaps are small (6).

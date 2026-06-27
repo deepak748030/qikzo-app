@@ -108,3 +108,4 @@ const styles = StyleSheet.create({
     statusPill: { borderWidth: 1, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 0 },
     status: { fontSize: 9, fontFamily: fonts.bodyBold },
 });
+

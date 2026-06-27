@@ -11,7 +11,7 @@ export default function AboutUs() {
       <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <View style={{ marginVertical: 10 }}><Brand size={34} /></View>
         <Text style={styles.p}>
-          Qizko is an on-demand point-to-point delivery app. Book a rider to pick up anything — groceries,
+          Qikzo is an on-demand point-to-point delivery app. Book a rider to pick up anything — groceries,
           food, medicines, parcels — from any address in your city and drop it wherever you want, with live tracking
           and transparent distance-based pricing.
         </Text>
@@ -19,7 +19,7 @@ export default function AboutUs() {
         <Text style={styles.p}>
           To make city logistics effortless for every Indian. Tap, set pickup & drop, and a captain on a bike does the rest.
         </Text>
-        <Text style={styles.h}>Why Qizko</Text>
+        <Text style={styles.h}>Why Qikzo</Text>
         <Text style={styles.p}>
           • Anything, anywhere — pickup from any shop or address{'\n'}
           • Verified riders, live trip tracking{'\n'}

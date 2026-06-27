@@ -68,7 +68,7 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.version}>Qizko v1.0.0</Text>
+        <Text style={styles.version}>Qikzo v1.0.0</Text>
       </ScrollView>
 
       <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />

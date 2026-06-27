@@ -37,3 +37,4 @@ const styles = StyleSheet.create({
   iconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   title: { color: colors.foreground, fontSize: 16, fontFamily: fonts.heading, flex: 1, textAlign: 'center' },
 });
+
