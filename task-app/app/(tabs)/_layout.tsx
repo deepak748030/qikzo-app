@@ -22,7 +22,7 @@ export default function TabLayout() {
           elevation: 0,
           shadowOpacity: 0,
         },
-        tabBarActiveTintColor: colors.foreground,
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarLabelStyle: { fontSize: 10, fontFamily: fonts.bodyBold, marginTop: 2 },
       }}

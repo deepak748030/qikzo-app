@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
@@ -99,14 +99,14 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 6, paddingTop: 24 },
   headline: { fontSize: 22, fontFamily: fonts.displayBold, color: colors.foreground },
   sub: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 6 },
-  otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, gap: 6 },
+  otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, gap: 6, },
   otpBox: {
-    flex: 1, height: 52, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: 0,
+    flex: 1, height: 52, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: radius.md,
     textAlign: 'center', fontSize: 20, fontFamily: fonts.displayBold, color: colors.foreground,
     backgroundColor: colors.inputBg,
   },
   otpBoxFilled: { borderColor: colors.foreground },
-  btn: { marginTop: 24 },
+  btn: { marginTop: 24, borderRadius: radius.sm },
   resendRow: { alignItems: 'center', marginTop: 18 },
   resendMuted: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body },
   resend: { fontSize: 13, color: colors.foreground, fontFamily: fonts.bodyBold, textDecorationLine: 'underline' },

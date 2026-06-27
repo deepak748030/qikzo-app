@@ -1,37 +1,37 @@
-// Qizko — on-demand delivery/ride booking customer app theme.
-// "Black & Gold Elegance" palette: deep navy + warm gold accent on clean white.
-// Reference palette: #FFFFFF, #E5E5E5, #FCA311, #14213D, #000000
+// Qikzo — on-demand delivery/ride booking customer app theme.
+// Palette: deep teal #004643 + warm gold accent on clean white.
+// Single source of truth — every screen reads colors from here.
 
 export const colors = {
-  primary: '#14213D',          // deep navy — primary surfaces, buttons, brand
-  primaryDark: '#004643',
+  primary: '#004643',          // deep teal — primary surfaces, buttons, brand
+  primaryDark: '#00302E',      // pressed/elevated teal
   primaryForeground: '#FFFFFF',
   accent: '#FCA311',           // warm gold — highlights, active pins, CTAs
-  accentForeground: '#14213D',
+  accentForeground: '#004643',
   background: '#FFFFFF',
   card: '#FFFFFF',
-  foreground: '#14213D',       // primary text
-  mutedForeground: '#6B7280',
-  border: '#E5E5E5',
-  divider: '#ECECEC',
+  foreground: '#004643',       // primary text — teal, not black
+  mutedForeground: '#5C7472',  // muted teal-grey for secondary text
+  border: '#D8E2E1',           // soft teal-tinted border so white cards on white bg are visible
+  divider: '#E6ECEB',
   success: '#16A34A',
   danger: '#DC2626',
   warning: '#FCA311',
   inputBg: '#FFFFFF',
-  inputBorder: '#D8D8D8',
-  chipBg: '#F4F4F5',
+  inputBorder: '#B9C8C7',      // teal-tinted input outline
+  chipBg: '#F1F5F4',
   // legacy keys kept for backward compatibility with any remaining screens
   green: '#16A34A',
   red: '#DC2626',
-  purple: '#14213D',
+  purple: '#004643',
   orange: '#FCA311',
 };
 
-// Small, professional border radii (max 4) — soft edges, not bubbly boxes.
+// Tight, professional border radii (max 3) — soft edges, never bubbly.
 export const radius = {
-  sm: 2,
-  md: 3,
-  lg: 4,
+  sm: 1,
+  md: 2,
+  lg: 3,
 };
 
 // Strict rule: horizontal padding is always 6; vertical gaps are small (6).

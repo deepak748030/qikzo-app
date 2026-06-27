@@ -3,17 +3,45 @@ import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, Fla
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
-import { Search, Bell, MapPin, ChevronRight, Package, Navigation } from 'lucide-react-native';
-import { colors, fonts } from '@/lib/theme';
+import {
+  Search, Bell, MapPin, ChevronRight, Package, Navigation,
+  ShoppingCart, UtensilsCrossed, Pill, Sparkles, Bike, Car, Truck,
+  Home as HomeIcon, Building2, Heart, Bookmark, LucideIcon,
+} from 'lucide-react-native';
+import { colors, fonts, radius } from '@/lib/theme';
 import Brand from '@/components/Brand';
 import ServiceToggle from '@/components/ServiceToggle';
 import LeafletMap from '@/components/LeafletMap';
+import AnimatedIcon from '@/components/AnimatedIcon';
 import { categories, savedPlaces, DeliveryCategory } from '@/lib/mockData';
 import { useBooking } from '@/lib/bookingStore';
 import { useAuth } from '@/lib/authStore';
 import { useServiceMode, rideOptions } from '@/lib/serviceMode';
 
 const DEFAULT_CENTER = { lat: 28.6139, lng: 77.209 };
+
+// Lucide icon mapping replaces emoji per category / ride option / saved place.
+const CATEGORY_ICON: Record<string, LucideIcon> = {
+  groceries: ShoppingCart,
+  food: UtensilsCrossed,
+  medicines: Pill,
+  parcel: Package,
+  other: Sparkles,
+};
+
+const RIDE_ICON: Record<string, LucideIcon> = {
+  bike: Bike,
+  auto: Car,
+  cab: Car,
+  parcel: Truck,
+};
+
+const PLACE_ICON: Record<string, LucideIcon> = {
+  home: HomeIcon,
+  office: Building2,
+  mom: Heart,
+};
+
 
 
 export default function HomeScreen() {
@@ -78,7 +106,7 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <Brand size={24} />
         <Pressable onPress={() => router.push('/notifications')} hitSlop={8} style={styles.bellBtn}>
-          <Bell size={20} color={colors.foreground} strokeWidth={1.8} />
+          <AnimatedIcon Icon={Bell} size={20} color={colors.foreground} variant="bounce" strokeWidth={1.8} />
           <View style={styles.bellDot} />
         </Pressable>
       </View>
@@ -100,9 +128,12 @@ export default function HomeScreen() {
             style={{ height: 170 }}
           />
           <Pressable style={styles.mapOverlayBtn} onPress={() => openMap('pickup')} hitSlop={6}>
-            <Navigation size={12} color={colors.foreground} />
+            <AnimatedIcon Icon={Navigation} size={12} color={colors.foreground} variant="pulse" />
             <Text style={styles.mapOverlayText}>Use my location</Text>
           </Pressable>
+          <View style={styles.mapPingWrap} pointerEvents="none">
+            <AnimatedIcon Icon={MapPin} size={22} color={colors.accent} variant="ping" ringColor={colors.accent} strokeWidth={2.2} />
+          </View>
         </View>
 
         {/* Where-to card */}
@@ -139,34 +170,44 @@ export default function HomeScreen() {
           <>
             <Text style={styles.section}>Choose your ride</Text>
             <View style={styles.catGrid}>
-              {rideOptions.map((r) => (
-                <Pressable
-                  key={r.id}
-                  style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
-                  onPress={() => openWithCategory(r.id)}
-                >
-                  <Text style={styles.catEmoji}>{r.emoji}</Text>
-                  <Text style={styles.catName}>{r.name}</Text>
-                  <Text style={styles.catHint} numberOfLines={1}>{r.hint}</Text>
-                </Pressable>
-              ))}
+              {rideOptions.map((r) => {
+                const RIcon = RIDE_ICON[r.id] || Bike;
+                return (
+                  <Pressable
+                    key={r.id}
+                    style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
+                    onPress={() => openWithCategory(r.id)}
+                  >
+                    <View style={styles.catIconChip}>
+                      <RIcon size={20} color={colors.foreground} strokeWidth={1.8} />
+                    </View>
+                    <Text style={styles.catName}>{r.name}</Text>
+                    <Text style={styles.catHint} numberOfLines={1}>{r.hint}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </>
         ) : (
           <>
             <Text style={styles.section}>What do you want to send?</Text>
             <View style={styles.catGrid}>
-              {categories.map((c: DeliveryCategory) => (
-                <Pressable
-                  key={c.id}
-                  style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
-                  onPress={() => openWithCategory(c.id)}
-                >
-                  <Text style={styles.catEmoji}>{c.emoji}</Text>
-                  <Text style={styles.catName}>{c.name}</Text>
-                  <Text style={styles.catHint} numberOfLines={1}>{c.hint}</Text>
-                </Pressable>
-              ))}
+              {categories.map((c: DeliveryCategory) => {
+                const CIcon = CATEGORY_ICON[c.id] || Package;
+                return (
+                  <Pressable
+                    key={c.id}
+                    style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
+                    onPress={() => openWithCategory(c.id)}
+                  >
+                    <View style={styles.catIconChip}>
+                      <CIcon size={20} color={colors.foreground} strokeWidth={1.8} />
+                    </View>
+                    <Text style={styles.catName}>{c.name}</Text>
+                    <Text style={styles.catHint} numberOfLines={1}>{c.hint}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </>
         )}
@@ -180,15 +221,20 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={{ width: 6 }} />}
           contentContainerStyle={{ paddingHorizontal: 6 }}
-          renderItem={({ item }) => (
-            <Pressable style={styles.placeChip} onPress={() => openWithCategory(mode === 'ride' ? 'bike' : 'parcel', item.address)}>
-              <Text style={styles.placeEmoji}>{item.emoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.placeLabel}>{item.label}</Text>
-                <Text style={styles.placeAddr} numberOfLines={1}>{item.address}</Text>
-              </View>
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            const PIcon = PLACE_ICON[item.id] || Bookmark;
+            return (
+              <Pressable style={styles.placeChip} onPress={() => openWithCategory(mode === 'ride' ? 'bike' : 'parcel', item.address)}>
+                <View style={styles.placeIconChip}>
+                  <PIcon size={18} color={colors.foreground} strokeWidth={1.8} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.placeLabel}>{item.label}</Text>
+                  <Text style={styles.placeAddr} numberOfLines={1}>{item.address}</Text>
+                </View>
+              </Pressable>
+            );
+          }}
         />
 
         {/* Recent bookings */}
@@ -200,36 +246,38 @@ export default function HomeScreen() {
         </View>
         {recent.length === 0 ? (
           <View style={styles.emptyRecent}>
-            <Package size={28} color={colors.mutedForeground} strokeWidth={1.5} />
+            <View style={styles.emptyIconWrap}>
+              <AnimatedIcon Icon={Package} size={28} color={colors.foreground} variant="bounce" strokeWidth={1.5} />
+            </View>
             <Text style={styles.emptyText}>No bookings yet. Pick a destination above to begin.</Text>
           </View>
         ) : (
           <View>
-            {recent.map((b, i) => (
-              <Pressable
-                key={b.id}
-                style={[styles.recentRow, i === recent.length - 1 && { borderBottomWidth: 0 }]}
-                onPress={() => router.push({ pathname: '/booking-details', params: { id: b.id } })}
-              >
-                <View style={styles.recentIcon}>
-                  <Text style={{ fontSize: 18 }}>
-                    {categories.find((c) => c.id === b.categoryId)?.emoji
-                      || rideOptions.find((r) => r.id === b.categoryId)?.emoji
-                      || '📦'}
-                  </Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.recentRoute} numberOfLines={1}>
-                    {b.pickup} → {b.drop}
-                  </Text>
-                  <View style={styles.recentMetaRow}>
-                    <MapPin size={11} color={colors.mutedForeground} />
-                    <Text style={styles.recentMeta}>{b.distanceKm.toFixed(1)} km · {b.status}</Text>
+            {recent.map((b, i) => {
+              const RIcon =
+                CATEGORY_ICON[b.categoryId] || RIDE_ICON[b.categoryId] || Package;
+              return (
+                <Pressable
+                  key={b.id}
+                  style={[styles.recentRow, i === recent.length - 1 && { borderBottomWidth: 0 }]}
+                  onPress={() => router.push({ pathname: '/booking-details', params: { id: b.id } })}
+                >
+                  <View style={styles.recentIcon}>
+                    <RIcon size={18} color={colors.foreground} strokeWidth={1.8} />
                   </View>
-                </View>
-                <Text style={styles.recentPrice}>₹{b.price}</Text>
-              </Pressable>
-            ))}
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={styles.recentRoute} numberOfLines={1}>
+                      {b.pickup} → {b.drop}
+                    </Text>
+                    <View style={styles.recentMetaRow}>
+                      <MapPin size={11} color={colors.mutedForeground} />
+                      <Text style={styles.recentMeta}>{b.distanceKm.toFixed(1)} km · {b.status}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.recentPrice}>₹{b.price}</Text>
+                </Pressable>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -240,8 +288,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   topBar: { paddingHorizontal: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bellBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
-  bellDot: { position: 'absolute', top: 7, right: 8, width: 6, height: 6, backgroundColor: colors.accent },
+  bellBtn: {
+    width: 36, height: 36, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm,
+  },
+  bellDot: { position: 'absolute', top: 7, right: 8, width: 6, height: 6, backgroundColor: colors.accent, borderRadius: radius.sm },
 
   toggleWrap: { marginTop: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
 
@@ -259,20 +310,24 @@ const styles = StyleSheet.create({
     position: 'absolute', right: 8, bottom: 8,
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: colors.card, borderWidth: 1, borderColor: colors.foreground,
-    paddingHorizontal: 8, paddingVertical: 5,
+    paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.sm,
   },
   mapOverlayText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground },
+  mapPingWrap: {
+    position: 'absolute', top: '50%', left: '50%',
+    marginLeft: -11, marginTop: -11,
+  },
 
   whereCard: {
     marginHorizontal: 6, marginTop: 12, borderWidth: 1, borderColor: colors.foreground,
-    backgroundColor: colors.card, borderRadius: 0, padding: 10,
+    backgroundColor: colors.card, borderRadius: radius.md, padding: 10,
   },
   whereRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   whereTextWrap: { flex: 1 },
   whereLabel: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: colors.mutedForeground },
   wherePlaceholder: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground, marginTop: 2 },
   muted: { color: colors.mutedForeground },
-  pinDot: { width: 10, height: 10, marginLeft: 2 },
+  pinDot: { width: 10, height: 10, marginLeft: 2, borderRadius: radius.sm },
   pinPickup: { backgroundColor: colors.accent },
   pinDrop: { backgroundColor: colors.foreground },
   whereDivider: { height: 1, backgroundColor: colors.divider, marginVertical: 2, marginLeft: 22 },
@@ -287,23 +342,33 @@ const styles = StyleSheet.create({
   catGrid: { paddingHorizontal: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   catItem: {
     borderWidth: 1, borderColor: colors.border, padding: 10, alignItems: 'flex-start',
-    backgroundColor: colors.card, borderRadius: 0,
+    backgroundColor: colors.card, borderRadius: radius.md,
   },
-  catEmoji: { fontSize: 22 },
-  catName: { fontSize: 13, fontFamily: fonts.heading, color: colors.foreground, marginTop: 4 },
+  catIconChip: {
+    width: 36, height: 36, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.chipBg,
+    alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, marginBottom: 4,
+  },
+  catName: { fontSize: 13, fontFamily: fonts.heading, color: colors.foreground, marginTop: 2 },
   catHint: { fontSize: 10, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 1 },
 
   placeChip: {
     width: 220, flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1, borderColor: colors.border, padding: 8, backgroundColor: colors.card, borderRadius: 0,
+    borderWidth: 1, borderColor: colors.border, padding: 8, backgroundColor: colors.card, borderRadius: radius.md,
   },
-  placeEmoji: { fontSize: 22 },
+  placeIconChip: {
+    width: 32, height: 32, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.chipBg,
+    alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm,
+  },
   placeLabel: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
   placeAddr: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 1 },
 
   recentHead: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingRight: 6 },
   viewAll: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground, textDecorationLine: 'underline' },
   emptyRecent: { alignItems: 'center', paddingVertical: 24, gap: 6, paddingHorizontal: 24 },
+  emptyIconWrap: {
+    width: 60, height: 60, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
+    borderRadius: radius.lg, marginBottom: 4,
+  },
   emptyText: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, textAlign: 'center' },
   recentRow: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6,
@@ -311,7 +376,7 @@ const styles = StyleSheet.create({
   },
   recentIcon: {
     width: 36, height: 36, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
-    borderRadius: 0, backgroundColor: colors.card,
+    borderRadius: radius.sm, backgroundColor: colors.card,
   },
   recentRoute: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
   recentMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },

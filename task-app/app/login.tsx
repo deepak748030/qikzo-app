@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Image, StyleSheet, ScrollView, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 import Brand from '@/components/Brand';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
+
+// Illustrations replace the marketing copy on the login screen.
+const HERO = require('../assets/images/login-hero.png');
+const SECURE = require('../assets/images/login-secure.png');
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -28,13 +32,22 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 16 }]}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Brand size={38} />
-        {/* Updated copy: this is a Rapido/Uber-style on-demand delivery app, not a grocery store. */}
-        <Text style={styles.headline}>Get anything,{'\n'}delivered to your door.</Text>
-        <Text style={styles.sub}>Groceries, food, medicines, parcels — book a rider in seconds. Login with your mobile number to start.</Text>
+    <View style={[styles.container, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10 }]}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.brandRow}>
+          <Brand size={30} />
+        </View>
 
+        {/* Top illustration */}
+        <View style={styles.heroWrap}>
+          <Image source={HERO} resizeMode="contain" style={styles.heroImg} />
+        </View>
+
+        {/* Input form */}
         <View style={styles.form}>
           <Input
             label="Mobile number"
@@ -47,11 +60,14 @@ export default function LoginScreen() {
           />
           <Button label="Continue" loading={loading} onPress={onContinue} style={styles.btn} />
         </View>
+
+        {/* Bottom illustration */}
+        <View style={styles.secureWrap}>
+          <Image source={SECURE} resizeMode="contain" style={styles.secureImg} />
+        </View>
       </ScrollView>
 
-      <Text style={styles.terms}>
-        By continuing you agree to our Terms & Privacy Policy.
-      </Text>
+      <Text style={styles.terms}>By continuing you agree to our Terms & Privacy Policy.</Text>
 
       <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
     </View>
@@ -60,10 +76,18 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 6, backgroundColor: colors.background },
-  scroll: { flexGrow: 1, justifyContent: 'center' },
-  headline: { fontSize: 30, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 28, letterSpacing: -0.5, lineHeight: 36 },
-  sub: { fontSize: 14, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 8, lineHeight: 20 },
-  form: { marginTop: 28, gap: 6 },
-  btn: { marginTop: 6 },
-  terms: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, textAlign: 'center' },
+  scroll: { flexGrow: 1, justifyContent: 'flex-start' },
+  brandRow: { paddingTop: 6 },
+  heroWrap: {
+    width: '100%', alignItems: 'center', justifyContent: 'center',
+    marginTop: 6,
+  },
+  heroImg: { width: '100%', height: 220 },
+  form: { marginTop: 6, gap: 6 },
+  btn: { marginTop: 6, borderRadius: radius.sm },
+  secureWrap: { width: '100%', alignItems: 'center', justifyContent: 'center', marginTop: 6 },
+  secureImg: { width: '100%', height: 140 },
+  terms: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, textAlign: 'center', marginTop: 6 },
+  // exported but unused style — kept to satisfy radius token contract
+  _radius: { borderRadius: radius.sm },
 });
