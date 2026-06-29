@@ -10,7 +10,7 @@ export const colors = {
   primaryForeground: '#FFFFFF',
   accent: '#FF6B1A',           // warm orange — CTAs, highlights, status
   accentForeground: '#FFFFFF',
-  background: '#FCEFE0',       // soft peach canvas
+  background: '#FFFFFF',       // soft peach canvas
   card: '#FFFFFF',
   foreground: '#1A2138',       // deep navy text
   mutedForeground: '#6B7280',  // muted slate

@@ -304,17 +304,19 @@ const styles = StyleSheet.create({
   hi: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body },
   headline: { fontSize: 22, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 4, lineHeight: 28, letterSpacing: -0.5 },
 
-  // Banners and full-bleed elements stick to the screen edges.
+  // Rounded white map card matching the reference mockups.
   mapBox: {
-    marginTop: 12,
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border,
+    marginTop: 12, marginHorizontal: 6,
+    borderRadius: radius.sm, overflow: 'hidden',
     backgroundColor: '#f3f3f3', position: 'relative',
+    borderWidth: 1, borderColor: colors.border,
   },
   mapOverlayBtn: {
     position: 'absolute', right: 8, bottom: 8,
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.foreground,
-    paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.sm,
+    backgroundColor: colors.card, borderWidth: 0,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill,
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   mapOverlayText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground },
   mapPingWrap: {
@@ -324,18 +326,18 @@ const styles = StyleSheet.create({
 
   whereCard: {
     marginHorizontal: 6, marginTop: 12, borderWidth: 0,
-    backgroundColor: colors.primary, borderRadius: 0, padding: 12,
+    backgroundColor: colors.primary, borderRadius: radius.md, padding: 12,
   },
   whereRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   whereIconChip: {
     width: 28, height: 28, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 0,
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: radius.md,
   },
   whereTextWrap: { flex: 1 },
   whereLabel: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: 'rgba(255,255,255,0.75)' },
   wherePlaceholder: { fontSize: 13, fontFamily: fonts.bodyBold, color: '#FFFFFF', marginTop: 2 },
   muted: { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.body },
-  pinDot: { width: 10, height: 10, marginLeft: 2, borderRadius: 0 },
+  pinDot: { width: 10, height: 10, marginLeft: 2, borderRadius: radius.md },
   pinPickup: { backgroundColor: colors.accent },
   pinDrop: { backgroundColor: '#FFFFFF' },
   whereDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginVertical: 2, marginLeft: 38 },

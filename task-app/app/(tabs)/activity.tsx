@@ -153,3 +153,5 @@ const styles = StyleSheet.create({
     },
     status: { fontSize: 9, fontFamily: fonts.bodyBold },
 });
+
+// activity

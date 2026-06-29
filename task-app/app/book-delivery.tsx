@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Banknote, Wallet, Phone, FileText, Bike, ChevronRight } from 'lucide-react-native';
-import { colors, fonts } from '@/lib/theme';
+import { Banknote, Wallet, Phone, FileText, Bike, ChevronRight, MapPin, Home } from 'lucide-react-native';
+import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
@@ -124,9 +124,11 @@ export default function BookDeliveryScreen() {
                     <Text style={styles.label}>Trip</Text>
                     <View style={styles.tripCard}>
                         <Pressable style={styles.tripRow} onPress={() => openMap('pickup')}>
-                            <View style={[styles.pinDot, { backgroundColor: colors.accent }]} />
+                            <View style={styles.pinDot}>
+                                <MapPin size={14} color="#FFFFFF" />
+                            </View>
                             <View style={styles.tripTextWrap}>
-                                <Text style={styles.tripFieldLabel}>PICK UP</Text>
+                                <Text style={styles.tripFieldLabel}>Pick up</Text>
                                 <Text
                                     style={[styles.tripValue, !draft.pickup && styles.tripPlaceholder]}
                                     numberOfLines={2}
@@ -134,13 +136,15 @@ export default function BookDeliveryScreen() {
                                     {draft.pickup || 'Tap to set on the map'}
                                 </Text>
                             </View>
-                            <ChevronRight size={16} color={colors.mutedForeground} />
+                            <ChevronRight size={16} color="rgba(255,255,255,0.8)" />
                         </Pressable>
                         <View style={styles.tripDivider} />
                         <Pressable style={styles.tripRow} onPress={() => openMap('drop')}>
-                            <View style={[styles.pinDot, { backgroundColor: colors.foreground }]} />
+                            <View style={styles.pinDot}>
+                                <Home size={14} color="#FFFFFF" />
+                            </View>
                             <View style={styles.tripTextWrap}>
-                                <Text style={styles.tripFieldLabel}>{isRide ? 'DROP / DESTINATION' : 'DROP'}</Text>
+                                <Text style={styles.tripFieldLabel}>{isRide ? 'Drop / Destination' : 'Drop'}</Text>
                                 <Text
                                     style={[styles.tripValue, !draft.drop && styles.tripPlaceholder]}
                                     numberOfLines={2}
@@ -148,7 +152,7 @@ export default function BookDeliveryScreen() {
                                     {draft.drop || 'Tap to set on the map'}
                                 </Text>
                             </View>
-                            <ChevronRight size={16} color={colors.mutedForeground} />
+                            <ChevronRight size={16} color="rgba(255,255,255,0.8)" />
                         </Pressable>
                     </View>
 
@@ -296,23 +300,23 @@ const styles = StyleSheet.create({
     section: { paddingHorizontal: 6, marginTop: 10 },
     label: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.4, marginBottom: 6, textTransform: 'uppercase' },
 
-    catChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
+    catChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
     catChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
     catChipEmoji: { fontSize: 14 },
     catChipLabel: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
     catChipLabelActive: { color: colors.primaryForeground },
 
-    tripCard: { borderWidth: 1, borderColor: colors.foreground, padding: 6, borderRadius: 0, backgroundColor: colors.card },
-    tripRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 2 },
+    tripCard: { padding: 10, borderRadius: radius.lg, backgroundColor: colors.primary },
+    tripRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 2 },
     tripTextWrap: { flex: 1, minWidth: 0 },
-    tripFieldLabel: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: colors.mutedForeground },
-    tripValue: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground, marginTop: 2 },
-    tripPlaceholder: { color: colors.mutedForeground },
-    tripDivider: { height: 1, backgroundColor: colors.divider, marginLeft: 20, marginVertical: 2 },
-    pinDot: { width: 10, height: 10, marginLeft: 2 },
+    tripFieldLabel: { fontSize: 10, letterSpacing: 0.6, fontFamily: fonts.bodyBold, color: 'rgba(255,255,255,0.85)' },
+    tripValue: { fontSize: 13, fontFamily: fonts.bodyBold, color: '#FFFFFF', marginTop: 2 },
+    tripPlaceholder: { color: 'rgba(255,255,255,0.7)' },
+    tripDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginLeft: 32, marginVertical: 2 },
+    pinDot: { width: 28, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.22)' },
 
     savedRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-    savedChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 0, backgroundColor: colors.card, maxWidth: '100%' },
+    savedChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.md, backgroundColor: colors.card, maxWidth: '100%' },
     savedChipText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground, flexShrink: 1 },
 
     // Important fix: noteWrap was letting Input overflow the right edge. Now the Input
@@ -320,11 +324,11 @@ const styles = StyleSheet.create({
     noteWrap: { flexDirection: 'row', alignItems: 'flex-start' },
 
     payRow: { flexDirection: 'row', gap: 6 },
-    payBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
+    payBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
     payBtnActive: { borderColor: colors.foreground, borderWidth: 2 },
     payText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
 
-    bill: { borderWidth: 1, borderColor: colors.border, padding: 10, borderRadius: 0, backgroundColor: colors.card },
+    bill: { borderWidth: 1, borderColor: colors.border, padding: 10, borderRadius: radius.md, backgroundColor: colors.card },
     billRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, gap: 8 },
     billLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, flex: 1, minWidth: 0 },
     billValue: { fontSize: 12, color: colors.foreground, fontFamily: fonts.bodyBold },

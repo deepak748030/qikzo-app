@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { router, Href } from 'expo-router';
 import { User, MapPin, Activity, HelpCircle, Info, Shield, FileText, ChevronRight, LogOut, Bell } from 'lucide-react-native';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
@@ -39,7 +39,10 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Profile" showBack={false} />
+      <ScreenHeader
+        title="Profile"
+        showBack={false}
+      />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.head}>
           <View style={styles.avatar}><Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text></View>
@@ -47,16 +50,13 @@ export default function ProfileScreen() {
             <Text style={styles.name}>{name}</Text>
             <Text style={styles.phone}>{phone || 'Not signed in'}</Text>
           </View>
-          <Pressable style={styles.addrChip}>
-            <MapPin size={14} color={colors.foreground} />
-            <Text style={styles.addrText}>Home</Text>
-          </Pressable>
+
         </View>
 
         <View style={styles.menu}>
           {ITEMS.map((it) => (
             <Pressable key={it.label} style={styles.menuRow} onPress={() => it.route && router.push(it.route)}>
-              <it.icon size={18} color={colors.foreground} />
+              <it.icon size={20} color={colors.foreground} />
               <Text style={styles.menuLabel}>{it.label}</Text>
               <ChevronRight size={18} color={colors.mutedForeground} />
             </Pressable>
@@ -79,14 +79,14 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  avatar: { width: 48, height: 48, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+  avatar: { width: 48, height: 48, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
   avatarText: { color: colors.primaryForeground, fontFamily: fonts.displayBold, fontSize: 20 },
   name: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground },
   phone: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
   addrChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 0 },
   addrText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
   menu: { marginTop: 6 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: colors.divider },
   menuLabel: { flex: 1, fontSize: 14, fontFamily: fonts.body, color: colors.foreground },
   version: { textAlign: 'center', fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 16 },
 });

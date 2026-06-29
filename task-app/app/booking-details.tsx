@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Phone, X, MessageCircle, FileText, Bike, Star, CheckCircle2, MapPin } from 'lucide-react-native';
-import { colors, fonts } from '@/lib/theme';
+import { Phone, X, MessageCircle, FileText, Bike, Star, CheckCircle2, MapPin, Home } from 'lucide-react-native';
+import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
@@ -187,33 +187,32 @@ export default function BookingDetailsScreen() {
                     </View>
                 ) : null}
 
-                {/* Trip card */}
+                {/* Trip card — green location card matching the brand */}
                 <View style={styles.tripCard}>
-                    <Text style={styles.sectionLabel}>Trip</Text>
                     <View style={styles.tripRow}>
-                        <View style={styles.tripIcons}>
-                            <View style={[styles.pin, { backgroundColor: colors.accent }]} />
+                        <View style={styles.tripIconCol}>
+                            <View style={styles.pinBubble}><MapPin size={14} color="#FFFFFF" /></View>
                             <View style={styles.pinLine} />
-                            <View style={[styles.pin, { backgroundColor: colors.foreground }]} />
+                            <View style={styles.pinBubble}><Home size={14} color="#FFFFFF" /></View>
                         </View>
-                        <View style={{ flex: 1, gap: 10 }}>
+                        <View style={{ flex: 1, gap: 12 }}>
                             <View>
-                                <Text style={styles.tripLabel}>PICKUP</Text>
-                                <Text style={styles.tripText}>{booking.pickup}</Text>
+                                <Text style={styles.tripLabel}>My Location</Text>
+                                <Text style={styles.tripText} numberOfLines={2}>{booking.pickup}</Text>
                             </View>
                             <View>
-                                <Text style={styles.tripLabel}>DROP</Text>
-                                <Text style={styles.tripText}>{booking.drop}</Text>
+                                <Text style={styles.tripLabel}>Drop</Text>
+                                <Text style={styles.tripText} numberOfLines={2}>{booking.drop}</Text>
                             </View>
                         </View>
                     </View>
                     <View style={styles.tripStats}>
                         <View style={styles.tripStat}>
-                            <MapPin size={11} color={colors.mutedForeground} />
+                            <MapPin size={11} color="rgba(255,255,255,0.9)" />
                             <Text style={styles.tripStatText}>{booking.distanceKm.toFixed(1)} km</Text>
                         </View>
                         <View style={styles.tripStat}>
-                            <Bike size={11} color={colors.mutedForeground} />
+                            <Bike size={11} color="rgba(255,255,255,0.9)" />
                             <Text style={styles.tripStatText}>~{booking.etaMin} min</Text>
                         </View>
                         <View style={styles.tripStat}>
@@ -266,18 +265,18 @@ const styles = StyleSheet.create({
 
     statusBanner: {
         marginTop: 8, marginHorizontal: 6, padding: 10, flexDirection: 'row', gap: 10,
-        borderWidth: 1, borderColor: colors.foreground, borderRadius: 0, backgroundColor: colors.card,
+        borderWidth: 1, borderColor: colors.foreground, borderRadius: radius.md, backgroundColor: colors.card,
     },
-    statusIconWrap: { width: 46, height: 46, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+    statusIconWrap: { width: 46, height: 46, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
     searchingWrap: { alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' },
-    pulseRing: { position: 'absolute', width: 30, height: 30, borderWidth: 1, borderColor: colors.foreground, borderRadius: 0 },
+    pulseRing: { position: 'absolute', width: 30, height: 30, borderWidth: 1, borderColor: colors.foreground, borderRadius: radius.md },
     statusTitle: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground },
     statusSub: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
 
-    timeline: { marginTop: 8, marginHorizontal: 6, paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
+    timeline: { marginTop: 8, marginHorizontal: 6, paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
     timelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, minHeight: 28 },
     timelineLeft: { alignItems: 'center', width: 10, alignSelf: 'stretch' },
-    timelineDot: { width: 10, height: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: 0, marginTop: 3 },
+    timelineDot: { width: 10, height: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radius.md, marginTop: 3 },
     timelineDotDone: { backgroundColor: colors.foreground, borderColor: colors.foreground },
     timelineDotCurrent: { backgroundColor: colors.accent, borderColor: colors.accent },
     timelineBar: { flex: 1, width: 1, backgroundColor: colors.border, marginTop: 2, marginBottom: 0 },
@@ -285,33 +284,34 @@ const styles = StyleSheet.create({
     timelineText: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, paddingBottom: 12, flex: 1, lineHeight: 16 },
     timelineTextDone: { color: colors.foreground, fontFamily: fonts.bodyBold },
 
-    riderCard: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
-    riderAvatar: { width: 42, height: 42, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+    riderCard: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
+    riderAvatar: { width: 42, height: 42, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
     riderAvatarText: { color: colors.primaryForeground, fontFamily: fonts.displayBold, fontSize: 18 },
     riderName: { fontSize: 14, fontFamily: fonts.bodyBold, color: colors.foreground },
     riderMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     riderMeta: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body },
     riderVehicle: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
-    callBtn: { width: 36, height: 36, borderWidth: 1, borderColor: colors.foreground, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+    callBtn: { width: 36, height: 36, borderWidth: 1, borderColor: colors.foreground, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
 
-    tripCard: { marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
+    tripCard: { marginTop: 8, marginHorizontal: 6, padding: 12, borderRadius: radius.lg, backgroundColor: colors.primary },
     sectionLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.4, textTransform: 'uppercase' },
-    tripRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
-    tripIcons: { alignItems: 'center', width: 14, paddingTop: 4 },
-    pin: { width: 10, height: 10 },
-    pinLine: { flex: 1, width: 1, backgroundColor: colors.border, marginVertical: 4, minHeight: 22 },
-    tripLabel: { fontSize: 9, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.6 },
-    tripText: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground, marginTop: 2 },
-    tripStats: { flexDirection: 'row', gap: 12, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.divider },
+    tripRow: { flexDirection: 'row', gap: 12, marginTop: 2 },
+    tripIconCol: { alignItems: 'center', width: 28, paddingTop: 2 },
+    pinBubble: { width: 28, height: 28, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
+    pin: { width: 10, height: 10, borderRadius: radius.pill },
+    pinLine: { flex: 1, width: 2, backgroundColor: 'rgba(255,255,255,0.35)', marginVertical: 4, minHeight: 18 },
+    tripLabel: { fontSize: 10, fontFamily: fonts.bodyBold, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.3 },
+    tripText: { fontSize: 13, fontFamily: fonts.bodyBold, color: '#FFFFFF', marginTop: 2 },
+    tripStats: { flexDirection: 'row', gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' },
     tripStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    tripStatText: { fontSize: 11, color: colors.foreground, fontFamily: fonts.bodyBold },
+    tripStatText: { fontSize: 11, color: '#FFFFFF', fontFamily: fonts.bodyBold },
 
-    notesCard: { marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
+    notesCard: { marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
     notesHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
     notesText: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground, lineHeight: 19 },
     recipient: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.bodyBold, marginTop: 8 },
 
-    fareCard: { marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 0, backgroundColor: colors.card },
+    fareCard: { marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
     fareRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, marginTop: 4 },
     fareLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body },
     fareValue: { fontSize: 12, color: colors.foreground, fontFamily: fonts.bodyBold },
