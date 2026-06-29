@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   box: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1, borderColor: colors.inputBorder, backgroundColor: colors.inputBg,
-    paddingHorizontal: 14, borderRadius: radius.pill, minHeight: 46,
+    paddingHorizontal: 14, borderRadius: radius.sm, minHeight: 46,
   },
   prefix: { fontSize: 14, color: colors.foreground, fontFamily: fonts.bodyBold, marginRight: 6 },
   input: { flex: 1, paddingVertical: 10, fontSize: 14, color: colors.foreground, fontFamily: fonts.body },

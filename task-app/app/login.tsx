@@ -61,10 +61,7 @@ export default function LoginScreen() {
           <Button label="Continue" loading={loading} onPress={onContinue} style={styles.btn} />
         </View>
 
-        {/* Bottom illustration */}
-        <View style={styles.secureWrap}>
-          <Image source={SECURE} resizeMode="contain" style={styles.secureImg} />
-        </View>
+
       </ScrollView>
 
       <Text style={styles.terms}>By continuing you agree to our Terms & Privacy Policy.</Text>

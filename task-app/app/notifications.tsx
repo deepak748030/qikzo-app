@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Package, Tag, BellRing, Truck, Gift, Info } from 'lucide-react-native';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 
 type N = {
@@ -86,15 +86,15 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    mark: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
+    mark: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground, },
     row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: 6, paddingVertical: 12, backgroundColor: colors.background },
     rowUnread: { backgroundColor: '#FAFAFA' },
-    iconWrap: { width: 36, height: 36, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+    iconWrap: { width: 36, height: 36, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
     titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
     title: { flex: 1, fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
     time: { fontSize: 10, fontFamily: fonts.body, color: colors.mutedForeground },
     body: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 3, lineHeight: 17 },
-    dot: { width: 7, height: 7, backgroundColor: colors.accent, marginTop: 6 },
+    dot: { width: 7, height: 7, backgroundColor: colors.accent, marginTop: 6, borderRadius: radius.lg },
     empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 8, paddingHorizontal: 24 },
     emptyTitle: { fontSize: 15, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 6 },
     emptySub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, textAlign: 'center' },

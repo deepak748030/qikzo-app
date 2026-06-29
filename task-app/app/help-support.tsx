@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 
 const FAQS = [
@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   lead: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body, lineHeight: 20 },
   section: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 16, marginBottom: 8 },
-  card: { borderWidth: 1, borderColor: colors.border, padding: 10, marginBottom: 6, borderRadius: 0 },
+  card: { borderWidth: 1, borderColor: colors.border, padding: 10, marginBottom: 6, borderRadius: radius.sm },
   q: { fontSize: 14, fontFamily: fonts.heading, color: colors.foreground },
   a: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 4, lineHeight: 19 },
 });
