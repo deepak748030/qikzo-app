@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp } from 'react-native';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 
 type Props = {
   label: string;
@@ -11,7 +11,7 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-// Strict rule: when pressed/working, show spinner instead of text. Radius 0.
+// Pill CTA matching the reference's "Calculate" button — full-width, orange, rounded.
 export default function Button({ label, onPress, loading, disabled, variant = 'solid', style }: Props) {
   const isOutline = variant === 'outline';
   return (
@@ -22,12 +22,12 @@ export default function Button({ label, onPress, loading, disabled, variant = 's
         styles.base,
         isOutline ? styles.outline : styles.solid,
         (disabled || loading) && styles.disabled,
-        pressed && { opacity: 0.85 },
+        pressed && { opacity: 0.9 },
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={isOutline ? colors.foreground : colors.primaryForeground} size="small" />
+        <ActivityIndicator color={isOutline ? colors.foreground : colors.accentForeground} size="small" />
       ) : (
         <Text style={[styles.label, isOutline ? styles.outlineLabel : styles.solidLabel]}>{label}</Text>
       )}
@@ -36,12 +36,11 @@ export default function Button({ label, onPress, loading, disabled, variant = 's
 }
 
 const styles = StyleSheet.create({
-  base: { height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
-  solid: { backgroundColor: colors.primary },
-  outline: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.foreground },
+  base: { height: 54, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, paddingHorizontal: 20 },
+  solid: { backgroundColor: colors.accent },
+  outline: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.foreground },
   disabled: { opacity: 0.5 },
-  label: { fontSize: 14, fontFamily: fonts.bodyBold },
-  solidLabel: { color: colors.primaryForeground },
+  label: { fontSize: 15, fontFamily: fonts.bodyBold, letterSpacing: 0.3 },
+  solidLabel: { color: colors.accentForeground },
   outlineLabel: { color: colors.foreground },
 });
-

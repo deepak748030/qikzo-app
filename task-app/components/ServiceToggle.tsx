@@ -36,7 +36,7 @@ function Segment({
     return (
         <Pressable onPress={onPress} style={styles.segWrap} hitSlop={6}>
             <View style={styles.segInner}>
-                <Icon size={16} color={active ? colors.foreground : colors.mutedForeground} strokeWidth={active ? 2.4 : 1.8} />
+                <Icon size={16} color={active ? colors.primary : colors.mutedForeground} strokeWidth={active ? 2.4 : 1.8} />
                 <Text style={[styles.segText, active && styles.segTextActive]}>{label}</Text>
             </View>
             <View style={[styles.underline, active && styles.underlineActive]} />
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     segWrap: { alignItems: 'center' },
     segInner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 6 },
     segText: { fontSize: 14, fontFamily: fonts.heading, color: colors.mutedForeground },
-    segTextActive: { color: colors.foreground },
+    segTextActive: { color: colors.primary },
     underline: { height: 2, width: '100%', backgroundColor: 'transparent' },
-    underlineActive: { backgroundColor: colors.foreground },
+    underlineActive: { backgroundColor: colors.primary },
 });

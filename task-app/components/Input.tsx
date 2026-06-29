@@ -1,13 +1,13 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet, TextInputProps } from 'react-native';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 
 type Props = TextInputProps & {
   label?: string;
   prefix?: string;
 };
 
-// Strict rule: outlined input, small vertical padding, radius 0.
+// Rounded outlined input — matches the reference's pill receipt-number field.
 export default function Input({ label, prefix, style, ...rest }: Props) {
   return (
     <View style={styles.wrap}>
@@ -30,9 +30,8 @@ const styles = StyleSheet.create({
   box: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1, borderColor: colors.inputBorder, backgroundColor: colors.inputBg,
-    paddingHorizontal: 10, borderRadius: 0,
+    paddingHorizontal: 14, borderRadius: radius.pill, minHeight: 46,
   },
   prefix: { fontSize: 14, color: colors.foreground, fontFamily: fonts.bodyBold, marginRight: 6 },
-  input: { flex: 1, paddingVertical: 8, fontSize: 14, color: colors.foreground, fontFamily: fonts.body },
+  input: { flex: 1, paddingVertical: 10, fontSize: 14, color: colors.foreground, fontFamily: fonts.body },
 });
-

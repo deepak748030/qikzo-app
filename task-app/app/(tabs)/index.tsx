@@ -136,31 +136,35 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Where-to card */}
+        {/* Where-to card — green primary surface like reference "My Location" card */}
         <View style={styles.whereCard}>
           <Pressable style={styles.whereRow} onPress={() => openMap('pickup')}>
-            <View style={[styles.pinDot, styles.pinPickup]} />
+            <View style={styles.whereIconChip}>
+              <MapPin size={14} color={colors.primary} strokeWidth={2.2} />
+            </View>
             <View style={styles.whereTextWrap}>
               <Text style={styles.whereLabel}>PICK UP FROM</Text>
               <Text style={[styles.wherePlaceholder, !draft.pickup && styles.muted]} numberOfLines={1}>
                 {draft.pickup || 'Tap to set pickup location'}
               </Text>
             </View>
-            <ChevronRight size={16} color={colors.mutedForeground} />
+            <ChevronRight size={16} color={'rgba(255,255,255,0.7)'} />
           </Pressable>
           <View style={styles.whereDivider} />
           <Pressable style={styles.whereRow} onPress={() => openMap('drop')}>
-            <View style={[styles.pinDot, styles.pinDrop]} />
+            <View style={styles.whereIconChip}>
+              <HomeIcon size={14} color={colors.primary} strokeWidth={2.2} />
+            </View>
             <View style={styles.whereTextWrap}>
               <Text style={styles.whereLabel}>{mode === 'ride' ? 'GOING TO' : 'DELIVER TO'}</Text>
               <Text style={[styles.wherePlaceholder, !draft.drop && styles.muted]} numberOfLines={1}>
                 {draft.drop || (mode === 'ride' ? 'Where are you headed?' : 'Where should the rider drop it?')}
               </Text>
             </View>
-            <ChevronRight size={16} color={colors.mutedForeground} />
+            <ChevronRight size={16} color={'rgba(255,255,255,0.7)'} />
           </Pressable>
           <View style={styles.searchHint}>
-            <Search size={14} color={colors.mutedForeground} />
+            <Search size={14} color={'rgba(255,255,255,0.85)'} />
             <Text style={styles.searchHintText}>Search any address, landmark or area</Text>
           </View>
         </View>
@@ -319,23 +323,27 @@ const styles = StyleSheet.create({
   },
 
   whereCard: {
-    marginHorizontal: 6, marginTop: 12, borderWidth: 1, borderColor: colors.foreground,
-    backgroundColor: colors.card, borderRadius: radius.md, padding: 10,
+    marginHorizontal: 6, marginTop: 12, borderWidth: 0,
+    backgroundColor: colors.primary, borderRadius: 0, padding: 12,
   },
   whereRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  whereIconChip: {
+    width: 28, height: 28, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 0,
+  },
   whereTextWrap: { flex: 1 },
-  whereLabel: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: colors.mutedForeground },
-  wherePlaceholder: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground, marginTop: 2 },
-  muted: { color: colors.mutedForeground },
-  pinDot: { width: 10, height: 10, marginLeft: 2, borderRadius: radius.sm },
+  whereLabel: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: 'rgba(255,255,255,0.75)' },
+  wherePlaceholder: { fontSize: 13, fontFamily: fonts.bodyBold, color: '#FFFFFF', marginTop: 2 },
+  muted: { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.body },
+  pinDot: { width: 10, height: 10, marginLeft: 2, borderRadius: 0 },
   pinPickup: { backgroundColor: colors.accent },
-  pinDrop: { backgroundColor: colors.foreground },
-  whereDivider: { height: 1, backgroundColor: colors.divider, marginVertical: 2, marginLeft: 22 },
+  pinDrop: { backgroundColor: '#FFFFFF' },
+  whereDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginVertical: 2, marginLeft: 38 },
   searchHint: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: colors.divider,
+    flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.25)',
     marginTop: 6, paddingTop: 8,
   },
-  searchHintText: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body },
+  searchHintText: { fontSize: 12, color: 'rgba(255,255,255,0.9)', fontFamily: fonts.body },
 
   section: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground, paddingHorizontal: 6, marginTop: 18, marginBottom: 8, letterSpacing: 0.2 },
 
