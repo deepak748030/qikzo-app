@@ -1,35 +1,35 @@
 // Qikzo — on-demand delivery/ride booking customer app theme.
-// Palette: deep teal #004643 + warm gold accent on clean white.
+// Palette locked to the reference swatches:
+//   • Cyprus  #004643 — primary brand (headers, CTAs, active surfaces)
+//   • Sand Dune #F0EDE5 — canvas / header band / muted surface
 // Single source of truth — every screen reads colors from here.
-
-// Palette derived from reference mockups: soft peach/cream canvas,
-// fresh leaf-green primary, warm orange CTA accent, deep navy text.
 export const colors = {
-  primary: '#7CB342',          // leaf green — primary cards, active states, brand
-  primaryDark: '#5A8F2A',      // pressed green
-  primaryForeground: '#FFFFFF',
-  accent: '#FF6B1A',           // warm orange — CTAs, highlights, status
-  accentForeground: '#FFFFFF',
-  background: '#FFFFFF',       // soft peach canvas
+  primary: '#004643',          // Cyprus — brand deep teal
+  primaryDark: '#00302E',      // pressed
+  primaryForeground: '#F0EDE5',
+  accent: '#E5B769',           // warm gold accent (from Cyprus palette family)
+  accentForeground: '#004643',
+  background: '#F6F3EC',       // slightly lifted Sand Dune canvas
+  headerBg: '#F0EDE5',         // exact Sand Dune — used on every screen header
   card: '#FFFFFF',
-  foreground: '#1A2138',       // deep navy text
-  mutedForeground: '#6B7280',  // muted slate
-  border: '#EADBC8',           // warm sand border (visible on peach + white)
-  divider: '#EFE3D2',
-  success: '#7CB342',
-  danger: '#E53935',
-  warning: '#FF6B1A',
+  foreground: '#0F2A28',       // near-Cyprus ink for body text
+  mutedForeground: '#6B7E7C',  // muted teal-gray
+  border: '#DED6C6',           // sand border (visible on Sand Dune + white)
+  divider: '#E6DFCF',
+  success: '#2F7D6B',
+  danger: '#C0392B',
+  warning: '#C78A2E',
   inputBg: '#FFFFFF',
-  inputBorder: '#E0D2BE',
-  chipBg: '#FFF4E6',
-  // legacy keys
-  green: '#7CB342',
-  red: '#E53935',
-  purple: '#1A2138',
-  orange: '#ff6a1aaa',
+  inputBorder: '#D5CBB6',
+  chipBg: '#F0EDE5',
+  // legacy keys retained for compatibility
+  green: '#004643',
+  red: '#C0392B',
+  purple: '#0F2A28',
+  orange: '#E5B769',
 };
 
-// Rounded radii matching the reference mockups (soft, friendly cards & pill buttons).
+// Rounded radii matching the reference mockups (soft cards, pill CTAs).
 export const radius = {
   sm: 10,
   md: 16,

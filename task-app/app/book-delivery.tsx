@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Banknote, Wallet, Phone, FileText, Bike, ChevronRight, MapPin, Home } from 'lucide-react-native';
+import { Banknote, Wallet, Bike, ChevronRight, MapPin, Home } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Input from '@/components/Input';
@@ -177,7 +177,7 @@ export default function BookDeliveryScreen() {
                     <View style={styles.section}>
                         <Text style={styles.label}>What needs to be picked up?</Text>
                         <View style={styles.noteWrap}>
-                            <FileText size={14} color={colors.mutedForeground} style={{ marginTop: 10, marginRight: 4 }} />
+
                             <View style={{ flex: 1, minWidth: 0 }}>
                                 <Input
                                     placeholder={'List the items, sizes, brand notes...\ne.g. 2L Amul milk, brown bread, 6 eggs'}
@@ -198,7 +198,7 @@ export default function BookDeliveryScreen() {
                         {isRide ? 'Co-passenger contact (optional)' : 'Recipient contact (optional)'}
                     </Text>
                     <View style={styles.noteWrap}>
-                        <Phone size={14} color={colors.mutedForeground} style={{ marginTop: 12, marginRight: 4 }} />
+
                         <View style={{ flex: 1, minWidth: 0 }}>
                             <Input
                                 prefix="+91"

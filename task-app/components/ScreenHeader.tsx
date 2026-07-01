@@ -11,6 +11,7 @@ type Props = {
   right?: React.ReactNode;
 };
 
+// Every screen wears the Sand Dune header band with Cyprus ink — brand-locked.
 export default function ScreenHeader({ title, showBack = true, right }: Props) {
   const insets = useSafeAreaInsets();
   return (
@@ -18,10 +19,10 @@ export default function ScreenHeader({ title, showBack = true, right }: Props) {
       <View style={styles.row}>
         {showBack ? (
           <Pressable onPress={() => router.back()} style={styles.iconBtn} hitSlop={10}>
-            <ChevronLeft size={24} color={colors.foreground} />
+            <ChevronLeft size={22} color={colors.primary} strokeWidth={2.2} />
           </Pressable>
         ) : <View style={styles.iconBtn} />}
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title} numberOfLines={1}>{title}</Text>
         <View style={styles.iconBtn}>{right}</View>
       </View>
     </View>
@@ -30,11 +31,16 @@ export default function ScreenHeader({ title, showBack = true, right }: Props) {
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: colors.card, paddingHorizontal: 6, paddingBottom: 10,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: 6,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   iconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  title: { color: colors.foreground, fontSize: 16, fontFamily: fonts.heading, flex: 1, textAlign: 'center' },
+  title: {
+    color: colors.primary, fontSize: 16, fontFamily: fonts.displayBold,
+    flex: 1, textAlign: 'center', letterSpacing: 0.2,
+  },
 });
-
