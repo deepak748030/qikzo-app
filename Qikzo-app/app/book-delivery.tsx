@@ -83,17 +83,22 @@ export default function BookDeliveryScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 160 }}
             >
-                {/* Route map preview — full-bleed */}
-                {(draft.pickupCoord || draft.dropCoord) ? (
-                    <View style={styles.mapWrap}>
-                        <LeafletMap
-                            center={draft.pickupCoord || draft.dropCoord!}
-                            pickup={draft.pickupCoord || undefined}
-                            drop={draft.dropCoord || undefined}
-                            style={{ height: 150 }}
-                        />
-                    </View>
-                ) : null}
+                {/* Route map preview — always visible at the top, full-bleed.
+                    Falls back to a Delhi center when no coords are picked yet. */}
+                <View style={styles.mapWrap}>
+                    <LeafletMap
+                        center={draft.pickupCoord || draft.dropCoord || { lat: 28.6139, lng: 77.2090 }}
+                        pickup={draft.pickupCoord || undefined}
+                        drop={draft.dropCoord || undefined}
+                        style={{ height: 170 }}
+                    />
+                    {!(draft.pickupCoord || draft.dropCoord) ? (
+                        <Pressable style={styles.mapHint} onPress={() => openMap('drop')}>
+                            <MapPin size={12} color={colors.primaryForeground} />
+                            <Text style={styles.mapHintText}>Tap Trip below to set pickup & drop on map</Text>
+                        </Pressable>
+                    ) : null}
+                </View>
 
                 {/* Category / Ride option chips */}
                 <View style={styles.section}>
@@ -112,8 +117,15 @@ export default function BookDeliveryScreen() {
                                     style={[styles.catChip, active && styles.catChipActive]}
                                     onPress={() => setDraft({ categoryId: item.id })}
                                 >
-                                    <AssetIcon id={item.id} size={22} />
-                                    <Text style={[styles.catChipLabel, active && styles.catChipLabelActive]}>{item.name}</Text>
+                                    <View style={styles.catIconSlot}>
+                                        <AssetIcon id={item.id} size={28} />
+                                    </View>
+                                    <Text
+                                        style={[styles.catChipLabel, active && styles.catChipLabelActive]}
+                                        numberOfLines={1}
+                                    >
+                                        {item.name}
+                                    </Text>
                                 </Pressable>
                             );
                         }}
@@ -301,11 +313,28 @@ const styles = StyleSheet.create({
     section: { paddingHorizontal: 6, marginTop: 10 },
     label: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.4, marginBottom: 6, textTransform: 'uppercase' },
 
-    catChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
+    // Category / ride chip — icon perfectly centered in a fixed-height slot,
+    // then a single line of text below. Consistent size regardless of icon.
+    catChip: {
+        alignItems: 'center', justifyContent: 'center',
+        paddingHorizontal: 12, paddingVertical: 8,
+        minWidth: 82,
+        borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+        backgroundColor: colors.card,
+    },
     catChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    catIconSlot: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
     catChipEmoji: { fontSize: 14 },
-    catChipLabel: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
+    catChipLabel: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground, marginTop: 4, textAlign: 'center' },
     catChipLabelActive: { color: colors.primaryForeground },
+
+    mapHint: {
+        position: 'absolute', bottom: 8, alignSelf: 'center',
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 6,
+        borderRadius: radius.pill,
+    },
+    mapHintText: { color: colors.primaryForeground, fontSize: 11, fontFamily: fonts.bodyBold },
 
     tripCard: { padding: 10, borderRadius: radius.lg, backgroundColor: colors.primary },
     tripRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 2 },

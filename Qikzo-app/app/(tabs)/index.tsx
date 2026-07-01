@@ -108,9 +108,16 @@ export default function HomeScreen() {
           <>
             <Text style={styles.section}>Choose a ride</Text>
             <View style={styles.rideList}>
-              {rideOptions.map((r) => {
+              {rideOptions.map((r, idx) => {
                 const meta = RIDE_META[r.id];
                 const isSelected = selectedRide === r.id;
+                const isFirst = idx === 0;
+                const isLast = idx === rideOptions.length - 1;
+                // If the NEXT card is selected, drop this card's bottom border so
+                // the selected card's thick Cyprus border shows cleanly — no
+                // sand line sneaking between them.
+                const nextSelected =
+                  idx < rideOptions.length - 1 && selectedRide === rideOptions[idx + 1].id;
                 return (
                   <Pressable
                     key={r.id}
@@ -118,6 +125,14 @@ export default function HomeScreen() {
                     onLongPress={() => openWithCategory(r.id)}
                     style={[
                       isSelected ? styles.rideCardSelected : styles.rideCard,
+                      // stitch cards together — no visible gap, share borders
+                      !isFirst && !isSelected && { borderTopWidth: 0 },
+                      !isSelected && nextSelected && { borderBottomWidth: 0 },
+                      isFirst && { borderTopLeftRadius: radius.md, borderTopRightRadius: radius.md },
+                      isLast && { borderBottomLeftRadius: radius.md, borderBottomRightRadius: radius.md },
+                      !isFirst && !isLast && { borderRadius: 0 },
+                      isFirst && !isLast && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+                      isLast && !isFirst && { borderTopLeftRadius: 0, borderTopRightRadius: 0 },
                     ]}
                   >
                     <View style={styles.rideArt}>
@@ -228,18 +243,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6, textTransform: 'uppercase',
   },
 
-  // Rides list — selected card is highlighted with Cyprus border.
-  rideList: { paddingHorizontal: 6, gap: 6 },
+  // Rides list — cards stitched together (no vertical gap between bike/auto/cab).
+  rideList: { paddingHorizontal: 6 },
   rideCard: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card,
-    borderRadius: radius.md, paddingVertical: 8, paddingHorizontal: 10,
+    paddingVertical: 10, paddingHorizontal: 10,
   },
   rideCardSelected: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.card,
     borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 10,
-
+    marginVertical: -1, zIndex: 2,
   },
   rideArt: {
     width: 66, height: 52, alignItems: 'center', justifyContent: 'center',
@@ -274,7 +289,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card,
     borderRadius: radius.md,
   },
-  tileArt: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  tileArt: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
   tileBody: { flex: 1 },
   tileName: { fontSize: 13, fontFamily: fonts.displayBold, color: colors.foreground },
   tileHint: { fontSize: 10, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 1 },

@@ -19,9 +19,13 @@ export const colors = {
   success: '#2F7D6B',
   danger: '#C0392B',
   warning: '#C78A2E',
-  inputBg: '#FFFFFF',
-  inputBorder: '#D5CBB6',
+  // Sand-tinted input surface so fields don't look like flat white on the canvas
+  inputBg: '#FAF7EF',
+  inputBorder: '#CFC3A6',
   chipBg: '#F0EDE5',
+  // Rich footer surface for the bottom tab bar
+  surfaceDark: '#003330',
+  surfaceDarkBorder: '#00504C',
   // legacy keys retained for compatibility
   green: '#004643',
   red: '#C0392B',
