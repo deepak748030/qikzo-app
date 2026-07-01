@@ -23,18 +23,31 @@ export default function BookDeliveryScreen() {
     const resetDraft = useBooking((s) => s.resetDraft);
     const sheet = useSheet();
     const [loading, setLoading] = useState(false);
+    // Real road-based distance/duration reported by the map (OSRM). When present it
+    // overrides the mock straight-line estimate.
+    const [routeInfo, setRouteInfo] = useState<{ distanceKm: number; durationMin: number } | null>(null);
 
     const isRide = draft.mode === 'ride';
+
+    // Reset the resolved route whenever the endpoints change — the map will fetch a new one.
+    React.useEffect(() => {
+        setRouteInfo(null);
+    }, [draft.pickupCoord?.lat, draft.pickupCoord?.lng, draft.dropCoord?.lat, draft.dropCoord?.lng]);
 
     const trip = useMemo(() => {
         if (!draft.pickup.trim() || !draft.drop.trim()) return null;
         const base = estimateTrip(draft.pickup, draft.drop);
+        // Prefer real road-network distance/duration when the map has resolved a route.
+        const distanceKm = routeInfo?.distanceKm ?? base.distanceKm;
+        const etaMin = routeInfo ? Math.max(3, Math.round(routeInfo.durationMin)) : base.etaMin;
+        const merged = { ...base, distanceKm, etaMin };
         if (isRide) {
-            const r = estimateRide(base.distanceKm, draft.categoryId);
-            return { ...base, ...r };
+            const r = estimateRide(distanceKm, draft.categoryId);
+            return { ...merged, ...r, etaMin };
         }
-        return base;
-    }, [draft.pickup, draft.drop, draft.categoryId, isRide]);
+        // Recompute price for delivery when distance changes.
+        return { ...merged, price: Math.round(merged.base + distanceKm * merged.perKm) };
+    }, [draft.pickup, draft.drop, draft.categoryId, isRide, routeInfo]);
 
     const openMap = (field: 'pickup' | 'drop') => {
         router.push({ pathname: '/select-location', params: { field } });
@@ -90,6 +103,7 @@ export default function BookDeliveryScreen() {
                         center={draft.pickupCoord || draft.dropCoord || { lat: 28.6139, lng: 77.2090 }}
                         pickup={draft.pickupCoord || undefined}
                         drop={draft.dropCoord || undefined}
+                        onRoute={(r) => setRouteInfo(r)}
                         style={{ height: 170 }}
                     />
                     {!(draft.pickupCoord || draft.dropCoord) ? (

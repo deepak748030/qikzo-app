@@ -136,11 +136,16 @@ export default function SelectLocationScreen() {
 
     return (
         <View style={styles.container}>
-            {/* Map fills the screen */}
+            {/* Map fills the screen.
+                When placing the drop, keep the pickup marker visible (and vice-versa)
+                so the user always sees the other end of the trip they're planning. */}
             <LeafletMap
                 center={center}
                 pickerMode
                 pinColor={accent}
+                pickup={which === 'drop' ? draft.pickupCoord || undefined : undefined}
+                drop={which === 'pickup' ? draft.dropCoord || undefined : undefined}
+                showTraffic={false}
                 onCenterChange={setCenter}
                 style={StyleSheet.absoluteFill}
             />
