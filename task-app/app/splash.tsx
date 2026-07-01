@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { router } from 'expo-router';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 import { useAuth } from '@/lib/authStore';
 
 export default function SplashAnimated() {
@@ -75,10 +75,10 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
     center: { alignItems: 'center', justifyContent: 'center' },
     markWrap: { width: 110, height: 110, alignItems: 'center', justifyContent: 'center' },
-    ring: { position: 'absolute', width: 90, height: 90, borderWidth: 2, borderColor: colors.accent, borderRadius: 0 },
-    mark: { width: 78, height: 78, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+    ring: { position: 'absolute', width: 90, height: 90 },
+    mark: { width: 78, height: 78, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
     markText: { color: colors.primaryForeground, fontFamily: fonts.displayBold, fontSize: 46 },
-    dot: { position: 'absolute', top: 10, right: 10, width: 9, height: 9, backgroundColor: colors.accent, borderRadius: 0 },
+    dot: { position: 'absolute', top: 10, right: 10, width: 9, height: 9, backgroundColor: colors.accent, borderRadius: radius.lg },
     word: { marginTop: 18, fontSize: 36, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: -0.8 },
     tagline: { marginTop: 6, fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, letterSpacing: 2, textTransform: 'uppercase' },
     foot: { position: 'absolute', bottom: 28, fontSize: 10, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 3, textTransform: 'uppercase' },

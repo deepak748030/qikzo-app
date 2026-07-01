@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Phone, X, MessageCircle, FileText, Bike, Star, CheckCircle2, MapPin, Home } from 'lucide-react-native';
+import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar } from 'lucide-react-native';
+import AnimatedIcon from '@/components/AnimatedIcon';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Button from '@/components/Button';
@@ -123,14 +124,14 @@ export default function BookingDetailsScreen() {
                         {booking.status === 'Searching rider' ? (
                             <View style={styles.searchingWrap}>
                                 <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
-                                <ActivityIndicator color={colors.foreground} />
+                                <AnimatedIcon Icon={Radar} size={26} color={colors.foreground} variant="spin" strokeWidth={1.8} />
                             </View>
                         ) : booking.status === 'Delivered' ? (
-                            <CheckCircle2 size={28} color={colors.success} />
+                            <AnimatedIcon Icon={BadgeCheck} size={28} color={colors.success} variant="pulse" />
                         ) : booking.status === 'Cancelled' ? (
                             <X size={28} color={colors.danger} />
                         ) : (
-                            <Bike size={26} color={colors.foreground} />
+                            <AnimatedIcon Icon={Bike} size={26} color={colors.foreground} variant="bounce" />
                         )}
                     </View>
                     <View style={{ flex: 1 }}>
@@ -182,7 +183,7 @@ export default function BookingDetailsScreen() {
                             <Text style={styles.riderVehicle}>{booking.rider.vehicle} · {booking.rider.vehicleNo}</Text>
                         </View>
                         <Pressable style={styles.callBtn} onPress={onCallRider}>
-                            <Phone size={16} color={colors.foreground} />
+                            <AnimatedIcon Icon={PhoneCall} size={16} color={colors.foreground} variant="pulse" />
                         </Pressable>
                     </View>
                 ) : null}
@@ -191,9 +192,9 @@ export default function BookingDetailsScreen() {
                 <View style={styles.tripCard}>
                     <View style={styles.tripRow}>
                         <View style={styles.tripIconCol}>
-                            <View style={styles.pinBubble}><MapPin size={14} color="#FFFFFF" /></View>
+                            <View style={styles.pinBubble}><MapPinned size={14} color="#FFFFFF" /></View>
                             <View style={styles.pinLine} />
-                            <View style={styles.pinBubble}><Home size={14} color="#FFFFFF" /></View>
+                            <View style={styles.pinBubble}><Flag size={14} color="#FFFFFF" /></View>
                         </View>
                         <View style={{ flex: 1, gap: 12 }}>
                             <View>
@@ -208,7 +209,7 @@ export default function BookingDetailsScreen() {
                     </View>
                     <View style={styles.tripStats}>
                         <View style={styles.tripStat}>
-                            <MapPin size={11} color="rgba(255,255,255,0.9)" />
+                            <MapPinned size={11} color="rgba(255,255,255,0.9)" />
                             <Text style={styles.tripStatText}>{booking.distanceKm.toFixed(1)} km</Text>
                         </View>
                         <View style={styles.tripStat}>
@@ -225,7 +226,7 @@ export default function BookingDetailsScreen() {
                 {/* Items / notes */}
                 <View style={styles.notesCard}>
                     <View style={styles.notesHead}>
-                        <FileText size={14} color={colors.foreground} />
+                        <NotebookPen size={14} color={colors.foreground} />
                         <Text style={styles.sectionLabel}>Items / notes for rider</Text>
                     </View>
                     <Text style={styles.notesText}>{booking.notes}</Text>

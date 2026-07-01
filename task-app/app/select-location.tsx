@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
-import { ChevronLeft, LocateFixed, Search } from 'lucide-react-native';
+import { ArrowLeft, Crosshair, SearchCheck } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
 import LeafletMap, { LatLng } from '@/components/LeafletMap';
 import Button from '@/components/Button';
@@ -148,7 +148,7 @@ export default function SelectLocationScreen() {
             {/* Top bar overlay */}
             <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
                 <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-                    <ChevronLeft size={22} color={colors.foreground} />
+                    <ArrowLeft size={22} color={colors.foreground} />
                 </Pressable>
                 <View style={styles.titleWrap}>
                     <Text style={styles.titleSmall}>
@@ -167,7 +167,7 @@ export default function SelectLocationScreen() {
             >
                 {locating
                     ? <ActivityIndicator color={colors.foreground} />
-                    : <LocateFixed size={18} color={colors.foreground} />}
+                    : <Crosshair size={18} color={colors.foreground} />}
             </Pressable>
 
             {/* Bottom address card */}
@@ -190,7 +190,7 @@ export default function SelectLocationScreen() {
                     <Text style={styles.resolving}>Finding address…</Text>
                 ) : (
                     <Text style={styles.resolved} numberOfLines={1}>
-                        <Search size={10} color={colors.mutedForeground} /> {center.lat.toFixed(4)}, {center.lng.toFixed(4)}
+                        <SearchCheck size={10} color={colors.mutedForeground} /> {center.lat.toFixed(4)}, {center.lng.toFixed(4)}
                     </Text>
                 )}
                 <Button

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, useWindowDimensions, Pressable, Anima
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Bike, MapPin, Package } from 'lucide-react-native';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 import Button from '@/components/Button';
 import { useAuth } from '@/lib/authStore';
 
@@ -138,11 +138,11 @@ const styles = StyleSheet.create({
     slide: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
     textWrap: { alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
     iconBox: { width: 200, height: 200, alignItems: 'center', justifyContent: 'center', marginBottom: 36, alignSelf: 'center' },
-    iconRing: { position: 'absolute', width: 180, height: 180, borderWidth: 1, borderColor: colors.border },
-    iconDot: { position: 'absolute', top: 20, right: 20, width: 10, height: 10, backgroundColor: colors.accent },
+    iconRing: { position: 'absolute', width: 180, height: 180, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+    iconDot: { position: 'absolute', top: 20, right: 20, width: 10, height: 10, backgroundColor: colors.accent, borderRadius: radius.lg },
     title: { fontSize: 30, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: -0.6, textAlign: 'center', lineHeight: 36 },
     sub: { fontSize: 14, fontFamily: fonts.body, color: colors.mutedForeground, textAlign: 'center', marginTop: 12, lineHeight: 21, paddingHorizontal: 12 },
-    dots: { flexDirection: 'row', alignSelf: 'center', gap: 6, marginBottom: 18 },
-    dot: { height: 6, backgroundColor: colors.border },
+    dots: { flexDirection: 'row', alignSelf: 'center', gap: 6, marginBottom: 18, borderRadius: radius.lg },
+    dot: { height: 6, backgroundColor: colors.border, borderRadius: radius.lg },
     actions: { paddingHorizontal: 6 },
 });

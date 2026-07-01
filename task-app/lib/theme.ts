@@ -26,7 +26,7 @@ export const colors = {
   green: '#7CB342',
   red: '#E53935',
   purple: '#1A2138',
-  orange: '#FF6B1A',
+  orange: '#ff6a1aaa',
 };
 
 // Rounded radii matching the reference mockups (soft, friendly cards & pill buttons).

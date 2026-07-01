@@ -2,7 +2,7 @@ import React from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react-native';
-import { colors, fonts } from '@/lib/theme';
+import { colors, fonts, radius } from '@/lib/theme';
 
 type Variant = 'success' | 'error' | 'warning' | 'info';
 
@@ -66,16 +66,16 @@ const styles = StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
     sheet: {
         backgroundColor: colors.card, paddingHorizontal: 6, paddingTop: 8,
-        borderTopWidth: 1, borderColor: colors.border, alignItems: 'center', borderRadius: 0,
+        borderTopWidth: 1, borderColor: colors.border, alignItems: 'center', borderRadius: radius.sm,
     },
     handle: { width: 40, height: 4, backgroundColor: colors.border, marginBottom: 10, borderRadius: 0 },
-    iconWrap: { width: 52, height: 52, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+    iconWrap: { width: 52, height: 52, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
     title: { color: colors.foreground, fontFamily: fonts.heading, fontSize: 16, marginTop: 10, textAlign: 'center' },
     message: { color: colors.mutedForeground, fontSize: 13, marginTop: 6, textAlign: 'center', fontFamily: fonts.body },
-    actions: { flexDirection: 'row', gap: 6, marginTop: 14, width: '100%' },
-    btn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 0 },
+    actions: { flexDirection: 'row', gap: 6, marginTop: 14, width: '100%', borderRadius: radius.sm },
+    btn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
     confirmBtn: { backgroundColor: colors.primary },
     cancelBtn: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-    cancelText: { color: colors.foreground, fontFamily: fonts.bodyBold, fontSize: 14 },
-    confirmText: { color: colors.primaryForeground, fontFamily: fonts.bodyBold, fontSize: 14 },
+    cancelText: { color: colors.foreground, fontFamily: fonts.bodyBold, fontSize: 14, letterSpacing: 1.5 },
+    confirmText: { color: colors.primaryForeground, fontFamily: fonts.bodyBold, fontSize: 14, letterSpacing: 1.5 },
 });

@@ -1,48 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import * as Location from 'expo-location';
 import {
-  Search, Bell, MapPin, ChevronRight, Package, Navigation,
-  ShoppingCart, UtensilsCrossed, Pill, Sparkles, Bike, Car, Truck,
+  Search, Bell, ChevronRight, MapPin,
   Home as HomeIcon, Building2, Heart, Bookmark, LucideIcon,
 } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import Brand from '@/components/Brand';
 import ServiceToggle from '@/components/ServiceToggle';
-import LeafletMap from '@/components/LeafletMap';
-import AnimatedIcon from '@/components/AnimatedIcon';
+import AssetIcon from '@/components/AssetIcon';
 import { categories, savedPlaces, DeliveryCategory } from '@/lib/mockData';
 import { useBooking } from '@/lib/bookingStore';
-import { useAuth } from '@/lib/authStore';
 import { useServiceMode, rideOptions } from '@/lib/serviceMode';
 
-const DEFAULT_CENTER = { lat: 28.6139, lng: 77.209 };
-
-// Lucide icon mapping replaces emoji per category / ride option / saved place.
-const CATEGORY_ICON: Record<string, LucideIcon> = {
-  groceries: ShoppingCart,
-  food: UtensilsCrossed,
-  medicines: Pill,
-  parcel: Package,
-  other: Sparkles,
-};
-
-const RIDE_ICON: Record<string, LucideIcon> = {
-  bike: Bike,
-  auto: Car,
-  cab: Car,
-  parcel: Truck,
-};
-
+// Saved place chip icons stay as small line icons — they're UI chrome, not hero art.
 const PLACE_ICON: Record<string, LucideIcon> = {
   home: HomeIcon,
   office: Building2,
   mom: Heart,
 };
-
-
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -50,7 +27,6 @@ export default function HomeScreen() {
   const setDraft = useBooking((s) => s.setDraft);
   const draft = useBooking((s) => s.draft);
   const bookings = useBooking((s) => s.bookings);
-  const name = useAuth((s) => s.name);
   const mode = useServiceMode((s) => s.mode);
   const setMode = useServiceMode((s) => s.setMode);
 
@@ -65,40 +41,12 @@ export default function HomeScreen() {
   };
 
   const openMap = (field: 'pickup' | 'drop') => {
-    // Don't reset existing pickup/drop here — just remember the active mode.
     setDraft({ mode });
     router.push({ pathname: '/select-location', params: { field } });
   };
 
   const recent = bookings.slice(0, 3);
-  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
-
-  // Auto-detect current location for the home map preview (silent — no prompts on home).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { status } = await Location.getForegroundPermissionsAsync();
-        let granted = status === 'granted';
-        if (!granted) {
-          const req = await Location.requestForegroundPermissionsAsync();
-          granted = req.status === 'granted';
-        }
-        if (!granted) return;
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        if (cancelled) return;
-        const coord = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-        setMyLoc(coord);
-        if (!draft.pickupCoord) setDraft({ pickupCoord: coord });
-      } catch { }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const mapCenter = draft.pickupCoord || myLoc || DEFAULT_CENTER;
-  const mapPickup = draft.pickupCoord || myLoc || undefined;
-
+  const tileWidth = (width - 12 - 6) / 2; // 2-col grid, 6 horizontal pad + 6 gap
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 6 }]}>
@@ -106,7 +54,7 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <Brand size={24} />
         <Pressable onPress={() => router.push('/notifications')} hitSlop={8} style={styles.bellBtn}>
-          <AnimatedIcon Icon={Bell} size={20} color={colors.foreground} variant="bounce" strokeWidth={1.8} />
+          <Bell size={18} color={colors.foreground} strokeWidth={1.8} />
           <View style={styles.bellDot} />
         </Pressable>
       </View>
@@ -118,100 +66,60 @@ export default function HomeScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
 
-
-        {/* Live map preview */}
-        <View style={styles.mapBox}>
-          <LeafletMap
-            center={mapCenter}
-            pickup={mapPickup}
-            drop={draft.dropCoord || undefined}
-            style={{ height: 170 }}
-          />
-          <Pressable style={styles.mapOverlayBtn} onPress={() => openMap('pickup')} hitSlop={6}>
-            <AnimatedIcon Icon={Navigation} size={12} color={colors.foreground} variant="pulse" />
-            <Text style={styles.mapOverlayText}>Use my location</Text>
-          </Pressable>
-          <View style={styles.mapPingWrap} pointerEvents="none">
-            <AnimatedIcon Icon={MapPin} size={22} color={colors.accent} variant="ping" ringColor={colors.accent} strokeWidth={2.2} />
+        {/* Search-style "Where to?" trigger — single primary CTA, no clutter */}
+        <Pressable style={styles.whereBtn} onPress={() => openMap('drop')}>
+          <View style={styles.whereIcon}>
+            <Search size={16} color={colors.primaryForeground} strokeWidth={2.2} />
           </View>
-        </View>
-
-        {/* Where-to card — green primary surface like reference "My Location" card */}
-        <View style={styles.whereCard}>
-          <Pressable style={styles.whereRow} onPress={() => openMap('pickup')}>
-            <View style={styles.whereIconChip}>
-              <MapPin size={14} color={colors.primary} strokeWidth={2.2} />
-            </View>
-            <View style={styles.whereTextWrap}>
-              <Text style={styles.whereLabel}>PICK UP FROM</Text>
-              <Text style={[styles.wherePlaceholder, !draft.pickup && styles.muted]} numberOfLines={1}>
-                {draft.pickup || 'Tap to set pickup location'}
-              </Text>
-            </View>
-            <ChevronRight size={16} color={'rgba(255,255,255,0.7)'} />
-          </Pressable>
-          <View style={styles.whereDivider} />
-          <Pressable style={styles.whereRow} onPress={() => openMap('drop')}>
-            <View style={styles.whereIconChip}>
-              <HomeIcon size={14} color={colors.primary} strokeWidth={2.2} />
-            </View>
-            <View style={styles.whereTextWrap}>
-              <Text style={styles.whereLabel}>{mode === 'ride' ? 'GOING TO' : 'DELIVER TO'}</Text>
-              <Text style={[styles.wherePlaceholder, !draft.drop && styles.muted]} numberOfLines={1}>
-                {draft.drop || (mode === 'ride' ? 'Where are you headed?' : 'Where should the rider drop it?')}
-              </Text>
-            </View>
-            <ChevronRight size={16} color={'rgba(255,255,255,0.7)'} />
-          </Pressable>
-          <View style={styles.searchHint}>
-            <Search size={14} color={'rgba(255,255,255,0.85)'} />
-            <Text style={styles.searchHintText}>Search any address, landmark or area</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.whereTitle} numberOfLines={1}>
+              {draft.drop || (mode === 'ride' ? 'Where are you going?' : 'Where to deliver?')}
+            </Text>
+            <Text style={styles.whereSub} numberOfLines={1}>
+              {draft.pickup ? `From ${draft.pickup}` : 'Tap to set pickup & drop'}
+            </Text>
           </View>
-        </View>
+          <ChevronRight size={18} color={'rgba(255,255,255,0.9)'} />
+        </Pressable>
 
-        {/* Mode-specific section */}
+        {/* Mode-specific hero cards with big illustrations */}
         {mode === 'ride' ? (
           <>
             <Text style={styles.section}>Choose your ride</Text>
-            <View style={styles.catGrid}>
-              {rideOptions.map((r) => {
-                const RIcon = RIDE_ICON[r.id] || Bike;
-                return (
-                  <Pressable
-                    key={r.id}
-                    style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
-                    onPress={() => openWithCategory(r.id)}
-                  >
-                    <View style={styles.catIconChip}>
-                      <RIcon size={20} color={colors.foreground} strokeWidth={1.8} />
+            <View style={styles.rideList}>
+              {rideOptions.map((r) => (
+                <Pressable key={r.id} style={styles.rideCard} onPress={() => openWithCategory(r.id)}>
+                  <View style={styles.rideArt}>
+                    <AssetIcon id={r.id} size={68} />
+                  </View>
+                  <View style={styles.rideBody}>
+                    <View style={styles.rideHead}>
+                      <Text style={styles.rideName}>{r.name}</Text>
+                      <Text style={styles.ridePrice}>₹{r.base}+</Text>
                     </View>
-                    <Text style={styles.catName}>{r.name}</Text>
-                    <Text style={styles.catHint} numberOfLines={1}>{r.hint}</Text>
-                  </Pressable>
-                );
-              })}
+                    <Text style={styles.rideHint} numberOfLines={1}>{r.hint}</Text>
+                    <Text style={styles.rideCap}>{r.capacity} · ₹{r.perKm}/km</Text>
+                  </View>
+                  <ChevronRight size={16} color={colors.mutedForeground} />
+                </Pressable>
+              ))}
             </View>
           </>
         ) : (
           <>
             <Text style={styles.section}>What do you want to send?</Text>
-            <View style={styles.catGrid}>
-              {categories.map((c: DeliveryCategory) => {
-                const CIcon = CATEGORY_ICON[c.id] || Package;
-                return (
-                  <Pressable
-                    key={c.id}
-                    style={[styles.catItem, { width: (width - 12 - 12) / 3 }]}
-                    onPress={() => openWithCategory(c.id)}
-                  >
-                    <View style={styles.catIconChip}>
-                      <CIcon size={20} color={colors.foreground} strokeWidth={1.8} />
-                    </View>
-                    <Text style={styles.catName}>{c.name}</Text>
-                    <Text style={styles.catHint} numberOfLines={1}>{c.hint}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.tileGrid}>
+              {categories.map((c: DeliveryCategory) => (
+                <Pressable
+                  key={c.id}
+                  style={[styles.tile, { width: tileWidth }]}
+                  onPress={() => openWithCategory(c.id)}
+                >
+                  <AssetIcon id={c.id} size={64} />
+                  <Text style={styles.tileName}>{c.name}</Text>
+                  <Text style={styles.tileHint} numberOfLines={1}>{c.hint}</Text>
+                </Pressable>
+              ))}
             </View>
           </>
         )}
@@ -230,7 +138,7 @@ export default function HomeScreen() {
             return (
               <Pressable style={styles.placeChip} onPress={() => openWithCategory(mode === 'ride' ? 'bike' : 'parcel', item.address)}>
                 <View style={styles.placeIconChip}>
-                  <PIcon size={18} color={colors.foreground} strokeWidth={1.8} />
+                  <PIcon size={16} color={colors.foreground} strokeWidth={1.8} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.placeLabel}>{item.label}</Text>
@@ -250,25 +158,19 @@ export default function HomeScreen() {
         </View>
         {recent.length === 0 ? (
           <View style={styles.emptyRecent}>
-            <View style={styles.emptyIconWrap}>
-              <AnimatedIcon Icon={Package} size={28} color={colors.foreground} variant="bounce" strokeWidth={1.5} />
-            </View>
+            <AssetIcon id="parcel" size={56} />
             <Text style={styles.emptyText}>No bookings yet. Pick a destination above to begin.</Text>
           </View>
         ) : (
           <View>
             {recent.map((b, i) => {
-              const RIcon =
-                CATEGORY_ICON[b.categoryId] || RIDE_ICON[b.categoryId] || Package;
               return (
                 <Pressable
                   key={b.id}
                   style={[styles.recentRow, i === recent.length - 1 && { borderBottomWidth: 0 }]}
                   onPress={() => router.push({ pathname: '/booking-details', params: { id: b.id } })}
                 >
-                  <View style={styles.recentIcon}>
-                    <RIcon size={18} color={colors.foreground} strokeWidth={1.8} />
-                  </View>
+                  <AssetIcon id={b.categoryId} size={40} />
                   <View style={{ flex: 1, marginLeft: 8 }}>
                     <Text style={styles.recentRoute} numberOfLines={1}>
                       {b.pickup} → {b.drop}
@@ -300,73 +202,56 @@ const styles = StyleSheet.create({
 
   toggleWrap: { marginTop: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
 
-  greet: { paddingHorizontal: 6, paddingTop: 10 },
-  hi: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body },
-  headline: { fontSize: 22, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 4, lineHeight: 28, letterSpacing: -0.5 },
-
-  // Rounded white map card matching the reference mockups.
-  mapBox: {
-    marginTop: 12, marginHorizontal: 6,
-    borderRadius: radius.sm, overflow: 'hidden',
-    backgroundColor: '#f3f3f3', position: 'relative',
-    borderWidth: 1, borderColor: colors.border,
+  // "Where to?" hero CTA — one primary action, no map clutter.
+  whereBtn: {
+    marginHorizontal: 6, marginTop: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: colors.primary, borderRadius: radius.md,
+    paddingHorizontal: 12, paddingVertical: 12,
   },
-  mapOverlayBtn: {
-    position: 'absolute', right: 8, bottom: 8,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: colors.card, borderWidth: 0,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill,
-    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2,
+  whereIcon: {
+    width: 34, height: 34, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: radius.sm,
   },
-  mapOverlayText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground },
-  mapPingWrap: {
-    position: 'absolute', top: '50%', left: '50%',
-    marginLeft: -11, marginTop: -11,
-  },
-
-  whereCard: {
-    marginHorizontal: 6, marginTop: 12, borderWidth: 0,
-    backgroundColor: colors.primary, borderRadius: radius.md, padding: 12,
-  },
-  whereRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  whereIconChip: {
-    width: 28, height: 28, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: radius.md,
-  },
-  whereTextWrap: { flex: 1 },
-  whereLabel: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: 'rgba(255,255,255,0.75)' },
-  wherePlaceholder: { fontSize: 13, fontFamily: fonts.bodyBold, color: '#FFFFFF', marginTop: 2 },
-  muted: { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.body },
-  pinDot: { width: 10, height: 10, marginLeft: 2, borderRadius: radius.md },
-  pinPickup: { backgroundColor: colors.accent },
-  pinDrop: { backgroundColor: '#FFFFFF' },
-  whereDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginVertical: 2, marginLeft: 38 },
-  searchHint: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.25)',
-    marginTop: 6, paddingTop: 8,
-  },
-  searchHintText: { fontSize: 12, color: 'rgba(255,255,255,0.9)', fontFamily: fonts.body },
+  whereTitle: { fontSize: 14, fontFamily: fonts.displayBold, color: '#FFFFFF' },
+  whereSub: { fontSize: 11, fontFamily: fonts.body, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
 
   section: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground, paddingHorizontal: 6, marginTop: 18, marginBottom: 8, letterSpacing: 0.2 },
 
-  catGrid: { paddingHorizontal: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  catItem: {
-    borderWidth: 1, borderColor: colors.border, padding: 10, alignItems: 'flex-start',
-    backgroundColor: colors.card, borderRadius: radius.md,
+  // Ride cards — big illustration on the left, meta on the right.
+  rideList: { paddingHorizontal: 6, gap: 6 },
+  rideCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card,
+    borderRadius: radius.md, paddingVertical: 8, paddingHorizontal: 10,
   },
-  catIconChip: {
-    width: 36, height: 36, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.chipBg,
-    alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, marginBottom: 4,
+  rideArt: {
+    width: 72, height: 72, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.chipBg, borderRadius: radius.sm,
   },
-  catName: { fontSize: 13, fontFamily: fonts.heading, color: colors.foreground, marginTop: 2 },
-  catHint: { fontSize: 10, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 1 },
+  rideBody: { flex: 1 },
+  rideHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  rideName: { fontSize: 15, fontFamily: fonts.displayBold, color: colors.foreground },
+  ridePrice: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.accent },
+  rideHint: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
+  rideCap: { fontSize: 10, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
+
+  // Delivery tiles — 2 col grid of big illustrations.
+  tileGrid: { paddingHorizontal: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tile: {
+    alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8,
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card,
+    borderRadius: radius.md,
+  },
+  tileName: { fontSize: 13, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 6 },
+  tileHint: { fontSize: 10, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
 
   placeChip: {
-    width: 220, flexDirection: 'row', alignItems: 'center', gap: 8,
+    width: 210, flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1, borderColor: colors.border, padding: 8, backgroundColor: colors.card, borderRadius: radius.md,
   },
   placeIconChip: {
-    width: 32, height: 32, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.chipBg,
+    width: 30, height: 30, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.chipBg,
     alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm,
   },
   placeLabel: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
@@ -375,18 +260,10 @@ const styles = StyleSheet.create({
   recentHead: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingRight: 6 },
   viewAll: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground, textDecorationLine: 'underline' },
   emptyRecent: { alignItems: 'center', paddingVertical: 24, gap: 6, paddingHorizontal: 24 },
-  emptyIconWrap: {
-    width: 60, height: 60, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
-    borderRadius: radius.lg, marginBottom: 4,
-  },
   emptyText: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, textAlign: 'center' },
   recentRow: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6,
     borderBottomWidth: 1, borderBottomColor: colors.divider,
-  },
-  recentIcon: {
-    width: 36, height: 36, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
-    borderRadius: radius.sm, backgroundColor: colors.card,
   },
   recentRoute: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
   recentMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },

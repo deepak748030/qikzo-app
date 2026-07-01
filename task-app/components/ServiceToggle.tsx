@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Bike, Package } from 'lucide-react-native';
+import { Bike, PackageOpen } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
 
 export type ServiceMode = 'ride' | 'delivery';
@@ -22,7 +22,7 @@ export default function ServiceToggle({ value, onChange }: Props) {
             />
             <Segment
                 active={value === 'delivery'}
-                Icon={Package}
+                Icon={PackageOpen}
                 label="Delivery"
                 onPress={() => onChange('delivery')}
             />

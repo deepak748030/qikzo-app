@@ -11,6 +11,7 @@ import BottomSheet from '@/components/BottomSheet';
 import LeafletMap from '@/components/LeafletMap';
 import { useSheet } from '@/lib/useSheet';
 import { categories, estimateTrip, savedPlaces } from '@/lib/mockData';
+import AssetIcon from '@/components/AssetIcon';
 import { rideOptions, estimateRide } from '@/lib/serviceMode';
 import { newBookingId, useBooking } from '@/lib/bookingStore';
 
@@ -111,7 +112,7 @@ export default function BookDeliveryScreen() {
                                     style={[styles.catChip, active && styles.catChipActive]}
                                     onPress={() => setDraft({ categoryId: item.id })}
                                 >
-                                    <Text style={styles.catChipEmoji}>{item.emoji}</Text>
+                                    <AssetIcon id={item.id} size={22} />
                                     <Text style={[styles.catChipLabel, active && styles.catChipLabelActive]}>{item.name}</Text>
                                 </Pressable>
                             );
