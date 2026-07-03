@@ -132,7 +132,8 @@ export default function BookDeliveryScreen() {
                                     onPress={() => setDraft({ categoryId: item.id })}
                                 >
                                     <View style={styles.catIconSlot}>
-                                        <AssetIcon id={item.id} size={28} />
+                                        {/* <AssetIcon id={item.id} size={28} /> */}
+                                        <AssetIcon id={item.id} size={item.id === 'cab' ? 40 : 28} />
                                     </View>
                                     <Text
                                         style={[styles.catChipLabel, active && styles.catChipLabelActive]}
