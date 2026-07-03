@@ -13,6 +13,7 @@ import AssetIcon from '@/components/AssetIcon';
 import { categories, savedPlaces, DeliveryCategory } from '@/lib/mockData';
 import { useBooking } from '@/lib/bookingStore';
 import { useServiceMode, rideOptions } from '@/lib/serviceMode';
+import PromoBanners from '@/components/PromoBanners';
 
 const PLACE_ICON: Record<string, LucideIcon> = {
   home: HomeIcon,
@@ -136,7 +137,7 @@ export default function HomeScreen() {
                     ]}
                   >
                     <View style={styles.rideArt}>
-                      <AssetIcon id={r.id} size={isSelected ? 60 : 44} />
+                      <AssetIcon id={r.id} size={r.id === 'cab' ? (isSelected ? 78 : 66) : (isSelected ? 60 : 44)} />
                     </View>
                     <View style={styles.rideBody}>
                       <View style={styles.rideHeadRow}>
@@ -166,6 +167,8 @@ export default function HomeScreen() {
                 Choose {rideOptions.find((r) => r.id === selectedRide)?.name}
               </Text>
             </Pressable>
+
+            <PromoBanners />
           </>
         ) : (
           <>
@@ -188,6 +191,8 @@ export default function HomeScreen() {
                 </Pressable>
               ))}
             </View>
+
+            <PromoBanners />
           </>
         )}
       </ScrollView>

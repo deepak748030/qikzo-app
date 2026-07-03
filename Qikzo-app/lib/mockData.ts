@@ -25,6 +25,43 @@ export const savedPlaces: SavedPlace[] = [
   { id: 'mom', label: "Mom's place", address: '12-A, Lajpat Nagar, New Delhi 110024', emoji: '💝' },
 ];
 
+// Promo banners — tapping opens the map centered on the given coord.
+export type PromoBanner = {
+  id: string;
+  title: string;
+  subtitle: string;
+  address: string;
+  image: any;
+  coord: { lat: number; lng: number };
+};
+
+export const promoBanners: PromoBanner[] = [
+  {
+    id: 'food-market',
+    title: 'Chandni Chowk Food Market',
+    subtitle: 'Street food · Old Delhi',
+    address: 'Chandni Chowk, Old Delhi 110006',
+    image: require('../assets/banners/food-market.jpg'),
+    coord: { lat: 28.6506, lng: 77.2303 },
+  },
+  {
+    id: 'city-park',
+    title: 'Lodhi Gardens',
+    subtitle: 'City park · Lodhi Road',
+    address: 'Lodhi Rd, New Delhi 110003',
+    image: require('../assets/banners/city-park.jpg'),
+    coord: { lat: 28.5931, lng: 77.2197 },
+  },
+  {
+    id: 'mall',
+    title: 'DLF Mall of India',
+    subtitle: 'Shopping mall · Noida',
+    address: 'Sector 18, Noida 201301',
+    image: require('../assets/banners/mall.jpg'),
+    coord: { lat: 28.5675, lng: 77.3210 },
+  },
+];
+
 export type BookingStatus =
   | 'Searching rider'
   | 'Rider accepted'
