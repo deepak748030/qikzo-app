@@ -12,7 +12,15 @@ import { useSheet } from '@/lib/useSheet';
 import { useBooking } from '@/lib/bookingStore';
 import { BookingStatus, categories } from '@/lib/mockData';
 import { useAuth } from '@/lib/authStore';
-import BookingStageOverlay, { Stage } from '@/components/BookingStageOverlay';
+import BookingStageOverlay, { Stage, VehicleKind } from '@/components/BookingStageOverlay';
+
+// Map booking category → vehicle rendered on the "accepted" overlay.
+// Ride categories map 1:1; delivery categories default to the delivery bike.
+function vehicleFor(categoryId?: string): VehicleKind {
+    if (categoryId === 'cab') return 'car';
+    if (categoryId === 'auto') return 'auto';
+    return 'bike';
+}
 
 // Linear simulation of a real trip lifecycle.
 const FLOW: BookingStatus[] = [
@@ -296,8 +304,9 @@ export default function BookingDetailsScreen() {
             <BookingStageOverlay
                 visible={overlayStage === 'accepted'}
                 stage="accepted"
+                vehicle={vehicleFor(booking.categoryId)}
                 riderName={booking.rider?.name}
-                autoDismissMs={3200}
+                autoDismissMs={3600}
                 onContinue={() => setAcceptedShown(false)}
             />
             <BookingStageOverlay

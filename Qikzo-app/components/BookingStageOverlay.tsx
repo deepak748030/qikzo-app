@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Modal, View, Text, StyleSheet, Animated, Easing, Dimensions, Vibration, Platform, Pressable } from 'react-native';
+import { Modal, View, Text, StyleSheet, Animated, Easing, Dimensions, Vibration, Platform, Image, ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Radar, BadgeCheck, Sparkles, MapPin, Home, PartyPopper } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
@@ -10,17 +10,36 @@ import Button from './Button';
 let AudioMod: any = null;
 try { AudioMod = require('expo-av'); } catch { AudioMod = null; }
 
-// Public CC0 sfx (Mixkit CDN, mp3 — plays on both iOS & Android via expo-av).
-// "Motorcycle hum passing by" gives us the doppler pass we want to sync with
-// the bike sliding across the screen. Success uses a short achievement chime.
-const ENGINE_URL = 'https://assets.mixkit.co/active_storage/sfx/2732/2732-preview.mp3';
+// Vehicle art (transparent PNGs, all facing right — matches drive direction).
+const VEHICLE_IMAGES: Record<VehicleKind, ImageSourcePropType> = {
+    bike: require('../assets/images/vehicle-bike.png'),
+    auto: require('../assets/images/vehicle-bike.png'),
+    car: require('../assets/images/vehicle-bike.png'),
+};
+
+// Per-vehicle drive tuning — animation duration + playback rate keep the
+// engine sound length matched to how long the vehicle takes to cross screen.
+const VEHICLE_TUNING: Record<VehicleKind, { driveMs: number; rate: number; width: number; height: number; bottom: number }> = {
+    bike: { driveMs: 2600, rate: 1.15, width: 190, height: 118, bottom: 12 },
+    auto: { driveMs: 3000, rate: 0.95, width: 180, height: 130, bottom: 10 },
+    car: { driveMs: 3200, rate: 0.85, width: 230, height: 128, bottom: 14 },
+};
+
+// Public CC0 sfx (Mixkit CDN, mp3). Motorcycle pass for two-wheelers, car
+// pass-by for the cab so the audio actually matches what you see driving.
+const ENGINE_URL_BIKE = 'https://assets.mixkit.co/active_storage/sfx/2681/2681-preview.mp3';
+const ENGINE_URL_CAR = 'https://assets.mixkit.co/active_storage/sfx/2681/2681-preview.mp3';
 const SUCCESS_URL = 'https://assets.mixkit.co/active_storage/sfx/270/270-preview.mp3';
+
+export type VehicleKind = 'bike' | 'auto' | 'car';
+
 
 export type Stage = 'searching' | 'accepted' | 'delivered';
 
 type Props = {
     visible: boolean;
     stage: Stage;
+    vehicle?: VehicleKind;          // Which vehicle to render on the "accepted" stage
     riderName?: string;
     userName?: string;
     bookingId?: string;
@@ -34,10 +53,11 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // Immersive full-screen state renderer for the booking lifecycle.
 //  • searching → radar with pulsing rings + rotating scanner
-//  • accepted  → bike drives across the screen w/ engine sound + haptics
+//  • accepted  → real vehicle art (bike/auto/car) drives across, engine sfx
+//                is speed-matched to the animation via playback rate
 //  • delivered → success celebration with user's name + confetti burst
 export default function BookingStageOverlay({
-    visible, stage, riderName, userName, bookingId,
+    visible, stage, vehicle = 'bike', riderName, userName, bookingId,
     onDismiss, onCancel, onContinue, autoDismissMs,
 }: Props) {
     const soundRef = useRef<any>(null);
@@ -45,23 +65,39 @@ export default function BookingStageOverlay({
     // Play/stop appropriate audio per stage. Best-effort — never throws.
     useEffect(() => {
         let cancelled = false;
-        async function play(url: string, loop: boolean) {
+        async function play(url: string, opts: { loop: boolean; rate?: number }) {
             if (!AudioMod?.Audio) return;
             try {
                 await AudioMod.Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true });
-                const { sound } = await AudioMod.Audio.Sound.createAsync({ uri: url }, { shouldPlay: true, isLooping: loop, volume: 0.9 });
+                const { sound } = await AudioMod.Audio.Sound.createAsync(
+                    { uri: url },
+                    {
+                        shouldPlay: true,
+                        isLooping: opts.loop,
+                        volume: 0.9,
+                        rate: opts.rate ?? 1,
+                        shouldCorrectPitch: false, // keep pitch shift so slower rate = deeper engine
+                    }
+                );
                 if (cancelled) { await sound.unloadAsync().catch(() => { }); return; }
                 soundRef.current = sound;
             } catch { /* audio is optional */ }
         }
 
         if (visible && stage === 'accepted') {
-            // One-shot pass — do NOT loop, so it feels like a bike whooshing past.
-            play(ENGINE_URL, false);
-            if (Platform.OS !== 'web') Vibration.vibrate([0, 40, 80, 40], false);
+            const t = VEHICLE_TUNING[vehicle];
+            // One-shot pass — sound rate mirrors animation speed so the
+            // engine builds/fades as the vehicle crosses the screen.
+            const url = vehicle === 'car' ? ENGINE_URL_CAR : ENGINE_URL_BIKE;
+            play(url, { loop: false, rate: t.rate });
+            if (Platform.OS !== 'web') {
+                // Heavier rumble for the car, quick blips for the bike.
+                const pattern = vehicle === 'car' ? [0, 80, 120, 80] : [0, 40, 80, 40];
+                Vibration.vibrate(pattern, false);
+            }
         }
         if (visible && stage === 'delivered') {
-            play(SUCCESS_URL, false);
+            play(SUCCESS_URL, { loop: false });
             if (Platform.OS !== 'web') Vibration.vibrate(80);
         }
 
@@ -72,7 +108,7 @@ export default function BookingStageOverlay({
             soundRef.current = null;
             if (s) s.stopAsync?.().catch(() => { }).finally(() => s.unloadAsync?.().catch(() => { }));
         };
-    }, [visible, stage]);
+    }, [visible, stage, vehicle]);
 
     // Auto-continue the "accepted" screen after a moment so the user isn't stuck.
     useEffect(() => {
@@ -84,13 +120,14 @@ export default function BookingStageOverlay({
     return (
         <Modal visible={visible} animationType="fade" statusBarTranslucent transparent={false}>
             {stage === 'searching' && <SearchingStage onCancel={onCancel} />}
-            {stage === 'accepted' && <AcceptedStage riderName={riderName} />}
+            {stage === 'accepted' && <AcceptedStage riderName={riderName} vehicle={vehicle} />}
             {stage === 'delivered' && (
                 <DeliveredStage userName={userName} bookingId={bookingId} onDismiss={onDismiss} />
             )}
         </Modal>
     );
 }
+
 
 /* ---------------- Searching for rider ---------------- */
 function SearchingStage({ onCancel }: { onCancel?: () => void }) {
@@ -159,26 +196,43 @@ function AnimatedDots({ value }: { value: Animated.Value }) {
     );
 }
 
-/* ---------------- Rider accepted (bike drives across) ---------------- */
-function AcceptedStage({ riderName }: { riderName?: string }) {
+/* ---------------- Rider accepted (vehicle drives across) ---------------- */
+function AcceptedStage({ riderName, vehicle }: { riderName?: string; vehicle: VehicleKind }) {
     const insets = useSafeAreaInsets();
     const drive = useRef(new Animated.Value(0)).current;
     const bob = useRef(new Animated.Value(0)).current;
     const dust = useRef(new Animated.Value(0)).current;
 
+    const tuning = VEHICLE_TUNING[vehicle];
+    // Faster vehicles bob quicker — keeps the visual rhythm tied to the sound.
+    const bobStep = Math.round(180 * (1 / tuning.rate));
+    const dustStep = Math.round(500 * (1 / tuning.rate));
+
     useEffect(() => {
-        Animated.timing(drive, { toValue: 1, duration: 2800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }).start();
+        Animated.timing(drive, {
+            toValue: 1,
+            duration: tuning.driveMs,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+        }).start();
         Animated.loop(
             Animated.sequence([
-                Animated.timing(bob, { toValue: 1, duration: 180, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-                Animated.timing(bob, { toValue: 0, duration: 180, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+                Animated.timing(bob, { toValue: 1, duration: bobStep, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+                Animated.timing(bob, { toValue: 0, duration: bobStep, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
             ])
         ).start();
-        Animated.loop(Animated.timing(dust, { toValue: 1, duration: 500, easing: Easing.linear, useNativeDriver: true })).start();
-    }, []);
+        Animated.loop(
+            Animated.timing(dust, { toValue: 1, duration: dustStep, easing: Easing.linear, useNativeDriver: true })
+        ).start();
+    }, [vehicle]);
 
-    const translateX = drive.interpolate({ inputRange: [0, 1], outputRange: [-180, SCREEN_W + 60] });
-    const translateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
+    const translateX = drive.interpolate({
+        inputRange: [0, 1],
+        outputRange: [-(tuning.width + 20), SCREEN_W + 60],
+    });
+    // Bike bobs more than the car (car has suspension damping in real life).
+    const bobRange = vehicle === 'car' ? -2 : vehicle === 'bike' ? -4 : -3;
+    const translateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, bobRange] });
 
     return (
         <View style={[styles.fullDark, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -188,19 +242,29 @@ function AcceptedStage({ riderName }: { riderName?: string }) {
                     <Text style={styles.acceptedBadgeText}>Rider accepted</Text>
                 </View>
                 <Text style={styles.bigTitle}>{riderName ? `${riderName.split(' ')[0]} is on the way!` : 'Your rider is on the way!'}</Text>
-                <Text style={styles.bigSub}>Sit tight — your captain is riding out to your pickup point.</Text>
+                <Text style={styles.bigSub}>Sit tight — your captain is heading to your pickup point.</Text>
             </View>
 
-            {/* Road strip with the moving bike */}
+            {/* Road strip with the moving vehicle art (facing right = drive direction) */}
             <View style={styles.road}>
                 <RoadLines />
-                <Animated.View style={[styles.bikeTravel, { transform: [{ translateX }, { translateY }] }]}>
+                <Animated.View
+                    style={[
+                        styles.bikeTravel,
+                        { bottom: tuning.bottom, transform: [{ translateX }, { translateY }] },
+                    ]}
+                >
                     <DustPuffs value={dust} />
-                    <Text style={styles.bikeEmoji}>🏍️</Text>
+                    <Image
+                        source={VEHICLE_IMAGES[vehicle]}
+                        resizeMode="contain"
+                        style={{ width: tuning.width, height: tuning.height }}
+                    />
                 </Animated.View>
             </View>
         </View>
     );
+
 }
 
 function RoadLines() {
