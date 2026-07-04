@@ -13,8 +13,8 @@ try { AudioMod = require('expo-av'); } catch { AudioMod = null; }
 // Vehicle art (transparent PNGs, all facing right — matches drive direction).
 const VEHICLE_IMAGES: Record<VehicleKind, ImageSourcePropType> = {
     bike: require('../assets/images/vehicle-bike.png'),
-    auto: require('../assets/images/vehicle-bike.png'),
-    car: require('../assets/images/vehicle-bike.png'),
+    auto: require('../assets/images/vehicle-auto.png'),
+    car: require('../assets/images/vehicle-car.png'),
 };
 
 // Per-vehicle drive tuning — animation duration + playback rate keep the
@@ -63,52 +63,98 @@ export default function BookingStageOverlay({
     const soundRef = useRef<any>(null);
 
     // Play/stop appropriate audio per stage. Best-effort — never throws.
+    // Volume ramps in on start and ramps out before stop so the engine sounds
+    // like it approaches from far away, drives past, then fades into the distance.
     useEffect(() => {
         let cancelled = false;
-        async function play(url: string, opts: { loop: boolean; rate?: number }) {
+        let fadeTimers: ReturnType<typeof setTimeout>[] = [];
+
+        const clearFades = () => { fadeTimers.forEach(clearTimeout); fadeTimers = []; };
+
+        const fadeVolume = (sound: any, from: number, to: number, durationMs: number) => {
+            const steps = 10;
+            const stepMs = Math.max(20, Math.floor(durationMs / steps));
+            for (let i = 1; i <= steps; i++) {
+                const v = from + ((to - from) * i) / steps;
+                const t = setTimeout(() => { sound?.setVolumeAsync?.(Math.max(0, Math.min(1, v))).catch(() => { }); }, stepMs * i);
+                fadeTimers.push(t);
+            }
+        };
+
+        async function play(url: string, opts: { loop: boolean; rate?: number; totalMs?: number; fadeInMs?: number; fadeOutMs?: number; targetVolume?: number }) {
             if (!AudioMod?.Audio) return;
             try {
-                await AudioMod.Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true });
+                await AudioMod.Audio.setAudioModeAsync({
+                    playsInSilentModeIOS: true,
+                    shouldDuckAndroid: false,
+                    staysActiveInBackground: false,
+                });
+                const target = opts.targetVolume ?? 1.0;
+                const fadeIn = opts.fadeInMs ?? 350;
+                const fadeOut = opts.fadeOutMs ?? 500;
                 const { sound } = await AudioMod.Audio.Sound.createAsync(
                     { uri: url },
                     {
                         shouldPlay: true,
                         isLooping: opts.loop,
-                        volume: 0.9,
+                        volume: 0, // start silent, fade in
                         rate: opts.rate ?? 1,
-                        shouldCorrectPitch: false, // keep pitch shift so slower rate = deeper engine
+                        shouldCorrectPitch: false,
                     }
                 );
                 if (cancelled) { await sound.unloadAsync().catch(() => { }); return; }
                 soundRef.current = sound;
+                // Fade in
+                fadeVolume(sound, 0, target, fadeIn);
+                // Schedule fade out just before the animation ends
+                if (opts.totalMs) {
+                    const outStart = Math.max(fadeIn + 50, opts.totalMs - fadeOut);
+                    const t = setTimeout(() => fadeVolume(sound, target, 0, fadeOut), outStart);
+                    fadeTimers.push(t);
+                }
             } catch { /* audio is optional */ }
         }
 
         if (visible && stage === 'accepted') {
             const t = VEHICLE_TUNING[vehicle];
-            // One-shot pass — sound rate mirrors animation speed so the
-            // engine builds/fades as the vehicle crosses the screen.
             const url = vehicle === 'car' ? ENGINE_URL_CAR : ENGINE_URL_BIKE;
-            play(url, { loop: false, rate: t.rate });
+            play(url, {
+                loop: false,
+                rate: t.rate,
+                totalMs: t.driveMs,
+                fadeInMs: Math.round(t.driveMs * 0.18),
+                fadeOutMs: Math.round(t.driveMs * 0.28),
+                targetVolume: 1.0,
+            });
             if (Platform.OS !== 'web') {
-                // Heavier rumble for the car, quick blips for the bike.
                 const pattern = vehicle === 'car' ? [0, 80, 120, 80] : [0, 40, 80, 40];
                 Vibration.vibrate(pattern, false);
             }
         }
         if (visible && stage === 'delivered') {
-            play(SUCCESS_URL, { loop: false });
+            play(SUCCESS_URL, { loop: false, targetVolume: 1.0, fadeInMs: 120, fadeOutMs: 400, totalMs: 1600 });
             if (Platform.OS !== 'web') Vibration.vibrate(80);
         }
 
         return () => {
             cancelled = true;
+            clearFades();
             Vibration.cancel();
             const s = soundRef.current;
             soundRef.current = null;
-            if (s) s.stopAsync?.().catch(() => { }).finally(() => s.unloadAsync?.().catch(() => { }));
+            if (s) {
+                // Quick fade-out on unmount to avoid an audible clip.
+                const steps = 5;
+                for (let i = 1; i <= steps; i++) {
+                    setTimeout(() => s.setVolumeAsync?.(Math.max(0, 1 - i / steps)).catch(() => { }), i * 30);
+                }
+                setTimeout(() => {
+                    s.stopAsync?.().catch(() => { }).finally(() => s.unloadAsync?.().catch(() => { }));
+                }, steps * 30 + 40);
+            }
         };
     }, [visible, stage, vehicle]);
+
 
     // Auto-continue the "accepted" screen after a moment so the user isn't stuck.
     useEffect(() => {
