@@ -11,6 +11,8 @@ import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useBooking } from '@/lib/bookingStore';
 import { BookingStatus, categories } from '@/lib/mockData';
+import { useAuth } from '@/lib/authStore';
+import BookingStageOverlay, { Stage } from '@/components/BookingStageOverlay';
 
 // Linear simulation of a real trip lifecycle.
 const FLOW: BookingStatus[] = [
@@ -32,6 +34,16 @@ export default function BookingDetailsScreen() {
     const assignRider = useBooking((s) => s.assignRider);
     const sheet = useSheet();
     const [cancelling, setCancelling] = useState(false);
+    const userName = useAuth((s) => s.name);
+    // Track when the user has dismissed the delivered celebration so we don't
+    // pop it up again if they navigate back to this screen.
+    const [deliveredDismissed, setDeliveredDismissed] = useState(false);
+    // Momentarily show the "rider accepted" full-screen even after status advances.
+    const [acceptedShown, setAcceptedShown] = useState(false);
+
+    useEffect(() => {
+        if (booking?.status === 'Rider accepted') setAcceptedShown(true);
+    }, [booking?.status]);
 
     // Auto-progression timer (simulated rider matching + trip).
     useEffect(() => {
@@ -81,6 +93,24 @@ export default function BookingDetailsScreen() {
     const category = categories.find((c) => c.id === booking.categoryId);
     const isActive = booking.status !== 'Delivered' && booking.status !== 'Cancelled';
     const currentIdx = FLOW.indexOf(booking.status);
+
+    // Which full-screen immersive stage (if any) should render on top of the details.
+    const overlayStage: Stage | null =
+        booking.status === 'Searching rider'
+            ? 'searching'
+            : (booking.status === 'Rider accepted' || acceptedShown) && booking.status !== 'Delivered'
+                ? (acceptedShown && booking.status !== 'Rider accepted' ? null : 'accepted')
+                : booking.status === 'Delivered' && !deliveredDismissed
+                    ? 'delivered'
+                    : null;
+
+    const onOverlayCancel = () => {
+        setCancelling(true);
+        setTimeout(() => {
+            updateStatus(booking.id, 'Cancelled');
+            setCancelling(false);
+        }, 300);
+    };
 
     const onCancel = () => {
         sheet.show({
@@ -256,6 +286,27 @@ export default function BookingDetailsScreen() {
             </View>
 
             <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
+
+            {/* Full-screen immersive stage overlays: searching / accepted / delivered */}
+            <BookingStageOverlay
+                visible={overlayStage === 'searching'}
+                stage="searching"
+                onCancel={onOverlayCancel}
+            />
+            <BookingStageOverlay
+                visible={overlayStage === 'accepted'}
+                stage="accepted"
+                riderName={booking.rider?.name}
+                autoDismissMs={3200}
+                onContinue={() => setAcceptedShown(false)}
+            />
+            <BookingStageOverlay
+                visible={overlayStage === 'delivered'}
+                stage="delivered"
+                userName={userName}
+                bookingId={booking.id}
+                onDismiss={() => setDeliveredDismissed(true)}
+            />
         </View>
     );
 }
