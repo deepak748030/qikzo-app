@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 const env = require('./env');
 
-// Cache connection across serverless invocations for speed.
-let cached = global.__mongoose;
-if (!cached) cached = global.__mongoose = { conn: null, promise: null };
+// Cache the connection across serverless invocations (Vercel) for lightning restarts.
+let cached = global.__qikzoMongo;
+if (!cached) cached = global.__qikzoMongo = { conn: null, promise: null };
 
 async function connectDB() {
     if (cached.conn) return cached.conn;
@@ -12,13 +12,13 @@ async function connectDB() {
         cached.promise = mongoose
             .connect(env.MONGO_URI, {
                 serverSelectionTimeoutMS: 8000,
+                socketTimeoutMS: 30000,
                 maxPoolSize: 20,
                 minPoolSize: 2,
             })
             .then((m) => {
                 // eslint-disable-next-line no-console
-                console.log('✅ MongoDB connected');
-
+                console.log('✅ Qikzo MongoDB connected');
                 return m;
             });
     }

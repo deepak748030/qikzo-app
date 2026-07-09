@@ -1,29 +1,30 @@
 {
-    "name": "tractor-wala-dealers-server",
+    "name": "qikzo-server",
     "version": "1.0.0",
-    "description": "Express + Mongoose API backend for Tractor Wala Dealers bidding app",
+    "description": "Qikzo — on-demand delivery/ride booking backend (Express + MongoDB + Socket.io).",
     "main": "index.js",
+    "private": true,
+    "engines": {
+        "node": ">=18"
+    },
     "scripts": {
         "start": "node index.js",
         "dev": "nodemon index.js",
         "seed": "node src/seed/seed.js"
     },
-    "engines": {
-        "node": ">=18"
-    },
     "dependencies": {
         "bcryptjs": "^2.4.3",
-        "cloudinary": "^2.10.0",
         "compression": "^1.7.4",
         "cors": "^2.8.5",
         "dotenv": "^16.4.5",
         "express": "^4.19.2",
+        "express-mongo-sanitize": "^2.2.0",
         "express-rate-limit": "^7.4.0",
         "helmet": "^7.1.0",
         "jsonwebtoken": "^9.0.2",
         "mongoose": "^8.6.0",
         "morgan": "^1.10.0",
-        "multer": "^2.2.0"
+        "socket.io": "^4.8.1"
     },
     "devDependencies": {
         "nodemon": "^3.1.4"
