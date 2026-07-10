@@ -49,7 +49,11 @@ export default function BottomSheet({
                     ) : null}
                     <Pressable
                         style={[styles.btn, styles.confirmBtn]}
-                        onPress={onConfirm || onClose}
+                        onPress={() => {
+                            if (loading) return;
+                            onConfirm?.();
+                            onClose();
+                        }}
                         disabled={loading}
                     >
                         {loading ? <ActivityIndicator color={colors.primaryForeground} /> : (

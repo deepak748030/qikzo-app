@@ -3,35 +3,19 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
-import {
-  useFonts,
-  Sora_600SemiBold,
-  Sora_700Bold,
-  Sora_800ExtraBold,
-} from '@expo-google-fonts/sora';
-import {
-  Manrope_400Regular,
-  Manrope_500Medium,
-  Manrope_700Bold,
-} from '@expo-google-fonts/manrope';
+import { useFonts, Sora_600SemiBold, Sora_700Bold, Sora_800ExtraBold } from '@expo-google-fonts/sora';
+import { Manrope_400Regular, Manrope_500Medium, Manrope_700Bold } from '@expo-google-fonts/manrope';
 import { colors } from '@/lib/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
 export default function RootLayout() {
   const [loaded] = useFonts({
-    Sora_600SemiBold,
-    Sora_700Bold,
-    Sora_800ExtraBold,
-    Manrope_400Regular,
-    Manrope_500Medium,
-    Manrope_700Bold,
+    Sora_600SemiBold, Sora_700Bold, Sora_800ExtraBold,
+    Manrope_400Regular, Manrope_500Medium, Manrope_700Bold,
   });
 
-  useEffect(() => {
-    if (loaded) SplashScreen.hideAsync().catch(() => { });
-  }, [loaded]);
-
+  useEffect(() => { if (loaded) SplashScreen.hideAsync().catch(() => { }); }, [loaded]);
   if (!loaded) return null;
 
   return (
@@ -43,9 +27,10 @@ export default function RootLayout() {
         <Stack.Screen name="login" />
         <Stack.Screen name="otp" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="book-delivery" />
-        <Stack.Screen name="booking-details" />
-        <Stack.Screen name="select-location" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="vehicle-setup" />
+        <Stack.Screen name="active-job" />
+        <Stack.Screen name="documents" />
+        <Stack.Screen name="payout-details" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="personal-info" />
         <Stack.Screen name="help-support" />

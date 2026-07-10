@@ -1,153 +1,175 @@
-// Qikzo — point-to-point on-demand delivery (Rapido/Uber-style).
-// Users book a rider to pick up anything (groceries, food, medicines, parcels)
-// from one location and drop it at another. Pricing is distance-based.
+// Qikzo Partner — mock data for a rider (driver) app.
+// The rider sees incoming job requests, takes one, completes stages, gets paid.
 
-export type DeliveryCategory = {
-  id: string;
-  name: string;
-  emoji: string;
-  hint: string;
+export type JobCategory = 'ride' | 'groceries' | 'food' | 'medicines' | 'parcel' | 'other';
+
+export type IncomingJob = {
+    id: string;
+    customerName: string;
+    customerPhone: string;
+    category: JobCategory;
+    pickup: string;
+    drop: string;
+    distanceKm: number;
+    etaMin: number;      // trip time estimate
+    fare: number;
+    payment: 'cash' | 'upi';
+    notes?: string;
+    // 4-digit OTP the customer shows the rider at pickup — verifies the right
+    // parcel/passenger before the trip starts.
+    pickupOtp: string;
+    // seconds the rider has to accept before it auto-declines
+    expiresInSec: number;
 };
 
-export const categories: DeliveryCategory[] = [
-  { id: 'groceries', name: 'Groceries', emoji: '🛒', hint: 'Veggies, dairy, staples' },
-  { id: 'food', name: 'Food', emoji: '🍔', hint: 'Restaurant / takeaway' },
-  { id: 'medicines', name: 'Medicines', emoji: '💊', hint: 'Pharmacy pickup' },
-  { id: 'parcel', name: 'Parcel', emoji: '📦', hint: 'Documents, packages' },
-  { id: 'other', name: 'Other', emoji: '✨', hint: 'Anything else' },
+export type JobStage =
+    | 'Heading to pickup'
+    | 'Arrived at pickup'
+    | 'Picked up'
+    | 'Delivered';
+
+export const JOB_STAGES: JobStage[] = [
+    'Heading to pickup',
+    'Arrived at pickup',
+    'Picked up',
+    'Delivered',
 ];
 
-export type SavedPlace = { id: string; label: string; address: string; emoji: string };
-
-export const savedPlaces: SavedPlace[] = [
-  { id: 'home', label: 'Home', address: '24, Sector 18, Noida, UP 201301', emoji: '🏠' },
-  { id: 'office', label: 'Office', address: 'Tower B, Cyber Hub, Gurugram, HR 122002', emoji: '🏢' },
-  { id: 'mom', label: "Mom's place", address: '12-A, Lajpat Nagar, New Delhi 110024', emoji: '💝' },
-];
-
-// Promo banners — tapping opens the map centered on the given coord.
-export type PromoBanner = {
-  id: string;
-  title: string;
-  subtitle: string;
-  address: string;
-  image: any;
-  coord: { lat: number; lng: number };
+export type CompletedJob = {
+    id: string;
+    category: JobCategory;
+    pickup: string;
+    drop: string;
+    distanceKm: number;
+    fare: number;
+    payment: 'cash' | 'upi';
+    completedAt: number;
 };
 
-export const promoBanners: PromoBanner[] = [
-  {
-    id: 'food-market',
-    title: 'Chandni Chowk Food Market',
-    subtitle: 'Street food · Old Delhi',
-    address: 'Chandni Chowk, Old Delhi 110006',
-    image: require('../assets/banners/food-market.jpg'),
-    coord: { lat: 28.6506, lng: 77.2303 },
-  },
-  {
-    id: 'city-park',
-    title: 'Lodhi Gardens',
-    subtitle: 'City park · Lodhi Road',
-    address: 'Lodhi Rd, New Delhi 110003',
-    image: require('../assets/banners/city-park.jpg'),
-    coord: { lat: 28.5931, lng: 77.2197 },
-  },
-  {
-    id: 'mall',
-    title: 'DLF Mall of India',
-    subtitle: 'Shopping mall · Noida',
-    address: 'Sector 18, Noida 201301',
-    image: require('../assets/banners/mall.jpg'),
-    coord: { lat: 28.5675, lng: 77.3210 },
-  },
-];
-
-export type BookingStatus =
-  | 'Searching rider'
-  | 'Rider accepted'
-  | 'Arriving for pickup'
-  | 'Picked up'
-  | 'On the way'
-  | 'Delivered'
-  | 'Cancelled';
-
-export type Rider = {
-  name: string;
-  rating: number;
-  trips: number;
-  vehicle: string;
-  vehicleNo: string;
+export type RiderStats = {
+    todayEarnings: number;
+    todayTrips: number;
+    todayHours: number;
+    weekEarnings: number;
+    weekTrips: number;
+    monthEarnings: number;
+    monthTrips: number;
+    rating: number;
+    lifetimeTrips: number;
+    cashCollected: number;
+    upiCollected: number;
 };
 
-export type Booking = {
-  id: string;
-  categoryId: string;
-  pickup: string;
-  drop: string;
-  notes: string;
-  recipientPhone?: string;
-  payment: 'cash' | 'upi';
-  distanceKm: number;
-  etaMin: number;
-  price: number;
-  status: BookingStatus;
-  createdAt: number;
-  rider?: Rider;
+export const myRider = {
+    name: 'Rohit Sharma',
+    vehicle: 'Honda Activa',
+    vehicleNo: 'DL 8S CB 4421',
 };
 
-const RIDERS: Rider[] = [
-  { name: 'Rohit Sharma', rating: 4.9, trips: 1284, vehicle: 'Honda Activa', vehicleNo: 'DL 8S CB 4421' },
-  { name: 'Amit Verma', rating: 4.8, trips: 932, vehicle: 'TVS Jupiter', vehicleNo: 'HR 26 BL 7732' },
-  { name: 'Suresh Kumar', rating: 4.7, trips: 2104, vehicle: 'Bajaj Pulsar', vehicleNo: 'UP 14 DT 0098' },
+export const stats: RiderStats = {
+    todayEarnings: 940,
+    todayTrips: 7,
+    todayHours: 4.2,
+    weekEarnings: 5820,
+    weekTrips: 42,
+    monthEarnings: 21450,
+    monthTrips: 168,
+    rating: 4.9,
+    lifetimeTrips: 1284,
+    cashCollected: 520,
+    upiCollected: 420,
+};
+
+// Mon → Sun earnings, used by the Earnings tab's mini bar chart.
+export const weeklyEarnings = [520, 780, 940, 620, 1120, 980, 860];
+export const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+// Upcoming settlement — surfaced on the Earnings tab.
+export const nextPayout = {
+    amount: 1240,
+    when: 'Tomorrow, 6:00 AM',
+    account: 'HDFC ••• 4421',
+};
+
+// Rolling incoming jobs. The dispatch screen cycles through these
+// when the rider is online.
+export const incomingJobs: IncomingJob[] = [
+    {
+        id: 'QZ2109',
+        customerName: 'Priya Mehta',
+        customerPhone: '+91 98180 22110',
+        category: 'food',
+        pickup: 'Burger Singh, Connaught Place',
+        drop: '24, Sector 18, Noida',
+        distanceKm: 8.4,
+        etaMin: 28,
+        fare: 92,
+        payment: 'upi',
+        notes: '1 Maharaja burger, fries, Coke',
+        pickupOtp: '4821',
+        expiresInSec: 15,
+    },
+    {
+        id: 'QZ2110',
+        customerName: 'Arjun Kapoor',
+        customerPhone: '+91 99900 33221',
+        category: 'medicines',
+        pickup: 'Apollo Pharmacy, Lajpat Nagar',
+        drop: 'B-12, Greater Kailash 1',
+        distanceKm: 3.1,
+        etaMin: 14,
+        fare: 50,
+        payment: 'cash',
+        notes: 'Crocin 650, B-complex',
+        pickupOtp: '2019',
+        expiresInSec: 15,
+    },
+    {
+        id: 'QZ2111',
+        customerName: 'Neha Singh',
+        customerPhone: '+91 98765 43210',
+        category: 'parcel',
+        pickup: '221, Karol Bagh',
+        drop: 'DLF Cyber Hub, Gurgaon',
+        distanceKm: 12.6,
+        etaMin: 42,
+        fare: 126,
+        payment: 'upi',
+        pickupOtp: '7736',
+        expiresInSec: 15,
+    },
 ];
 
-export function pickRider(seed: string): Rider {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return RIDERS[h % RIDERS.length];
-}
-
-// Deterministic distance + price estimate from pickup/drop strings.
-export function estimateTrip(pickup: string, drop: string) {
-  const seed = (pickup + '|' + drop).trim().toLowerCase();
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 33 + seed.charCodeAt(i)) >>> 0;
-  const distanceKm = Math.max(1.5, +(2 + (h % 1100) / 100).toFixed(1)); // 2.0 - 13.0
-  const base = 25;
-  const perKm = 8;
-  const price = Math.round(base + distanceKm * perKm);
-  const etaMin = Math.max(6, Math.round(8 + distanceKm * 2.4));
-  return { distanceKm, price, etaMin, base, perKm };
-}
-
-// Seed history shown on first run.
-export const seedBookings: Booking[] = [
-  {
-    id: 'QZ2018',
-    categoryId: 'food',
-    pickup: 'Burger Singh, Connaught Place',
-    drop: '24, Sector 18, Noida',
-    notes: '1 Maharaja burger, 1 Coke, fries',
-    payment: 'upi',
-    distanceKm: 8.4,
-    etaMin: 28,
-    price: 92,
-    status: 'Delivered',
-    createdAt: Date.now() - 1000 * 60 * 60 * 26,
-    rider: RIDERS[1],
-  },
-  {
-    id: 'QZ2014',
-    categoryId: 'medicines',
-    pickup: 'Apollo Pharmacy, Lajpat Nagar',
-    drop: "Mom's place",
-    notes: 'Crocin 650, Vicks inhaler, B-complex strip',
-    payment: 'cash',
-    distanceKm: 3.1,
-    etaMin: 14,
-    price: 50,
-    status: 'Delivered',
-    createdAt: Date.now() - 1000 * 60 * 60 * 72,
-    rider: RIDERS[0],
-  },
+export const completedJobs: CompletedJob[] = [
+    { id: 'QZ2108', category: 'food', pickup: 'KFC, CP', drop: 'Sector 62, Noida', distanceKm: 11.2, fare: 115, payment: 'upi', completedAt: Date.now() - 1000 * 60 * 30 },
+    { id: 'QZ2107', category: 'groceries', pickup: 'BigBasket, GK', drop: 'Vasant Vihar', distanceKm: 5.8, fare: 72, payment: 'cash', completedAt: Date.now() - 1000 * 60 * 95 },
+    { id: 'QZ2106', category: 'parcel', pickup: 'Karol Bagh', drop: 'Rohini Sec 9', distanceKm: 9.4, fare: 100, payment: 'upi', completedAt: Date.now() - 1000 * 60 * 180 },
+    { id: 'QZ2105', category: 'medicines', pickup: 'Apollo, Lajpat', drop: 'Defence Colony', distanceKm: 2.7, fare: 46, payment: 'cash', completedAt: Date.now() - 1000 * 60 * 240 },
+    { id: 'QZ2104', category: 'food', pickup: 'Dominos, CP', drop: 'Malviya Nagar', distanceKm: 6.9, fare: 80, payment: 'upi', completedAt: Date.now() - 1000 * 60 * 60 * 6 },
+    { id: 'QZ2098', category: 'ride', pickup: 'IGI Terminal 3', drop: 'Aerocity Hotel', distanceKm: 3.4, fare: 55, payment: 'cash', completedAt: Date.now() - 1000 * 60 * 60 * 24 },
+    { id: 'QZ2091', category: 'parcel', pickup: 'Nehru Place', drop: 'Saket', distanceKm: 4.2, fare: 60, payment: 'upi', completedAt: Date.now() - 1000 * 60 * 60 * 28 },
+    { id: 'QZ2087', category: 'groceries', pickup: 'Reliance Fresh, GK', drop: 'Green Park', distanceKm: 2.9, fare: 48, payment: 'cash', completedAt: Date.now() - 1000 * 60 * 60 * 30 },
 ];
+
+export type Document = {
+    id: string;
+    name: string;
+    status: 'verified' | 'pending' | 'rejected';
+    updatedAt: string;
+};
+
+export const documents: Document[] = [
+    { id: 'dl', name: 'Driving licence', status: 'verified', updatedAt: '12 Mar 2026' },
+    { id: 'rc', name: 'Vehicle RC', status: 'verified', updatedAt: '12 Mar 2026' },
+    { id: 'insurance', name: 'Insurance', status: 'pending', updatedAt: 'Under review' },
+    { id: 'photo', name: 'Profile photo', status: 'verified', updatedAt: '10 Mar 2026' },
+];
+
+export const CATEGORY_META: Record<JobCategory, { emoji: string; label: string }> = {
+    ride: { emoji: '🛵', label: 'Ride' },
+    groceries: { emoji: '🛒', label: 'Groceries' },
+    food: { emoji: '🍔', label: 'Food' },
+    medicines: { emoji: '💊', label: 'Medicines' },
+    parcel: { emoji: '📦', label: 'Parcel' },
+    other: { emoji: '✨', label: 'Other' },
+};

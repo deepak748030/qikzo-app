@@ -1,40 +1,49 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { colors, fonts } from '@/lib/theme';
+import { Bike } from 'lucide-react-native';
+import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
-import Brand from '@/components/Brand';
 
 export default function AboutUs() {
-  return (
-    <View style={styles.container}>
-      <ScreenHeader title="About us" />
-      <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <View style={{ marginVertical: 10 }}><Brand size={34} /></View>
-        <Text style={styles.p}>
-          Qikzo is an on-demand point-to-point delivery app. Book a rider to pick up anything — groceries,
-          food, medicines, parcels — from any address in your city and drop it wherever you want, with live tracking
-          and transparent distance-based pricing.
-        </Text>
-        <Text style={styles.h}>Our mission</Text>
-        <Text style={styles.p}>
-          To make city logistics effortless for every Indian. Tap, set pickup & drop, and a captain on a bike does the rest.
-        </Text>
-        <Text style={styles.h}>Why Qikzo</Text>
-        <Text style={styles.p}>
-          • Anything, anywhere — pickup from any shop or address{'\n'}
-          • Verified riders, live trip tracking{'\n'}
-          • Honest distance-based fares with no surprises{'\n'}
-          • Cash or UPI — pay your way
-        </Text>
-        <Text style={styles.muted}>Made with care in India 🇮🇳</Text>
-      </ScrollView>
-    </View>
-  );
+    return (
+        <View style={styles.container}>
+            <ScreenHeader title="About us" />
+            <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.brand}>
+                    <View style={styles.mark}><Bike size={20} color={colors.primaryForeground} strokeWidth={2.4} /></View>
+                    <View>
+                        <Text style={styles.brandName}>Qikzo Partner</Text>
+                        <Text style={styles.brandTag}>drive. deliver. earn.</Text>
+                    </View>
+                </View>
+                <Text style={styles.p}>
+                    Qikzo Partner is the rider app that powers Qikzo — India's on-demand point-to-point
+                    delivery and ride network. Every job you take helps a customer get something across the city.
+                </Text>
+                <Text style={styles.h}>Our mission</Text>
+                <Text style={styles.p}>
+                    To create honest, flexible earning opportunities for lakhs of captains across India — with fair fares, transparent payouts, and respectful support.
+                </Text>
+                <Text style={styles.h}>Why ride with us</Text>
+                <Text style={styles.p}>
+                    • Flexible hours — go online when you want{'\n'}
+                    • Transparent fares — you see the payout before accepting{'\n'}
+                    • Daily payouts — no waiting weeks for your money{'\n'}
+                    • 24×7 rider support
+                </Text>
+                <Text style={styles.muted}>Made with care in India 🇮🇳</Text>
+            </ScrollView>
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  p: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body, lineHeight: 21, marginTop: 6 },
-  h: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 16 },
-  muted: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 20, textAlign: 'center' },
+    container: { flex: 1, backgroundColor: colors.background },
+    brand: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 10, paddingHorizontal: 6 },
+    mark: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+    brandName: { fontSize: 18, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: -0.3 },
+    brandTag: { fontSize: 10, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 },
+    p: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body, lineHeight: 21, marginTop: 6, paddingHorizontal: 6 },
+    h: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 16, paddingHorizontal: 6 },
+    muted: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 20, textAlign: 'center' },
 });

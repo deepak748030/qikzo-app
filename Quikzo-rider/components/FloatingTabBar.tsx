@@ -1,19 +1,25 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, Activity, User, LucideIcon } from 'lucide-react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { colors, fonts } from '@/lib/theme';
 
-// Icon + label per route — kept local so this component owns its visual identity.
-const ICONS: Record<string, LucideIcon> = {
-    index: Home,
-    activity: Activity,
-    profile: User,
+type MciName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+// Premium MaterialCommunityIcons — filled when active, outline when idle.
+// Rider-flavoured picks: home-variant for dashboard, motorbike for the
+// active-job feed, cash-multiple for earnings, account-circle for profile.
+const ICONS: Record<string, { active: MciName; idle: MciName }> = {
+    index: { active: 'home-variant', idle: 'home-variant-outline' },
+    activity: { active: 'motorbike', idle: 'motorbike' },
+    earnings: { active: 'cash-multiple', idle: 'cash-multiple' },
+    profile: { active: 'account-circle', idle: 'account-outline' },
 };
 const LABELS: Record<string, string> = {
     index: 'Home',
-    activity: 'Activity',
+    activity: 'Trips',
+    earnings: 'Earnings',
     profile: 'Profile',
 };
 
@@ -80,8 +86,8 @@ export default function FloatingTabBar({ state, navigation }: BottomTabBarProps)
                         <View style={styles.bubbleRing}>
                             {(() => {
                                 const activeRoute = state.routes[state.index];
-                                const Icon = ICONS[activeRoute.name] ?? Home;
-                                return <Icon size={22} color={colors.primary} strokeWidth={2.4} />;
+                                const name = ICONS[activeRoute.name]?.active ?? 'home-variant';
+                                return <MaterialCommunityIcons name={name} size={26} color={colors.primary} />;
                             })()}
                         </View>
                     </Animated.View>
@@ -90,7 +96,7 @@ export default function FloatingTabBar({ state, navigation }: BottomTabBarProps)
                 {/* Static tab slots */}
                 {state.routes.map((route, index) => {
                     const focused = state.index === index;
-                    const Icon = ICONS[route.name] ?? Home;
+                    const icon = ICONS[route.name] ?? ICONS.index;
                     const label = LABELS[route.name] ?? route.name;
 
                     const onPress = () => {
@@ -116,7 +122,7 @@ export default function FloatingTabBar({ state, navigation }: BottomTabBarProps)
                         >
                             {/* Hide in-bar icon on the active slot — the floating bubble shows it above. */}
                             <View style={[styles.iconSpot, focused && styles.iconSpotHidden]}>
-                                <Icon size={20} color={colors.primary} strokeWidth={2} />
+                                <MaterialCommunityIcons name={icon.idle} size={22} color={colors.mutedForeground} />
                             </View>
                             <Text style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
                                 {label}
