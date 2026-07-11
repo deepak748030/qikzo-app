@@ -6,9 +6,14 @@ export type EarningsSummary = {
     todayHours: number;
     week: number;
     weekTrips: number;
+    weekHours: number;
     month: number;
     monthTrips: number;
+    monthHours: number;
     weekly: number[]; // Mon..Sun
+    cashCollected: number;
+    upiCollected: number;
+    nextPayoutAmount: number;
 };
 
 export const earningsApi = {

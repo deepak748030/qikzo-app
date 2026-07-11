@@ -10,6 +10,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useAuth } from '@/lib/authStore';
 import { authApi } from '@/lib/api/endpoints/auth';
+import { ridersApi } from '@/lib/api/endpoints/riders';
 import { ApiError } from '@/lib/api/errors';
 
 const HERO = require('../assets/images/otp-hero.png');
@@ -17,16 +18,15 @@ const LEN = 6;
 
 export default function OtpScreen() {
   const insets = useSafeAreaInsets();
-  const { phone, devCode } = useLocalSearchParams<{ phone: string; devCode?: string }>();
-  const initial = (devCode && /^\d{4,8}$/.test(devCode))
-    ? devCode.padEnd(LEN, '').slice(0, LEN).split('')
-    : Array(LEN).fill('');
-  const [digits, setDigits] = useState<string[]>(initial.length === LEN ? initial : Array(LEN).fill(''));
+  const { phone } = useLocalSearchParams<{ phone: string }>();
+  // OTP is never prefilled — the rider must enter the code manually.
+  const [digits, setDigits] = useState<string[]>(Array(LEN).fill(''));
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(30);
   const inputs = useRef<(TextInput | null)[]>([]);
   const sheet = useSheet();
   const setPhone = useAuth((s) => s.setPhone);
+  const setVehicleProfile = useAuth((s) => s.setVehicleProfile);
   const profileComplete = useAuth((s) => s.profileComplete);
 
   useEffect(() => {
@@ -59,7 +59,19 @@ export default function OtpScreen() {
       setPhone(`+91 ${phone}`);
       try { (await import('@/lib/socket')).connectSocket(); } catch {}
       import('@/lib/push').then((m) => m.registerForPushAsync('rider').catch(() => {}));
-      router.replace(profileComplete ? '/(tabs)' : '/vehicle-setup');
+
+      // Check server profile: existing rider (with a real vehicleNo) skips vehicle-setup.
+      let hasProfile = profileComplete;
+      try {
+        const me = await ridersApi.me();
+        const vNo = (me?.vehicleNo || '').trim().toUpperCase();
+        if (vNo && vNo !== 'PENDING') {
+          const t = /auto/i.test(me.vehicle) ? 'auto' : /sedan|car/i.test(me.vehicle) ? 'sedan' : 'bike';
+          setVehicleProfile(t as any, vNo);
+          hasProfile = true;
+        }
+      } catch {}
+      router.replace(hasProfile ? '/(tabs)' : '/vehicle-setup');
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Verification failed. Please try again.';
       sheet.show({ variant: 'error', title: 'Verification failed', message: msg });

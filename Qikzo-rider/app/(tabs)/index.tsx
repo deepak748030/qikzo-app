@@ -18,7 +18,7 @@ import { tokenStore } from '@/lib/api/tokenStore';
 import { ApiError } from '@/lib/api/errors';
 import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
 
-const CENTER = { lat: 28.6139, lng: 77.2090 }; // New Delhi
+const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 }; // Only used until GPS resolves.
 const LOCATION_INTERVAL_MS = 10_000;   // heartbeat while online
 const INCOMING_POLL_MS = 5_000;         // job-request feed poll
 
@@ -41,6 +41,26 @@ export default function DispatchHome() {
 
     const [incoming, setIncoming] = useState<IncomingJob | null>(null);
     const [acceptBusy, setAcceptBusy] = useState(false);
+    // Live GPS center for the map — resolves as soon as permission is granted.
+    const [center, setCenter] = useState(FALLBACK_CENTER);
+
+    // Resolve the rider's real location on mount so the map isn't stuck on Delhi.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                let { status } = await Location.getForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    const req = await Location.requestForegroundPermissionsAsync();
+                    status = req.status;
+                }
+                if (status !== 'granted') return;
+                const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                if (!cancelled) setCenter({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+            } catch { /* ignore */ }
+        })();
+        return () => { cancelled = true; };
+    }, []);
 
     // Auth-aware helpers — real online/toggle when signed in, mock in preview.
     const isSignedIn = () => !!tokenStore.get().accessToken;
@@ -62,7 +82,9 @@ export default function DispatchHome() {
                 if (status !== 'granted') return;
                 const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
                 if (stopped) return;
-                await pushLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+                const next = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+                setCenter(next);
+                await pushLocation(next);
             } catch { /* ignore */ }
         };
         tick();
@@ -119,7 +141,20 @@ export default function DispatchHome() {
                 } catch { /* ignore */ }
             } catch (e) {
                 const msg = e instanceof ApiError ? e.message : 'Could not go online.';
-                sheet.show({ variant: 'error', title: 'Failed to go online', message: msg });
+                const code = (e instanceof ApiError ? e.code : '') || '';
+                if (code === 'KYC_NOT_APPROVED') {
+                    // Guide the rider straight to the Documents screen so they can upload.
+                    sheet.show({
+                        variant: 'warning',
+                        title: 'KYC verification needed',
+                        message: 'Upload and verify your documents before going online.',
+                        confirmText: 'Open documents',
+                        cancelText: 'Later',
+                        onConfirm: () => router.push('/documents'),
+                    });
+                } else {
+                    sheet.show({ variant: 'error', title: 'Failed to go online', message: msg });
+                }
                 return;
             }
         } else {
@@ -175,7 +210,8 @@ export default function DispatchHome() {
 
     return (
         <View style={styles.container}>
-            <LeafletMap center={CENTER} showTraffic={online} style={StyleSheet.absoluteFill} />
+            {/* showTraffic disabled — no fake vehicles on the rider map. Only the rider's real GPS drives the view. */}
+            <LeafletMap center={center} showTraffic={false} style={StyleSheet.absoluteFill} />
 
             {/* Header — hello + city chip */}
             <View style={[styles.header, { paddingTop: insets.top + 8 }]}>

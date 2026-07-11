@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { router, Href } from 'expo-router';
 import { User, Bike, FileCheck2, Bell, HelpCircle, Info, Shield, FileText, LogOut, Star, Landmark } from 'lucide-react-native';
@@ -11,8 +11,8 @@ import { useSheet } from '@/lib/useSheet';
 import { useAuth } from '@/lib/authStore';
 import { useJobs } from '@/lib/jobStore';
 import { useInitialLoad } from '@/lib/useInitialLoad';
-import { stats } from '@/lib/mockData';
 import { authApi } from '@/lib/api/endpoints/auth';
+import { ridersApi } from '@/lib/api/endpoints/riders';
 import { tokenStore } from '@/lib/api/tokenStore';
 
 type Item = { icon: any; label: string; route: Href };
@@ -40,8 +40,12 @@ export default function ProfileScreen() {
     const setOnline = useJobs((s) => s.setOnline);
     const loading = useInitialLoad();
 
-    // Refresh identity from the server when the tab mounts so name/phone stay in
-    // sync after edits on other devices.
+    // Real rating + lifetime trips come from the server rider record — no mock.
+    const [rating, setRating] = useState<number>(0);
+    const [lifetimeTrips, setLifetimeTrips] = useState<number>(0);
+
+    // Refresh identity + rider stats from the server so we never display mock
+    // numbers on a brand-new account.
     useEffect(() => {
         const { accessToken } = tokenStore.get();
         if (!accessToken) return;
@@ -49,6 +53,10 @@ export default function ProfileScreen() {
             if (u.name) setName(u.name);
             if (u.phone) setPhone(u.phone);
         }).catch(() => { /* ignore */ });
+        ridersApi.me().then((r) => {
+            setRating(typeof r.rating === 'number' ? r.rating : 0);
+            setLifetimeTrips(typeof r.trips === 'number' ? r.trips : 0);
+        }).catch(() => { /* ignore — keep 0 defaults */ });
     }, [setName, setPhone]);
 
     const confirmLogout = () => {
@@ -98,7 +106,7 @@ export default function ProfileScreen() {
                     </View>
                     <View style={styles.rating}>
                         <Star size={12} color={colors.accent} fill={colors.accent} />
-                        <Text style={styles.ratingText}>{stats.rating.toFixed(1)}</Text>
+                        <Text style={styles.ratingText}>{rating > 0 ? rating.toFixed(1) : '—'}</Text>
                     </View>
                 </View>
 
@@ -116,7 +124,7 @@ export default function ProfileScreen() {
                         <FileCheck2 size={16} color={colors.primary} />
                         <View>
                             <Text style={styles.stripLabel}>Lifetime trips</Text>
-                            <Text style={styles.stripValue}>{stats.lifetimeTrips.toLocaleString('en-IN')}</Text>
+                            <Text style={styles.stripValue}>{lifetimeTrips.toLocaleString('en-IN')}</Text>
                             <Text style={styles.stripSub}>All verified</Text>
                         </View>
                     </View>

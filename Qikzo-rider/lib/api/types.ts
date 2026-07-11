@@ -114,6 +114,7 @@ export type Rider = {
     trips: number;
     online: boolean;
     available: boolean;
+    kycStatus?: 'not_started' | 'submitted' | 'in_review' | 'approved' | 'rejected';
     currentLocation?: {
         type: 'Point';
         coordinates: [number, number]; // [lng, lat]

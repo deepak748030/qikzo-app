@@ -13,7 +13,9 @@ const RiderSchema = new Schema(
         phone: { type: String, default: '', trim: true, index: true },
         vehicle: { type: String, required: true },
         vehicleNo: { type: String, required: true, uppercase: true, trim: true },
-        rating: { type: Number, default: 5, min: 0, max: 5 },
+        // Rating starts at 0 — new riders have no ride history yet, so we
+        // never seed a fake 5-star reputation. Rated after their first trip.
+        rating: { type: Number, default: 0, min: 0, max: 5 },
         trips: { type: Number, default: 0 },
         online: { type: Boolean, default: true, index: true },
         available: { type: Boolean, default: true, index: true },

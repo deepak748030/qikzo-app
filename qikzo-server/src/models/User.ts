@@ -14,6 +14,15 @@ const UserSchema = new Schema(
         blocked: { type: Boolean, default: false, index: true },
         blockedReason: { type: String, default: '' },
         lastLoginAt: { type: Date, default: null },
+        // Extended profile fields (used by rider Personal Info screen). Kept
+        // optional so existing users continue to validate.
+        dob: { type: String, default: '' },        // DD-MM-YYYY
+        gender: { type: String, enum: ['male', 'female', 'other', ''], default: '' },
+        address: { type: String, default: '' },
+        city: { type: String, default: '' },
+        pincode: { type: String, default: '' },
+        emergencyName: { type: String, default: '' },
+        emergencyPhone: { type: String, default: '' },
     },
     { timestamps: true }
 );

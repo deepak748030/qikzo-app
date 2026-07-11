@@ -1,12 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Skeleton, { SkeletonRow } from '@/components/Skeleton';
 import { SectionLabel, StatCol, StatDivider } from '@/components/ui';
 import { useInitialLoad } from '@/lib/useInitialLoad';
-import { CATEGORY_META, CompletedJob, stats } from '@/lib/mockData';
+import { CATEGORY_META, CompletedJob } from '@/lib/mockData';
 import { useJobs } from '@/lib/jobStore';
+import { useAuth } from '@/lib/authStore';
+import { api } from '@/lib/api';
+import type { EarningsSummary } from '@/lib/api/endpoints/earnings';
 
 // Renders a single completed job row — separated by 1px hairline.
 function Row({ item }: { item: CompletedJob }) {
@@ -33,8 +36,20 @@ export default function Activity() {
     const storeLoading = useJobs((s) => s.loading);
     const hydrateFromServer = useJobs((s) => s.hydrateFromServer);
     const loading = useInitialLoad();
+    const phone = useAuth((s) => s.phone);
 
-    useEffect(() => { hydrateFromServer(); }, [hydrateFromServer]);
+    // Real "today" strip — pulled from the server summary, not the mock stats.
+    const [summary, setSummary] = useState<EarningsSummary | null>(null);
+    const loadSummary = React.useCallback(async () => {
+        if (!phone) { setSummary(null); return; }
+        try { setSummary(await api.earnings.summary()); } catch { /* keep last */ }
+    }, [phone]);
+
+    useEffect(() => { hydrateFromServer(); loadSummary(); }, [hydrateFromServer, loadSummary]);
+
+    const todayEarnings = summary?.today ?? 0;
+    const todayTrips = summary?.todayTrips ?? 0;
+    const todayHours = summary?.todayHours ?? 0;
 
     if (loading) {
         return (
@@ -62,15 +77,16 @@ export default function Activity() {
                 ListHeaderComponent={
                     <View>
                         {/* Compact today strip — full breakdown lives in the Earnings tab */}
+                        {/* Compact today strip — full breakdown lives in the Earnings tab */}
                         <View style={styles.strip}>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.stripLabel}>Today</Text>
-                                <Text style={styles.stripValue}>₹{stats.todayEarnings.toLocaleString('en-IN')}</Text>
+                                <Text style={styles.stripValue}>₹{todayEarnings.toLocaleString('en-IN')}</Text>
                             </View>
                             <StatDivider />
-                            <StatCol label="Trips" value={String(stats.todayTrips)} />
+                            <StatCol label="Trips" value={String(todayTrips)} />
                             <StatDivider />
-                            <StatCol label="Online" value={`${stats.todayHours.toFixed(1)}h`} />
+                            <StatCol label="Online" value={`${todayHours.toFixed(1)}h`} />
                         </View>
                         <SectionLabel>Recent trips</SectionLabel>
                     </View>
@@ -83,7 +99,7 @@ export default function Activity() {
                         <Text style={styles.emptySub}>Go online from Home to receive your first job.</Text>
                     </View>
                 }
-                refreshControl={<RefreshControl refreshing={storeLoading} onRefresh={hydrateFromServer} tintColor={colors.foreground} />}
+                refreshControl={<RefreshControl refreshing={storeLoading} onRefresh={() => { hydrateFromServer(); loadSummary(); }} tintColor={colors.foreground} />}
             />
         </View>
     );

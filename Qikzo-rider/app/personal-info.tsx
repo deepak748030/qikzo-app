@@ -14,7 +14,7 @@ import { tokenStore } from '@/lib/api/tokenStore';
 import { ApiError } from '@/lib/api/errors';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DOB_RE = /^\d{2}\/\d{2}\/\d{4}$/;
+const DOB_RE = /^\d{2}-\d{2}-\d{4}$/;
 const PIN_RE = /^\d{6}$/;
 const PHONE_RE = /^\d{10}$/;
 
@@ -48,20 +48,27 @@ export default function PersonalInfo() {
 
   const err = (title: string, message: string) => sheet.show({ variant: 'error', title, message });
 
-  // Hydrate the freshest name/email from the server on mount.
+  // Hydrate the freshest profile from the server on mount.
   useEffect(() => {
     const { accessToken } = tokenStore.get();
     if (!accessToken) return;
-    authApi.me().then((u) => {
-      if (u.name) setFullName(u.name);
-      if ((u as any).email) setEmail((u as any).email);
+    authApi.me().then((u: any) => {
+      if (u?.name) setFullName(u.name);
+      if (u?.email) setEmail(u.email);
+      if (u?.dob) setDob(u.dob);
+      if (u?.gender) setGender(u.gender);
+      if (u?.address) setAddress(u.address);
+      if (u?.city) setCity(u.city);
+      if (u?.pincode) setPincode(u.pincode);
+      if (u?.emergencyName) setEmergencyName(u.emergencyName);
+      if (u?.emergencyPhone) setEmergencyPhone(u.emergencyPhone);
     }).catch(() => { /* ignore */ });
   }, []);
 
   const save = async () => {
     if (fullName.trim().length < 2) return err('Name required', 'Please enter your full name.');
     if (!EMAIL_RE.test(email)) return err('Invalid email', 'Enter a valid email address.');
-    if (!DOB_RE.test(dob)) return err('Invalid date of birth', 'Use DD/MM/YYYY format.');
+    if (!DOB_RE.test(dob)) return err('Invalid date of birth', 'Use DD-MM-YYYY format.');
     if (!gender) return err('Select gender', 'Please choose one option.');
     if (address.trim().length < 5) return err('Address required', 'Enter your current address.');
     if (city.trim().length < 2) return err('City required', 'Enter your city.');
@@ -71,11 +78,20 @@ export default function PersonalInfo() {
 
     setLoading(true);
     try {
-      // Extended fields (dob, gender, address, emergency contact) are stored
-      // locally until the rider profile schema supports them server-side.
       const { accessToken } = tokenStore.get();
       if (accessToken) {
-        const user = await usersApi.updateMe({ name: fullName.trim(), email: email.trim() });
+        // Persist all extended fields server-side so they survive re-installs.
+        const user = await usersApi.updateMe({
+          name: fullName.trim(),
+          email: email.trim(),
+          dob,
+          gender: gender!,
+          address: address.trim(),
+          city: city.trim(),
+          pincode,
+          emergencyName: emergencyName.trim(),
+          emergencyPhone,
+        });
         setName(user.name || fullName.trim());
       } else {
         setName(fullName.trim());
@@ -99,7 +115,14 @@ export default function PersonalInfo() {
           <Input label="Full name" placeholder="As per driving licence" value={fullName} onChangeText={setFullName} />
           <Input label="Mobile number" value={phone || ''} editable={false} />
           <Input label="Email" placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
-          <Input label="Date of birth" placeholder="DD/MM/YYYY" keyboardType="number-pad" value={dob} onChangeText={setDob} maxLength={10} />
+          <Input label="Date of birth" placeholder="DD-MM-YYYY" keyboardType="number-pad" value={dob} onChangeText={(v) => {
+            // Auto-format digits into DD-MM-YYYY as the user types.
+            const d = v.replace(/\D/g, '').slice(0, 8);
+            let out = d;
+            if (d.length > 4) out = `${d.slice(0,2)}-${d.slice(2,4)}-${d.slice(4)}`;
+            else if (d.length > 2) out = `${d.slice(0,2)}-${d.slice(2)}`;
+            setDob(out);
+          }} maxLength={10} />
           <View>
             <Text style={styles.label}>Gender</Text>
             <View style={styles.genderRow}>

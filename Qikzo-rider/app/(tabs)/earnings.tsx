@@ -7,13 +7,15 @@ import ScreenHeader from '@/components/ScreenHeader';
 import Skeleton from '@/components/Skeleton';
 import { useInitialLoad } from '@/lib/useInitialLoad';
 import { useAuth, formatPayoutLabel } from '@/lib/authStore';
-import { stats, weeklyEarnings, weekDays, nextPayout } from '@/lib/mockData';
+import { weekDays, nextPayout } from '@/lib/mockData';
 import { api } from '@/lib/api';
 import type { EarningsSummary } from '@/lib/api/endpoints/earnings';
 
 type Range = 'today' | 'week' | 'month';
 
 // Standalone Earnings tab — hero, weekly chart, cash/UPI split, next payout.
+// All numbers come from the server for the signed-in rider — no mock fallback,
+// so a fresh account correctly shows ₹0 / 0 trips / 0h instead of demo data.
 export default function Earnings() {
     const [range, setRange] = useState<Range>('today');
     const loading = useInitialLoad();
@@ -29,24 +31,33 @@ export default function Earnings() {
             try {
                 const s = await api.earnings.summary();
                 if (!cancelled) setSummary(s);
-            } catch { /* keep mock fallback */ }
+            } catch { /* keep empty state */ }
         })();
         return () => { cancelled = true; };
     }, [phone]);
 
-    const todayEarnings = summary?.today ?? stats.todayEarnings;
-    const weekEarnings = summary?.week ?? stats.weekEarnings;
-    const monthEarnings = summary?.month ?? stats.monthEarnings;
-    const todayTrips = summary?.todayTrips ?? stats.todayTrips;
-    const weekTrips = summary?.weekTrips ?? stats.weekTrips;
-    const monthTrips = summary?.monthTrips ?? stats.monthTrips;
-    const todayHours = summary?.todayHours ?? stats.todayHours;
-    const weeklyData = summary?.weekly ?? weeklyEarnings;
+    // Empty defaults — used until the summary request resolves so a brand-new
+    // account never shows leftover mock numbers.
+    const s = summary;
+    const todayEarnings = s?.today ?? 0;
+    const weekEarnings = s?.week ?? 0;
+    const monthEarnings = s?.month ?? 0;
+    const todayTrips = s?.todayTrips ?? 0;
+    const weekTrips = s?.weekTrips ?? 0;
+    const monthTrips = s?.monthTrips ?? 0;
+    const todayHours = s?.todayHours ?? 0;
+    const weekHours = s?.weekHours ?? 0;
+    const monthHours = s?.monthHours ?? 0;
+    const weeklyData = s?.weekly ?? [0, 0, 0, 0, 0, 0, 0];
+    const cashCollected = s?.cashCollected ?? 0;
+    const upiCollected = s?.upiCollected ?? 0;
+    const nextPayoutAmount = s?.nextPayoutAmount ?? 0;
 
     const value = range === 'today' ? todayEarnings : range === 'week' ? weekEarnings : monthEarnings;
     const trips = range === 'today' ? todayTrips : range === 'week' ? weekTrips : monthTrips;
-    const hours = range === 'today' ? `${todayHours.toFixed(1)}h` : range === 'week' ? '31h' : '128h';
-    const avg = `₹${Math.round(value / Math.max(1, trips))}`;
+    const hoursNum = range === 'today' ? todayHours : range === 'week' ? weekHours : monthHours;
+    const hours = `${hoursNum.toFixed(1)}h`;
+    const avg = trips > 0 ? `₹${Math.round(value / trips)}` : '₹0';
 
     const max = useMemo(() => Math.max(...weeklyData, 1), [weeklyData]);
     const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
@@ -116,8 +127,8 @@ export default function Earnings() {
                 {/* Cash vs UPI */}
                 <Text style={styles.section}>Today's collections</Text>
                 <View style={styles.splitRow}>
-                    <SplitCard Icon={Banknote} label="Cash" value={stats.cashCollected} tint={colors.warning} />
-                    <SplitCard Icon={Smartphone} label="UPI" value={stats.upiCollected} tint={colors.success} />
+                    <SplitCard Icon={Banknote} label="Cash" value={cashCollected} tint={colors.warning} />
+                    <SplitCard Icon={Smartphone} label="UPI" value={upiCollected} tint={colors.success} />
                 </View>
 
                 {/* Next payout */}
@@ -125,7 +136,7 @@ export default function Earnings() {
                 {payout ? (
                     <Pressable style={styles.payout} onPress={() => router.push('/payout-details')}>
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.payoutAmt}>₹{nextPayout.amount.toLocaleString('en-IN')}</Text>
+                            <Text style={styles.payoutAmt}>₹{nextPayoutAmount.toLocaleString('en-IN')}</Text>
                             <Text style={styles.payoutMeta}>{nextPayout.when} · {payoutLabel}</Text>
                         </View>
                         <View style={styles.payoutBtn}>
@@ -137,7 +148,7 @@ export default function Earnings() {
                         <View style={styles.addBankIcon}><Plus size={16} color={colors.primaryForeground} /></View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.addBankTitle}>Add bank account</Text>
-                            <Text style={styles.addBankSub}>Required to receive ₹{nextPayout.amount.toLocaleString('en-IN')} payout {nextPayout.when.toLowerCase()}.</Text>
+                            <Text style={styles.addBankSub}>Required to receive ₹{nextPayoutAmount.toLocaleString('en-IN')} payout {nextPayout.when.toLowerCase()}.</Text>
                         </View>
                         <ArrowRight size={16} color={colors.foreground} />
                     </Pressable>

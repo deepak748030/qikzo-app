@@ -10,6 +10,13 @@ export type UpdateMeInput = {
     email?: string;
     onboarded?: boolean;
     location?: string | null;
+    dob?: string;                 // DD-MM-YYYY
+    gender?: 'male' | 'female' | 'other';
+    address?: string;
+    city?: string;
+    pincode?: string;
+    emergencyName?: string;
+    emergencyPhone?: string;
 };
 
 export const usersApi = {

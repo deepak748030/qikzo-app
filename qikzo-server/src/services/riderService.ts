@@ -73,6 +73,14 @@ export const riderService = {
 
     async updateStatus(userId: string, patch: { online?: boolean; available?: boolean }) {
         const rider = await this.getOrCreateForUser(userId);
+        // Gate: a rider can only go online once KYC is approved. This mirrors
+        // the compliance requirement — no unverified rider should receive jobs.
+        if (patch.online === true && (rider as any).kycStatus !== 'approved') {
+            throw errors.badRequest(
+                'Complete KYC verification before going online.',
+                'KYC_NOT_APPROVED',
+            );
+        }
         if (patch.online !== undefined) rider.online = patch.online;
         if (patch.available !== undefined) rider.available = patch.available;
         await rider.save();
