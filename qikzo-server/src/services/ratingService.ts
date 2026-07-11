@@ -11,7 +11,7 @@ import notificationService from './notificationService';
  * 200 ratings so it stays cheap and stable.
  */
 export const ratingService = {
-    async submit(userId: string, input: { bookingId: string; stars: number; comment?: string; tags?: string[] }) {
+    async submit(userId: string, input: { bookingId: string; stars: number; comment?: string; tags?: string[]; tip?: number }) {
         const booking = await Booking.findOne({ _id: input.bookingId, user: userId });
         if (!booking) throw errors.notFound('Booking not found', 'BOOKING_NOT_FOUND');
         if (booking.status !== 'Delivered') {
@@ -31,19 +31,21 @@ export const ratingService = {
             stars: input.stars,
             comment: (input.comment || '').trim().slice(0, 500),
             tags: (input.tags || []).slice(0, 8),
+            tip: Math.max(0, Math.min(5000, Math.round(Number(input.tip || 0)))),
         });
 
         await this._recomputeRider(String(booking.rider));
 
         const rider = await Rider.findById(booking.rider).lean();
+        const tipAmt = Math.max(0, Math.round(Number(input.tip || 0)));
         if ((rider as any)?.user) {
             void notificationService.emit({
                 user: String((rider as any).user),
                 audience: 'rider',
                 topic: 'system',
-                title: `You received ${input.stars}★`,
+                title: tipAmt > 0 ? `You received ${input.stars}★ + ₹${tipAmt} tip` : `You received ${input.stars}★`,
                 body: (input.comment || '').slice(0, 120) || 'A customer rated your recent trip.',
-                data: { event: 'rating:new', bookingId: String(booking._id), stars: input.stars },
+                data: { event: 'rating:new', bookingId: String(booking._id), stars: input.stars, tip: tipAmt },
             }).catch(() => {});
         }
         return rating;

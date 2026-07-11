@@ -241,22 +241,27 @@ export const bookingService = {
         (b as any).cancelledAt = new Date();
         b.history.push({ status: 'Cancelled', note: b.cancelledReason || (fee ? `Fee ₹${fee}` : '') } as any);
         await b.save();
-        emitBookingUpdate(b);
-        emitJobCancelled(String(b._id));
 
-        // Notify rider if one was assigned.
+        // Look up the assigned rider's userId (if any) BEFORE emitting so the
+        // socket fanout can reach the rider's personal room too.
+        let riderUserId: string | undefined;
         if (b.rider) {
             const rider = await Rider.findById(b.rider).lean();
-            if ((rider as any)?.user) {
-                void notificationService.emit({
-                    user: String((rider as any).user),
-                    audience: 'rider',
-                    topic: 'booking',
-                    title: 'Booking cancelled',
-                    body: `Booking ${b.code} was cancelled by the customer.`,
-                    data: { event: 'booking:cancelled', bookingId: String(b._id) },
-                }).catch(() => {});
-            }
+            if ((rider as any)?.user) riderUserId = String((rider as any).user);
+        }
+        emitBookingUpdate(b, riderUserId);
+        emitJobCancelled(String(b._id), riderUserId);
+
+        // Notify rider if one was assigned.
+        if (riderUserId) {
+            void notificationService.emit({
+                user: riderUserId,
+                audience: 'rider',
+                topic: 'booking',
+                title: 'Booking cancelled',
+                body: `Booking ${b.code} was cancelled by the customer.`,
+                data: { event: 'booking:cancelled', bookingId: String(b._id) },
+            }).catch(() => {});
         }
         return b;
     },

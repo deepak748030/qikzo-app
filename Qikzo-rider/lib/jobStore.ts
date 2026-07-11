@@ -23,7 +23,17 @@ export type ActiveJob = Omit<IncomingJob, 'expiresInSec'> & {
     stage: JobStage;
     tripId?: string;      // set when server-backed
     bookingId?: string;
+    pickupCoord?: { lat: number; lng: number } | null;
+    dropCoord?: { lat: number; lng: number } | null;
 };
+
+function coordOf(p: any): { lat: number; lng: number } | null {
+    if (!p) return null;
+    if (typeof p.lat === 'number' && typeof p.lng === 'number') return { lat: p.lat, lng: p.lng };
+    const c = p.location?.coordinates;
+    if (Array.isArray(c) && c.length === 2) return { lat: c[1], lng: c[0] };
+    return null;
+}
 
 const CATEGORY_FROM_SLUG: Record<string, JobCategory> = {
     ride: 'ride', bike: 'ride', auto: 'ride', cab: 'ride',
@@ -85,6 +95,8 @@ function tripToActive(t: Trip): ActiveJob {
         notes: b?.notes || undefined,
         pickupOtp: '1234',
         stage: SERVER_TO_UI_STAGE[t.stage] || 'Heading to pickup',
+        pickupCoord: coordOf(b?.pickup),
+        dropCoord: coordOf(b?.drop),
     };
 }
 

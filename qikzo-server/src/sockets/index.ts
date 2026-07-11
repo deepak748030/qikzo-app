@@ -56,7 +56,7 @@ export function initSockets(httpServer: http.Server, opts: { corsOrigin?: string
     return io;
 }
 
-export function emitBookingUpdate(booking: any): void {
+export function emitBookingUpdate(booking: any, riderUserId?: string): void {
     if (!io || !booking) return;
     const payload = {
         id: String(booking._id),
@@ -67,6 +67,13 @@ export function emitBookingUpdate(booking: any): void {
     };
     io.to(`user:${String(booking.user)}`).emit('booking:update', payload);
     io.to(`booking:${String(booking._id)}`).emit('booking:update', payload);
+    // Also fan out to the assigned rider so the rider app reconciles in real time
+    // (e.g. the customer cancels after the rider accepted — the rider must know).
+    let uid: string | null = riderUserId ? String(riderUserId) : null;
+    if (!uid && booking.rider && typeof booking.rider === 'object' && booking.rider.user) {
+        uid = String(booking.rider.user);
+    }
+    if (uid) io.to(`rider:${uid}`).emit('booking:update', payload);
 }
 
 /**
@@ -118,10 +125,14 @@ export function emitJobOffer(booking: any, riderUserIds: string[] = []): void {
     }
 }
 
-/** Withdraw a job offer once accepted/cancelled so other rider apps clear it. */
-export function emitJobCancelled(bookingId: string): void {
+/** Withdraw a job offer once accepted/cancelled so other rider apps clear it.
+ *  When `riderUserId` is provided, the specific assigned rider is also targeted
+ *  directly — critical when a customer cancels after acceptance and that rider
+ *  may not be listening on the shared `riders` room anymore. */
+export function emitJobCancelled(bookingId: string, riderUserId?: string): void {
     if (!io || !bookingId) return;
     io.to('riders').emit('job:cancelled', { id: String(bookingId) });
+    if (riderUserId) io.to(`rider:${String(riderUserId)}`).emit('job:cancelled', { id: String(bookingId) });
 }
 
 /**

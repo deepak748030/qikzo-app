@@ -74,14 +74,23 @@ const STATUS_MAP: Record<ServerBookingStatus, BookingStatus> = {
 
 function mapRider(r: ServerRider | string | null | undefined, seed: string): UiRider | undefined {
     if (!r) return undefined;
-    if (typeof r === 'string') return pickRider(seed);
+    if (typeof r === 'string') return { ...pickRider(seed), id: r };
     return {
+        id: (r as any)._id || (r as any).id,
         name: r.name || 'Rider',
         rating: typeof r.rating === 'number' ? r.rating : 4.8,
         trips: typeof r.trips === 'number' ? r.trips : 0,
         vehicle: r.vehicle || 'Two-wheeler',
         vehicleNo: r.vehicleNo || '—',
     };
+}
+
+function coordFromPoint(p: any): { lat: number; lng: number } | null {
+    if (!p) return null;
+    const lat = Number(p.lat);
+    const lng = Number(p.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    return null;
 }
 
 function mapBooking(b: ServerBooking): Booking & { serverId: string } {
@@ -92,6 +101,8 @@ function mapBooking(b: ServerBooking): Booking & { serverId: string } {
         categoryId: (b as any).categorySlug || (b as any).vehicleTypeSlug || 'parcel',
         pickup: b.pickup?.address || '',
         drop: b.drop?.address || '',
+        pickupCoord: coordFromPoint(b.pickup),
+        dropCoord: coordFromPoint(b.drop),
         notes: b.notes || '',
         recipientPhone: b.recipientPhone || undefined,
         payment: (b.payment as 'cash' | 'upi') || 'cash',

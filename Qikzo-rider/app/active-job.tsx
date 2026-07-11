@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
 import { Phone, X, Navigation2, MapPin, ShieldAlert, Navigation, KeyRound, CheckCircle2, Coffee, Home as HomeIcon, PackageCheck } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import LeafletMap from '@/components/LeafletMap';
@@ -16,7 +17,7 @@ import { tokenStore } from '@/lib/api/tokenStore';
 import { ApiError } from '@/lib/api/errors';
 import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
 
-const CENTER = { lat: 28.6139, lng: 77.2090 };
+const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 };
 
 // CTAs per stage — one primary action advances the flow.
 const CTA_BY_STAGE: Record<string, string> = {
@@ -46,6 +47,30 @@ export default function ActiveJob() {
     const [cancelOpen, setCancelOpen] = useState(false);
     const [otpOpen, setOtpOpen] = useState(false);
     const [busy, setBusy] = useState(false);
+    const [riderLoc, setRiderLoc] = useState<{ lat: number; lng: number } | null>(null);
+
+    // Live rider location — powers the "rider → pickup" road route on the map.
+    // Also periodically pushed to the server so the customer app sees us move.
+    useEffect(() => {
+        let mounted = true;
+        let sub: Location.LocationSubscription | null = null;
+        (async () => {
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') return;
+                const first = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                if (mounted) setRiderLoc({ lat: first.coords.latitude, lng: first.coords.longitude });
+                sub = await Location.watchPositionAsync(
+                    { accuracy: Location.Accuracy.Balanced, distanceInterval: 15, timeInterval: 5000 },
+                    (loc) => {
+                        if (!mounted) return;
+                        setRiderLoc({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+                    }
+                );
+            } catch { /* ignore — map will just center on pickup */ }
+        })();
+        return () => { mounted = false; sub?.remove(); };
+    }, []);
 
     const isSignedIn = () => !!tokenStore.get().accessToken;
 
@@ -57,10 +82,32 @@ export default function ActiveJob() {
         const off = subscribeSocket('trip:update', () => {
             if (isSignedIn()) hydrateActiveFromServer();
         });
+        // Customer cancelled the booking → server emits both job:cancelled
+        // (to all online riders) and booking:update (Cancelled). Whichever
+        // arrives first, wipe the active job and inform this rider.
+        const handleCustomerCancel = (bookingId: string) => {
+            const a = useJobs.getState().active;
+            if (!a) return;
+            if (a.bookingId && String(a.bookingId) !== String(bookingId)) return;
+            useJobs.setState({ active: null });
+            sheet.show({
+                variant: 'warning',
+                title: 'Customer cancelled',
+                message: 'The customer cancelled this booking. You are back online for new jobs.',
+                confirmText: 'OK',
+                onConfirm: () => { sheet.hide(); router.replace('/(tabs)'); },
+            });
+        };
+        const offJobCancel = subscribeSocket('job:cancelled', (p: any) => {
+            if (p?.id) handleCustomerCancel(String(p.id));
+        });
+        const offBookingUpdate = subscribeSocket('booking:update', (p: any) => {
+            if (p?.status === 'Cancelled' && p?.id) handleCustomerCancel(String(p.id));
+        });
         const t = setInterval(() => {
             if (isSignedIn()) hydrateActiveFromServer();
         }, 15000);
-        return () => { off(); clearInterval(t); };
+        return () => { off(); offJobCancel(); offBookingUpdate(); clearInterval(t); };
     }, [hydrateActiveFromServer]);
 
     if (!active) {
@@ -185,14 +232,24 @@ export default function ActiveJob() {
 
 
 
+    // Real trip geometry — customer's pickup, drop, and the rider's live GPS
+    // position. Falls back to the map's default center only if none are known
+    // yet (fresh mount, permissions denied). NEVER renders random vehicles.
+    const pickupCoord = active.pickupCoord ?? null;
+    const dropCoord = active.dropCoord ?? null;
+    const mapCenter = riderLoc ?? pickupCoord ?? dropCoord ?? FALLBACK_CENTER;
+
     return (
         <View style={styles.container}>
             <LeafletMap
-                center={CENTER}
-                pickup={{ lat: 28.6304, lng: 77.2177 }}
-                drop={{ lat: 28.5675, lng: 77.3210 }}
+                center={mapCenter}
+                pickup={pickupCoord}
+                drop={dropCoord}
+                riderLocation={riderLoc}
+                showTraffic={false}
                 style={StyleSheet.absoluteFill}
             />
+
 
             {/* Top status bar */}
             <View style={[styles.top, { paddingTop: insets.top + 8 }]}>

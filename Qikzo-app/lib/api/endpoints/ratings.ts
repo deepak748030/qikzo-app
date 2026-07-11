@@ -5,7 +5,7 @@ import { http } from '../client';
  * per booking; `getForBooking` returns null when unrated.
  */
 export const ratingsApi = {
-    submit(input: { bookingId: string; stars: number; comment?: string; tags?: string[] }) {
+    submit(input: { bookingId: string; stars: number; comment?: string; tags?: string[]; tip?: number }) {
         return http<{ rating: any }>('/ratings', { method: 'POST', body: input });
     },
     getForBooking(bookingId: string) {

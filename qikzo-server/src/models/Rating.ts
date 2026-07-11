@@ -14,6 +14,7 @@ const RatingSchema = new Schema(
         stars: { type: Number, required: true, min: 1, max: 5 },
         comment: { type: String, default: '', maxlength: 500 },
         tags: [{ type: String }],
+        tip: { type: Number, default: 0, min: 0, max: 5000 },
     },
     { timestamps: true },
 );

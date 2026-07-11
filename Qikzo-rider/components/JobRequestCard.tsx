@@ -9,10 +9,11 @@ type Props = {
     job: IncomingJob;
     onAccept: () => void;
     onDecline: () => void;
+    accepting?: boolean;
 };
 
 // Card shown when a new job arrives — has a countdown ring that auto-declines.
-export default function JobRequestCard({ job, onAccept, onDecline }: Props) {
+export default function JobRequestCard({ job, onAccept, onDecline, accepting }: Props) {
     const [left, setLeft] = useState(job.expiresInSec);
     const cat = CATEGORY_META[job.category];
 
@@ -54,10 +55,10 @@ export default function JobRequestCard({ job, onAccept, onDecline }: Props) {
             {job.notes ? <Text style={styles.notes} numberOfLines={2}>Note: {job.notes}</Text> : null}
 
             <View style={styles.actions}>
-                <Pressable style={styles.decline} onPress={onDecline} hitSlop={6}>
+                <Pressable style={[styles.decline, accepting && { opacity: 0.5 }]} onPress={accepting ? undefined : onDecline} hitSlop={6} disabled={accepting}>
                     <Text style={styles.declineText}>Decline</Text>
                 </Pressable>
-                <Button label="Accept" onPress={onAccept} style={styles.accept} />
+                <Button label="Accept" onPress={onAccept} loading={accepting} disabled={accepting} style={styles.accept} />
             </View>
         </View>
     );

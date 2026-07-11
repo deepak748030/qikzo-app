@@ -72,6 +72,7 @@ export type BookingStatus =
   | 'Cancelled';
 
 export type Rider = {
+  id?: string;
   name: string;
   rating: number;
   trips: number;
@@ -84,6 +85,8 @@ export type Booking = {
   categoryId: string;
   pickup: string;
   drop: string;
+  pickupCoord?: { lat: number; lng: number } | null;
+  dropCoord?: { lat: number; lng: number } | null;
   notes: string;
   recipientPhone?: string;
   payment: 'cash' | 'upi';

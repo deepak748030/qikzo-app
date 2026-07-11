@@ -10,6 +10,9 @@ type Props = {
   center: LatLng;
   pickup?: LatLng | null;
   drop?: LatLng | null;
+  // Rider's own live location — when provided, a distinct marker is drawn and
+  // a real-road route from rider → pickup is fetched.
+  riderLocation?: LatLng | null;
   // when true, a fixed centered pin appears and `onCenterChange` fires while panning
   pickerMode?: boolean;
   pinColor?: string;
@@ -29,12 +32,15 @@ function buildHtml({
   center,
   pickup,
   drop,
+  riderLocation,
   pickerMode,
   pinColor,
   showTraffic,
 }: Required<Pick<Props, 'center'>> & Partial<Props>) {
   const accent = pinColor || colors.accent;
-  const traffic = showTraffic !== false;
+  // Suppress the random-vehicle simulation whenever we're actively rendering
+  // a real rider→pickup / pickup→drop trip. The randomness reads as "wrong".
+  const traffic = showTraffic !== false && !riderLocation;
   return `<!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -92,6 +98,35 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   }
   ${pickup ? `L.marker([${pickup.lat},${pickup.lng}], { icon: pinIcon('${colors.accent}') }).addTo(map);` : ''}
   ${drop ? `L.marker([${drop.lat},${drop.lng}], { icon: pinIcon('${colors.foreground}') }).addTo(map);` : ''}
+  ${riderLocation ? `
+    // Rider's live position — distinct blue dot with a pulse ring.
+    var riderIcon = L.divIcon({
+      className:'',
+      html:'<div style="position:relative;width:22px;height:22px;">\
+<div style="position:absolute;inset:-8px;border-radius:50%;background:${colors.primary};opacity:.18;animation:riderPulse 1.6s ease-out infinite;"></div>\
+<div style="position:absolute;inset:0;border-radius:50%;background:${colors.primary};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);"></div>\
+</div><style>@keyframes riderPulse{0%{transform:scale(.6);opacity:.5}100%{transform:scale(2.2);opacity:0}}</style>',
+      iconSize:[22,22], iconAnchor:[11,11]
+    });
+    L.marker([${riderLocation.lat},${riderLocation.lng}], { icon: riderIcon, interactive:false }).addTo(map);
+  ` : ''}
+
+  ${riderLocation && pickup ? `
+    // ---- Real road route: rider → pickup (dashed, secondary emphasis) ----
+    (function(){
+      var a=[${riderLocation.lng},${riderLocation.lat}], b=[${pickup.lng},${pickup.lat}];
+      var url='https://router.project-osrm.org/route/v1/driving/'+a.join(',')+';'+b.join(',')+'?overview=full&geometries=geojson&steps=false';
+      fetch(url).then(function(r){return r.json();}).then(function(d){
+        if(!d || !d.routes || !d.routes[0]) throw new Error('no route');
+        var coords=d.routes[0].geometry.coordinates.map(function(c){return [c[1],c[0]];});
+        L.polyline(coords, { color:'#ffffff', weight:7, opacity:.9 }).addTo(map);
+        L.polyline(coords, { color:'${colors.primary}', weight:4, dashArray:'2,8', opacity:1 }).addTo(map);
+      }).catch(function(){
+        var pts=[[${riderLocation.lat},${riderLocation.lng}],[${pickup.lat},${pickup.lng}]];
+        L.polyline(pts,{color:'${colors.primary}',weight:4,opacity:.9,dashArray:'2,8'}).addTo(map);
+      });
+    })();
+  ` : ''}
 
   // ------------- Real road routing between pickup & drop -------------
   var routeLineBg=null, routeLine=null, distLabel=null;
@@ -252,14 +287,14 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
 }
 
 export default function LeafletMap({
-  center, pickup, drop, pickerMode, pinColor, showTraffic, onCenterChange, onReady, onRoute, style,
+  center, pickup, drop, riderLocation, pickerMode, pinColor, showTraffic, onCenterChange, onReady, onRoute, style,
 }: Props) {
   const ref = useRef<WebView>(null);
   const html = useMemo(
-    () => buildHtml({ center, pickup, drop, pickerMode, pinColor, showTraffic }),
+    () => buildHtml({ center, pickup, drop, riderLocation, pickerMode, pinColor, showTraffic }),
     // Only rebuild when these change meaningfully
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, showTraffic]
+    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, riderLocation?.lat, riderLocation?.lng, showTraffic]
   );
 
   const onMessage = (e: WebViewMessageEvent) => {

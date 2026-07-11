@@ -309,7 +309,7 @@ export default function DispatchHome() {
                         <Skeleton width={110} height={44} rounded="pill" />
                     </View>
                 ) : online && incoming ? (
-                    <JobRequestCard job={incoming} onAccept={onAccept} onDecline={onDecline} />
+                    <JobRequestCard job={incoming} onAccept={onAccept} onDecline={onDecline} accepting={acceptBusy} />
                 ) : (
                     <View style={{ gap: 8 }}>
                         {kycStatus && kycStatus !== 'approved' && (

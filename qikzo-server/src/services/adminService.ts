@@ -319,6 +319,8 @@ export const adminService = {
     },
 
     async summary() {
+        const SupportTicket = (await import('../models/SupportTicket')).default;
+        const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
         const [
             usersTotal,
             ridersTotal,
@@ -326,15 +328,44 @@ export const adminService = {
             kycPending,
             payoutsPending,
             bookingsToday,
+            supportOpen,
+            revenueAgg,
         ] = await Promise.all([
             User.countDocuments({}),
             Rider.countDocuments({}),
             Rider.countDocuments({ online: true }),
             KYC.countDocuments({ status: { $in: ['submitted', 'in_review'] } }),
             Payout.countDocuments({ status: { $in: ['requested', 'processing'] } }),
-            Booking.countDocuments({ createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
+            Booking.countDocuments({ createdAt: { $gte: startOfDay } }),
+            SupportTicket.countDocuments({ status: { $in: ['open', 'pending'] } }),
+            Booking.aggregate([
+                { $match: { createdAt: { $gte: startOfDay }, status: { $nin: ['Cancelled'] } } },
+                { $group: { _id: null, gmv: { $sum: '$price' } } },
+            ]),
         ]);
-        return { usersTotal, ridersTotal, ridersOnline, kycPending, payoutsPending, bookingsToday };
+        const gmvToday = revenueAgg?.[0]?.gmv || 0;
+        // Dashboard consumes { counts: {...}, revenueToday, gmvToday }.
+        // Keep the legacy flat fields too so any older client keeps working.
+        return {
+            counts: {
+                users: usersTotal,
+                riders: ridersTotal,
+                ridersOnline,
+                bookingsToday,
+                kycPending,
+                payoutsPending,
+                supportOpen,
+            },
+            revenueToday: gmvToday,
+            gmvToday,
+            // legacy flat fields
+            usersTotal,
+            ridersTotal,
+            ridersOnline,
+            kycPending,
+            payoutsPending,
+            bookingsToday,
+        };
     },
 };
 

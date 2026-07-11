@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -101,51 +101,28 @@ export default function ActivityScreen() {
         );
     }
 
-    const renderItem = ({ item }: { item: Booking }) => {
-        const cat = categories.find((c) => c.id === item.categoryId);
-        const CatIcon = CATEGORY_ICON[item.categoryId] || Package;
-        const isActive = ACTIVE_STATUSES.includes(item.status);
-        return (
-            <Pressable
-                style={styles.row}
-                onPress={() => router.push({ pathname: '/booking-details', params: { id: item.id } })}
-            >
-                <View style={styles.iconBox}>
-                    {isActive ? (
-                        <AnimatedIcon Icon={CatIcon} size={18} color={colors.foreground} variant="ping" ringColor={colors.accent} />
-                    ) : (
-                        <CatIcon size={18} color={colors.foreground} strokeWidth={1.8} />
-                    )}
-                </View>
-                <View style={styles.info}>
-                    <Text style={styles.id}>#{item.id} · {cat?.name || 'Delivery'}</Text>
-                    <Text style={styles.route} numberOfLines={1}>
-                        {item.pickup} → {item.drop}
-                    </Text>
-                    <View style={styles.metaRow}>
-                        <MapPin size={10} color={colors.mutedForeground} />
-                        <Text style={styles.meta}>{item.distanceKm.toFixed(1)} km · {fmtTime(item.createdAt)}</Text>
-                    </View>
-                </View>
-                <View style={styles.right}>
-                    <Text style={styles.price}>₹{item.price}</Text>
-                    <View style={[styles.statusPill, { borderColor: STATUS_COLOR[item.status] }]}>
-                        <StatusGlyph status={item.status} />
-                        <Text style={[styles.status, { color: STATUS_COLOR[item.status] }]}>{item.status}</Text>
-                    </View>
-                </View>
-            </Pressable>
-        );
-    };
+    const renderItem = useCallback(({ item }: { item: Booking }) => (
+        <ActivityRow item={item} />
+    ), []);
+
+    const keyExtractor = useCallback((b: Booking) => b.id, []);
+    const getItemLayout = useCallback((_: any, index: number) => ({
+        length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index,
+    }), []);
 
     return (
         <View style={styles.container}>
             <ScreenHeader title="Activity" showBack={false} />
             <FlatList
                 data={bookings}
-                keyExtractor={(b) => b.id}
+                keyExtractor={keyExtractor}
                 renderItem={renderItem}
-                ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
+                getItemLayout={getItemLayout}
+                initialNumToRender={8}
+                maxToRenderPerBatch={8}
+                windowSize={7}
+                removeClippedSubviews
+                updateCellsBatchingPeriod={40}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 24 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -153,6 +130,48 @@ export default function ActivityScreen() {
         </View>
     );
 }
+
+// Fixed approximate row height so FlatList can compute offsets without
+// measuring — massive speed-up when the list is long or updates often.
+const ROW_HEIGHT = 76;
+
+// Memoised row so unchanged rows never re-render when the parent list updates.
+const ActivityRow = React.memo(function ActivityRow({ item }: { item: Booking }) {
+    const cat = categories.find((c) => c.id === item.categoryId);
+    const CatIcon = CATEGORY_ICON[item.categoryId] || Package;
+    const isActive = ACTIVE_STATUSES.includes(item.status);
+    return (
+        <Pressable
+            style={styles.row}
+            onPress={() => router.push({ pathname: '/booking-details', params: { id: item.id } })}
+        >
+            <View style={styles.iconBox}>
+                {isActive ? (
+                    <AnimatedIcon Icon={CatIcon} size={18} color={colors.foreground} variant="ping" ringColor={colors.accent} />
+                ) : (
+                    <CatIcon size={18} color={colors.foreground} strokeWidth={1.8} />
+                )}
+            </View>
+            <View style={styles.info}>
+                <Text style={styles.id}>#{item.id} · {cat?.name || 'Delivery'}</Text>
+                <Text style={styles.route} numberOfLines={1}>
+                    {item.pickup} → {item.drop}
+                </Text>
+                <View style={styles.metaRow}>
+                    <MapPin size={10} color={colors.mutedForeground} />
+                    <Text style={styles.meta}>{item.distanceKm.toFixed(1)} km · {fmtTime(item.createdAt)}</Text>
+                </View>
+            </View>
+            <View style={styles.right}>
+                <Text style={styles.price}>₹{item.price}</Text>
+                <View style={[styles.statusPill, { borderColor: STATUS_COLOR[item.status] }]}>
+                    <StatusGlyph status={item.status} />
+                    <Text style={[styles.status, { color: STATUS_COLOR[item.status] }]}>{item.status}</Text>
+                </View>
+            </View>
+        </Pressable>
+    );
+});
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -166,6 +185,7 @@ const styles = StyleSheet.create({
     row: {
         flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 6,
         borderBottomWidth: 1, borderBottomColor: colors.divider,
+        height: 76, // must match ROW_HEIGHT — powers FlatList getItemLayout.
     },
     iconBox: {
         width: 40, height: 40, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,

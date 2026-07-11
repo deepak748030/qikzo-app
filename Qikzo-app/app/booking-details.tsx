@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar } from 'lucide-react-native';
+import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar, KeyRound, ShieldCheck, Gift, Send } from 'lucide-react-native';
 import AnimatedIcon from '@/components/AnimatedIcon';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -15,6 +15,9 @@ import { useAuth } from '@/lib/authStore';
 import { tokenStore } from '@/lib/api/tokenStore';
 import { subscribe as subscribeSocket, emit as socketEmit, connectSocket } from '@/lib/socket';
 import BookingStageOverlay, { Stage, VehicleKind } from '@/components/BookingStageOverlay';
+import LeafletMap from '@/components/LeafletMap';
+import { ratingsApi } from '@/lib/api/endpoints/ratings';
+import { TextInput } from 'react-native';
 
 // Map booking category → vehicle rendered on the "accepted" overlay.
 // Ride categories map 1:1; delivery categories default to the delivery bike.
@@ -23,6 +26,16 @@ function vehicleFor(categoryId?: string): VehicleKind {
     if (categoryId === 'auto') return 'auto';
     return 'bike';
 }
+
+// Deterministic 4-digit pickup OTP derived from booking id so the same
+// code shows up on every render of the same trip.
+function pickupOtpFor(id: string): string {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return String(1000 + (h % 9000));
+}
+
+
 
 // Linear simulation of a real trip lifecycle.
 const FLOW: BookingStatus[] = [
@@ -48,11 +61,67 @@ export default function BookingDetailsScreen() {
     const [cancelling, setCancelling] = useState(false);
     const userName = useAuth((s) => s.name);
     const [deliveredDismissed, setDeliveredDismissed] = useState(false);
-    const [acceptedShown, setAcceptedShown] = useState(false);
+    const [acceptedDismissed, setAcceptedDismissed] = useState(false);
+    const [riderLoc, setRiderLoc] = useState<{ lat: number; lng: number } | null>(null);
 
+    // Rating + tip state (visible once booking is Delivered).
+    const [existingRating, setExistingRating] = useState<any | null>(null);
+    const [ratingStars, setRatingStars] = useState(0);
+    const [ratingComment, setRatingComment] = useState('');
+    const [ratingTip, setRatingTip] = useState<number>(0);
+    const [ratingSubmitting, setRatingSubmitting] = useState(false);
+
+    // Fetch any existing rating once delivered, so we don't let the user
+    // rate the same booking twice.
+    const serverBookingId = (booking as any)?.serverId as string | undefined;
     useEffect(() => {
-        if (booking?.status === 'Rider accepted') setAcceptedShown(true);
+        if (!serverBookingId) return;
+        if (booking?.status !== 'Delivered') return;
+        if (!tokenStore.get().accessToken) return;
+        let cancelled = false;
+        ratingsApi.getForBooking(serverBookingId)
+            .then((res) => { if (!cancelled) setExistingRating(res?.rating || null); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [serverBookingId, booking?.status]);
+
+    const submitRating = async () => {
+        if (!serverBookingId || !ratingStars) return;
+        setRatingSubmitting(true);
+        try {
+            const res = await ratingsApi.submit({
+                bookingId: serverBookingId,
+                stars: ratingStars,
+                comment: ratingComment.trim() || undefined,
+                tip: ratingTip > 0 ? ratingTip : undefined,
+            });
+            setExistingRating(res?.rating || { stars: ratingStars, comment: ratingComment, tip: ratingTip });
+            sheet.show({ variant: 'success', title: 'Thanks for the feedback!', message: ratingTip > 0 ? `Your ${ratingStars}★ rating and ₹${ratingTip} tip were sent to the rider.` : `Your ${ratingStars}★ rating was sent to the rider.`, confirmText: 'OK', onConfirm: () => sheet.hide() });
+        } catch (e: any) {
+            sheet.show({ variant: 'error', title: 'Could not submit', message: e?.message || 'Please try again.', confirmText: 'OK', onConfirm: () => sheet.hide() });
+        } finally {
+            setRatingSubmitting(false);
+        }
+    };
+
+    // Reset the dismissed latch if the booking cycles back to searching
+    // (e.g. rider cancelled, we're re-dispatching).
+    useEffect(() => {
+        if (booking?.status === 'Searching rider') setAcceptedDismissed(false);
     }, [booking?.status]);
+
+    // Subscribe to the assigned rider's live location for the map preview.
+    const riderId = booking?.rider?.id;
+    useEffect(() => {
+        if (!riderId) { setRiderLoc(null); return; }
+        try { connectSocket(); } catch {}
+        const off = subscribeSocket('rider:location', (p: any) => {
+            if (!p || String(p.id) !== String(riderId)) return;
+            if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+            setRiderLoc({ lat: p.lat, lng: p.lng });
+        });
+        return () => { off(); };
+    }, [riderId]);
 
     // Real-time booking/trip updates via socket + a 10s poll safety net.
     useEffect(() => {
@@ -129,19 +198,39 @@ export default function BookingDetailsScreen() {
     const currentIdx = FLOW.indexOf(booking.status);
 
     // Which full-screen immersive stage (if any) should render on top of the details.
+    // Overlay policy:
+    //  • Searching  → 'searching' until a rider is assigned.
+    //  • Rider accepted → 'accepted' ONCE, then auto-dismiss reveals the
+    //    full rider info / trip page underneath (fix for overlay getting
+    //    stuck on "guest is on the way").
+    //  • Delivered  → 'delivered' celebration until user dismisses.
+    // Once the rider taps "I've arrived" (status → Arriving for pickup) or
+    // any later stage, drop every full-screen overlay so the pickup OTP card
+    // on the details screen becomes visible immediately.
+    const postArrivalStatuses = ['Arriving for pickup', 'Picked up', 'On the way', 'Delivered', 'Cancelled'];
     const overlayStage: Stage | null =
-        booking.status === 'Searching rider'
-            ? 'searching'
-            : (booking.status === 'Rider accepted' || acceptedShown) && booking.status !== 'Delivered'
-                ? (acceptedShown && booking.status !== 'Rider accepted' ? null : 'accepted')
-                : booking.status === 'Delivered' && !deliveredDismissed
-                    ? 'delivered'
-                    : null;
+        postArrivalStatuses.includes(booking.status) && booking.status !== 'Delivered'
+            ? null
+            : booking.status === 'Searching rider'
+                ? 'searching'
+                : booking.status === 'Rider accepted' && !acceptedDismissed
+                    ? 'accepted'
+                    : booking.status === 'Delivered' && !deliveredDismissed
+                        ? 'delivered'
+                        : null;
 
     const onOverlayCancel = async () => {
         setCancelling(true);
-        try { await cancelOnServer(booking.id, 'User cancelled from overlay'); }
-        finally { setCancelling(false); }
+        try {
+            await cancelOnServer(booking.id, 'User cancelled from overlay');
+            sheet.show({
+                variant: 'success',
+                title: 'Booking cancelled',
+                message: 'Your booking was cancelled. The rider has been notified.',
+                confirmText: 'OK',
+                onConfirm: () => sheet.hide(),
+            });
+        } finally { setCancelling(false); }
     };
 
     const onCancel = () => {
@@ -153,10 +242,21 @@ export default function BookingDetailsScreen() {
             cancelText: 'Keep booking',
             onConfirm: async () => {
                 setCancelling(true);
-                try { await cancelOnServer(booking.id, 'User cancelled'); }
+                try {
+                    await cancelOnServer(booking.id, 'User cancelled');
+                    sheet.hide();
+                    setTimeout(() => {
+                        sheet.show({
+                            variant: 'success',
+                            title: 'Booking cancelled',
+                            message: 'Your booking was cancelled. The rider has been notified in real time.',
+                            confirmText: 'OK',
+                            onConfirm: () => sheet.hide(),
+                        });
+                    }, 200);
+                }
                 finally {
                     setCancelling(false);
-                    sheet.hide();
                 }
             },
         });
@@ -181,6 +281,22 @@ export default function BookingDetailsScreen() {
         <View style={styles.container}>
             <ScreenHeader title={`Booking #${booking.id}`} />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 110 }}>
+                {/* Live map — shown as soon as the trip has pickup coords.
+                    Once a rider accepts, their live location is overlaid too so
+                    the user can see them moving toward pickup. */}
+                {booking.pickupCoord && booking.status !== 'Cancelled' ? (
+                    <View style={styles.mapWrap}>
+                        <LeafletMap
+                            center={riderLoc || booking.pickupCoord}
+                            pickup={booking.pickupCoord}
+                            drop={booking.dropCoord || null}
+                            riderLocation={riderLoc && riderId ? { lat: riderLoc.lat, lng: riderLoc.lng } : null}
+                            showTraffic={false}
+                            style={styles.map}
+                        />
+                    </View>
+                ) : null}
+
                 {/* Status banner */}
                 <View style={styles.statusBanner}>
                     <View style={styles.statusIconWrap}>
@@ -210,6 +326,40 @@ export default function BookingDetailsScreen() {
                         </Text>
                     </View>
                 </View>
+
+                {/* Pickup OTP card — generated the moment the rider taps
+                    "I've arrived" in their app (status flips to
+                    "Arriving for pickup"). The 4 digits are derived
+                    deterministically from the booking id so the same code
+                    persists across refreshes. User reads it out; rider
+                    enters it in their app to start the trip. */}
+                {booking.status === 'Arriving for pickup' ? (
+                    <View style={styles.otpCard}>
+                        <View style={styles.otpHead}>
+                            <View style={styles.otpIconWrap}>
+                                <ShieldCheck size={16} color={colors.foreground} strokeWidth={2.2} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.otpTitle}>Share this pickup OTP</Text>
+                                <Text style={styles.otpSub}>
+                                    Your rider has arrived. Read this code out loud so they can start the trip.
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={styles.otpDigitsRow}>
+                            {pickupOtpFor(booking.id).split('').map((d, i) => (
+                                <View key={i} style={styles.otpDigitBox}>
+                                    <Text style={styles.otpDigitText}>{d}</Text>
+                                </View>
+                            ))}
+                        </View>
+                        <View style={styles.otpFootRow}>
+                            <KeyRound size={11} color={colors.mutedForeground} />
+                            <Text style={styles.otpFootText}>Never share this code with anyone else.</Text>
+                        </View>
+                    </View>
+                ) : null}
+
 
                 {/* Timeline */}
                 {booking.status !== 'Cancelled' ? (
@@ -250,6 +400,86 @@ export default function BookingDetailsScreen() {
                         </Pressable>
                     </View>
                 ) : null}
+
+                {/* Rate your rider — appears after Delivered. Users can rate 1-5,
+                    leave an optional comment, and add a tip. All of this is for
+                    the rider only. */}
+                {booking.status === 'Delivered' && booking.rider ? (
+                    existingRating ? (
+                        <View style={styles.rateCard}>
+                            <View style={styles.rateHead}>
+                                <BadgeCheck size={16} color={colors.success} />
+                                <Text style={styles.rateTitle}>You rated {booking.rider.name.split(' ')[0]}</Text>
+                            </View>
+                            <View style={styles.starRow}>
+                                {[1,2,3,4,5].map((n) => (
+                                    <Star key={n} size={22} color={colors.accent} fill={n <= (existingRating.stars || 0) ? colors.accent : 'transparent'} />
+                                ))}
+                            </View>
+                            {existingRating.comment ? (
+                                <Text style={styles.rateComment}>“{existingRating.comment}”</Text>
+                            ) : null}
+                            {existingRating.tip > 0 ? (
+                                <View style={styles.tipBadge}>
+                                    <Gift size={12} color={colors.foreground} />
+                                    <Text style={styles.tipBadgeText}>Tip sent · ₹{existingRating.tip}</Text>
+                                </View>
+                            ) : null}
+                        </View>
+                    ) : (
+                        <View style={styles.rateCard}>
+                            <View style={styles.rateHead}>
+                                <Star size={16} color={colors.accent} fill={colors.accent} />
+                                <Text style={styles.rateTitle}>Rate your rider</Text>
+                            </View>
+                            <Text style={styles.rateSub}>How was your ride with {booking.rider.name.split(' ')[0]}?</Text>
+                            <View style={styles.starRow}>
+                                {[1,2,3,4,5].map((n) => (
+                                    <Pressable key={n} onPress={() => setRatingStars(n)} hitSlop={6}>
+                                        <Star size={30} color={colors.accent} fill={n <= ratingStars ? colors.accent : 'transparent'} strokeWidth={1.6} />
+                                    </Pressable>
+                                ))}
+                            </View>
+                            <TextInput
+                                value={ratingComment}
+                                onChangeText={setRatingComment}
+                                placeholder="Leave a note for the rider (optional)"
+                                placeholderTextColor={colors.mutedForeground}
+                                multiline
+                                maxLength={500}
+                                style={styles.rateInput}
+                            />
+                            <View style={styles.tipHeadRow}>
+                                <Gift size={13} color={colors.foreground} />
+                                <Text style={styles.tipHead}>Add a tip for the rider</Text>
+                            </View>
+                            <View style={styles.tipChipsRow}>
+                                {[0, 20, 50, 100].map((amt) => {
+                                    const on = ratingTip === amt;
+                                    return (
+                                        <Pressable
+                                            key={amt}
+                                            onPress={() => setRatingTip(amt)}
+                                            style={[styles.tipChip, on && styles.tipChipOn]}
+                                        >
+                                            <Text style={[styles.tipChipText, on && styles.tipChipTextOn]}>
+                                                {amt === 0 ? 'No tip' : `₹${amt}`}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                            <Button
+                                label={ratingTip > 0 ? `Submit · ₹${ratingTip} tip` : 'Submit rating'}
+                                onPress={submitRating}
+                                loading={ratingSubmitting}
+                                disabled={!ratingStars || ratingSubmitting}
+                                style={{ marginTop: 12 }}
+                            />
+                        </View>
+                    )
+                ) : null}
+
 
                 {/* Trip card — green location card matching the brand */}
                 <View style={styles.tripCard}>
@@ -332,7 +562,7 @@ export default function BookingDetailsScreen() {
                 vehicle={vehicleFor(booking.categoryId)}
                 riderName={booking.rider?.name}
                 autoDismissMs={3600}
-                onContinue={() => setAcceptedShown(false)}
+                onContinue={() => setAcceptedDismissed(true)}
             />
             <BookingStageOverlay
                 visible={overlayStage === 'delivered'}
@@ -348,6 +578,13 @@ export default function BookingDetailsScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     missing: { fontSize: 14, color: colors.mutedForeground, fontFamily: fonts.body },
+
+    mapWrap: {
+        marginTop: 0, marginHorizontal: 0, height: 240,
+        borderBottomWidth: 1, borderBottomColor: colors.border,
+        overflow: 'hidden', backgroundColor: colors.card,
+    },
+    map: { flex: 1 },
 
     statusBanner: {
         marginTop: 8, marginHorizontal: 6, padding: 10, flexDirection: 'row', gap: 10,
@@ -406,5 +643,83 @@ const styles = StyleSheet.create({
     fareTotal: { fontSize: 16, color: colors.foreground, fontFamily: fonts.displayBold },
     payHint: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 6 },
 
+    otpCard: {
+        marginTop: 8, marginHorizontal: 6, padding: 14,
+        borderWidth: 1.5, borderColor: colors.foreground, borderRadius: radius.md,
+        backgroundColor: colors.card,
+    },
+    otpHead: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+    otpIconWrap: {
+        width: 30, height: 30, borderRadius: radius.pill,
+        backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center',
+    },
+    otpTitle: { fontSize: 13, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: 0.2 },
+    otpSub: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 2, lineHeight: 15 },
+    otpDigitsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 14 },
+    otpDigitBox: {
+        width: 56, height: 64,
+        borderWidth: 1.5, borderColor: colors.foreground, borderRadius: radius.md,
+        backgroundColor: colors.chipBg,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    otpDigitText: { fontSize: 28, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: 1 },
+    otpFootRow: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+    otpFootText: { fontSize: 10, fontFamily: fonts.body, color: colors.mutedForeground },
+
+
     footer: { paddingHorizontal: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
+    rateCard: {
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radius.md,
+        padding: 14,
+        marginTop: 12,
+        gap: 8,
+    },
+    rateHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    rateTitle: { fontSize: 14, fontFamily: fonts.displayBold, color: colors.foreground },
+    rateSub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground },
+    starRow: { flexDirection: 'row', gap: 10, marginTop: 4, alignSelf: 'center' },
+    rateComment: { fontSize: 12, fontFamily: fonts.body, color: colors.foreground, fontStyle: 'italic', marginTop: 4 },
+    rateInput: {
+        marginTop: 10,
+        minHeight: 60,
+        backgroundColor: colors.inputBg,
+        borderWidth: 1,
+        borderColor: colors.inputBorder,
+        borderRadius: radius.sm,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        fontFamily: fonts.body,
+        fontSize: 13,
+        color: colors.foreground,
+        textAlignVertical: 'top',
+    },
+    tipHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
+    tipHead: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
+    tipChipsRow: { flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' },
+    tipChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.card,
+    },
+    tipChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    tipChipText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
+    tipChipTextOn: { color: colors.primaryForeground },
+    tipBadge: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: colors.chipBg,
+        borderRadius: radius.pill,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        marginTop: 4,
+    },
+    tipBadgeText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground },
 });
