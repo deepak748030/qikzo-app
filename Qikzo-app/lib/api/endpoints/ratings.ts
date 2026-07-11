@@ -6,13 +6,13 @@ import { http } from '../client';
  */
 export const ratingsApi = {
     submit(input: { bookingId: string; stars: number; comment?: string; tags?: string[]; tip?: number }) {
-        return http<{ rating: any }>('/ratings', { method: 'POST', body: input });
+        return http.post<{ rating: any }>('/ratings', input);
     },
     getForBooking(bookingId: string) {
-        return http<{ rating: any | null }>(`/ratings/booking/${bookingId}`);
+        return http.get<{ rating: any | null }>(`/ratings/booking/${bookingId}`);
     },
     listForRider(riderId: string, limit?: number) {
-        return http<{ items: any[] }>(`/ratings/rider/${riderId}`, { query: limit ? { limit } : undefined });
+        return http.get<{ items: any[] }>(`/ratings/rider/${riderId}`, limit ? { query: { limit } } : undefined);
     },
 };
 

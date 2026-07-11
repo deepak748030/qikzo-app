@@ -45,6 +45,7 @@ type Props = {
     bookingId?: string;
     onDismiss?: () => void;         // Delivered — user closes the celebration
     onCancel?: () => void;          // Searching — cancel the request
+    cancelling?: boolean;           // Searching — show spinner + disable cancel btn
     onContinue?: () => void;        // Accepted — auto or manual advance
     autoDismissMs?: number;         // Accepted auto-hides after N ms
 };
@@ -58,7 +59,7 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 //  • delivered → success celebration with user's name + confetti burst
 export default function BookingStageOverlay({
     visible, stage, vehicle = 'bike', riderName, userName, bookingId,
-    onDismiss, onCancel, onContinue, autoDismissMs,
+    onDismiss, onCancel, cancelling, onContinue, autoDismissMs,
 }: Props) {
     const soundRef = useRef<any>(null);
 
@@ -165,7 +166,7 @@ export default function BookingStageOverlay({
 
     return (
         <Modal visible={visible} animationType="fade" statusBarTranslucent transparent={false}>
-            {stage === 'searching' && <SearchingStage onCancel={onCancel} />}
+            {stage === 'searching' && <SearchingStage onCancel={onCancel} cancelling={cancelling} />}
             {stage === 'accepted' && <AcceptedStage riderName={riderName} vehicle={vehicle} />}
             {stage === 'delivered' && (
                 <DeliveredStage userName={userName} bookingId={bookingId} onDismiss={onDismiss} />
@@ -176,7 +177,7 @@ export default function BookingStageOverlay({
 
 
 /* ---------------- Searching for rider ---------------- */
-function SearchingStage({ onCancel }: { onCancel?: () => void }) {
+function SearchingStage({ onCancel, cancelling }: { onCancel?: () => void; cancelling?: boolean }) {
     const insets = useSafeAreaInsets();
     const ring = useRef(new Animated.Value(0)).current;
     const scan = useRef(new Animated.Value(0)).current;
@@ -219,7 +220,7 @@ function SearchingStage({ onCancel }: { onCancel?: () => void }) {
 
             {onCancel ? (
                 <View style={styles.bottomBar}>
-                    <Button label="Cancel request" variant="outline" onPress={onCancel} />
+                    <Button label="Cancel request" variant="outline" onPress={onCancel} loading={cancelling} disabled={cancelling} />
                 </View>
             ) : null}
         </View>

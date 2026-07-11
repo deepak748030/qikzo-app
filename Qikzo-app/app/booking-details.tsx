@@ -555,6 +555,7 @@ export default function BookingDetailsScreen() {
                 visible={overlayStage === 'searching'}
                 stage="searching"
                 onCancel={onOverlayCancel}
+                cancelling={cancelling}
             />
             <BookingStageOverlay
                 visible={overlayStage === 'accepted'}
