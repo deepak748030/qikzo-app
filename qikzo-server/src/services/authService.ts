@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid';
 import User from '../models/User';
 import Otp from '../models/Otp';
 import RefreshToken from '../models/RefreshToken';
-import { generateCode, expiryDate, isValidIndianMobile } from '../utils/otp';
+import { generateCode, expiryDate, isValidIndianMobile, normalizeIndianPhone } from '../utils/otp';
 import { signAccess, signRefresh, verifyRefresh, type Role } from '../lib/tokens';
 import env from '../config/env';
 import { errors } from '../lib/errors';
@@ -19,8 +19,8 @@ export interface DeviceMeta {
 
 export const authService = {
     async requestOtp(phone: string) {
-        phone = String(phone || '').trim();
-        if (!isValidIndianMobile(phone)) {
+        phone = normalizeIndianPhone(phone);
+        if (!phone) {
             throw errors.badRequest('Enter a valid 10-digit Indian mobile number', 'INVALID_PHONE');
         }
         const code = generateCode();
@@ -38,9 +38,9 @@ export const authService = {
     },
 
     async verifyOtp(phone: string, code: string, device: DeviceMeta = {}) {
-        phone = String(phone || '').trim();
+        phone = normalizeIndianPhone(phone);
         code = String(code || '').trim();
-        if (!isValidIndianMobile(phone)) throw errors.badRequest('Invalid phone', 'INVALID_PHONE');
+        if (!phone) throw errors.badRequest('Invalid phone', 'INVALID_PHONE');
         if (!/^\d{4,8}$/.test(code)) throw errors.badRequest('Invalid code', 'INVALID_OTP');
 
         const record = await Otp.findOne({ phone });
@@ -61,11 +61,16 @@ export const authService = {
         }
         await Otp.deleteOne({ _id: record._id });
 
-        const user = await User.findOneAndUpdate(
-            { phone },
-            { $setOnInsert: { phone, name: 'Guest', role: 'customer' }, $set: { lastLoginAt: new Date() } },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
+        // Match canonical 10-digit OR legacy '+91'-prefixed rows, then normalize.
+        const legacy = `+91${phone}`;
+        let user = await User.findOne({ phone: { $in: [phone, legacy] } });
+        if (user) {
+            if (user.phone !== phone) user.phone = phone;
+            (user as any).lastLoginAt = new Date();
+            await user.save();
+        } else {
+            user = await User.create({ phone, name: 'Guest', role: 'customer', lastLoginAt: new Date() });
+        }
         if (!user) throw errors.internal('Failed to upsert user', 'USER_UPSERT_FAILED');
 
         const tokens = await this.issueTokens(user as any, device);

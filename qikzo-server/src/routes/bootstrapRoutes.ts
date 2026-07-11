@@ -4,6 +4,7 @@ import User from '../models/User';
 import { ok } from '../lib/http';
 import { errors } from '../lib/errors';
 import { authLimiter } from '../middleware/rateLimiters';
+import { normalizeIndianPhone } from '../utils/otp';
 
 /**
  * Public bootstrap for first admin only. Idempotent status check.
@@ -24,12 +25,13 @@ router.post('/', authLimiter, asyncHandler(async (req, res) => {
 
     const rawPhone = String(req.body?.phone || '').trim();
     const name = String(req.body?.name || 'Admin').trim() || 'Admin';
-    const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/\D/g, '')}`;
-    if (!/^\+\d{10,15}$/.test(phone)) throw errors.badRequest('Invalid phone', 'BAD_PHONE');
+    const phone = normalizeIndianPhone(rawPhone);
+    if (!phone) throw errors.badRequest('Enter a valid 10-digit Indian mobile number', 'BAD_PHONE');
 
-    const existing = await User.findOne({ phone });
+    // Match either canonical 10-digit or legacy '+91'-prefixed rows.
+    const existing = await User.findOne({ phone: { $in: [phone, `+91${phone}`] } });
     const user = existing
-        ? await User.findByIdAndUpdate(existing._id, { role: 'admin', name }, { new: true })
+        ? await User.findByIdAndUpdate(existing._id, { role: 'admin', name, phone }, { new: true })
         : await User.create({ phone, name, role: 'admin', onboarded: true });
 
     return ok(res, { user: { id: String(user!._id), phone: user!.phone, name: user!.name, role: user!.role } }, 'Admin created');

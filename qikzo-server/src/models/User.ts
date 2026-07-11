@@ -11,6 +11,8 @@ const UserSchema = new Schema(
         // sensitive routes. `customer` covers app users; riders live in their
         // own collection but we still tag their linked user for auth flows.
         role: { type: String, enum: ['customer', 'rider', 'admin'], default: 'customer', index: true },
+        blocked: { type: Boolean, default: false, index: true },
+        blockedReason: { type: String, default: '' },
         lastLoginAt: { type: Date, default: null },
     },
     { timestamps: true }

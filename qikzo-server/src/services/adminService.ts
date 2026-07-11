@@ -247,6 +247,72 @@ export const adminService = {
         if (!r.deletedCount) throw errors.notFound('Coupon not found', 'COUPON_NOT_FOUND');
     },
 
+    // ---------- Users ----------
+    async listUsers(opts: { q?: string; role?: string; blocked?: boolean; limit?: number; cursor?: string } = {}) {
+        const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+        const filter: any = {};
+        if (opts.role) filter.role = opts.role;
+        if (opts.blocked !== undefined) filter.blocked = opts.blocked;
+        if (opts.q) {
+            const rx = new RegExp(opts.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            filter.$or = [{ name: rx }, { phone: rx }, { email: rx }];
+        }
+        if (opts.cursor) filter._id = { $lt: opts.cursor };
+        const items = await User.find(filter).sort({ _id: -1 }).limit(limit + 1).lean();
+        const hasMore = items.length > limit;
+        return {
+            items: items.slice(0, limit),
+            nextCursor: hasMore ? String(items[limit - 1]._id) : null,
+        };
+    },
+
+    async getUser(id: string) {
+        const user = await User.findById(id).lean();
+        if (!user) throw errors.notFound('User not found', 'USER_NOT_FOUND');
+        const [bookingsCount, rider] = await Promise.all([
+            Booking.countDocuments({ user: id }),
+            Rider.findOne({ user: id }).lean(),
+        ]);
+        return { user, bookingsCount, rider };
+    },
+
+    async setUserBlocked(adminUserId: string, id: string, blocked: boolean, reason = '') {
+        const user = await User.findByIdAndUpdate(
+            id,
+            { blocked, blockedReason: blocked ? (reason || 'Blocked by admin') : '' },
+            { new: true },
+        );
+        if (!user) throw errors.notFound('User not found', 'USER_NOT_FOUND');
+        void notificationService.emit({
+            user: id,
+            audience: user.role === 'rider' ? 'rider' : 'customer',
+            topic: 'system',
+            title: blocked ? 'Account suspended' : 'Account reinstated',
+            body: blocked ? (reason || 'Contact support for details.') : 'Your account has been restored.',
+            data: { event: blocked ? 'user:blocked' : 'user:unblocked' },
+        }).catch(() => {});
+        void audit({ actorId: adminUserId, actorRole: 'admin', action: blocked ? 'user.block' : 'user.unblock', targetType: 'user', targetId: id, meta: { reason } });
+        return user;
+    },
+
+    async updateUser(adminUserId: string, id: string, patch: { name?: string; email?: string; role?: 'customer' | 'rider' | 'admin' }) {
+        const clean: any = {};
+        if (typeof patch.name === 'string') clean.name = patch.name.trim();
+        if (typeof patch.email === 'string') clean.email = patch.email.trim().toLowerCase();
+        if (patch.role && ['customer', 'rider', 'admin'].includes(patch.role)) clean.role = patch.role;
+        const user = await User.findByIdAndUpdate(id, clean, { new: true });
+        if (!user) throw errors.notFound('User not found', 'USER_NOT_FOUND');
+        void audit({ actorId: adminUserId, actorRole: 'admin', action: 'user.update', targetType: 'user', targetId: id, meta: clean });
+        return user;
+    },
+
+    async deleteUser(adminUserId: string, id: string) {
+        const user = await User.findByIdAndDelete(id);
+        if (!user) throw errors.notFound('User not found', 'USER_NOT_FOUND');
+        void audit({ actorId: adminUserId, actorRole: 'admin', action: 'user.delete', targetType: 'user', targetId: id });
+        return { deleted: true };
+    },
+
     async summary() {
         const [
             usersTotal,

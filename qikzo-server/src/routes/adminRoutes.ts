@@ -8,6 +8,8 @@ import {
     rejectSchema,
     approvePayoutSchema,
     blockRiderSchema,
+    blockUserSchema,
+    updateUserSchema,
 } from '../validators/adminValidators';
 
 /**
@@ -34,6 +36,13 @@ router.post('/payouts/:id/reject', validate(rejectSchema), adminController.rejec
 // Riders
 router.get('/riders', validate(listQuerySchema, 'query'), adminController.listRiders);
 router.post('/riders/:id/block', validate(blockRiderSchema), adminController.setRiderBlocked);
+
+// Users
+router.get('/users', validate(listQuerySchema, 'query'), adminController.listUsers);
+router.get('/users/:id', adminController.getUser);
+router.patch('/users/:id', validate(updateUserSchema), adminController.updateUser);
+router.post('/users/:id/block', validate(blockUserSchema), adminController.setUserBlocked);
+router.delete('/users/:id', adminController.deleteUser);
 
 // Bookings
 router.get('/bookings', validate(listQuerySchema, 'query'), adminController.listBookings);

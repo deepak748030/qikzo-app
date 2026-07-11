@@ -20,6 +20,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
         const payload = verifyAccess(token);
         const user = await User.findById(payload.id).lean<UserDoc>();
         if (!user) throw errors.unauthorized('User not found', 'USER_NOT_FOUND');
+        if ((user as any).blocked) throw errors.forbidden('Account suspended', 'USER_BLOCKED');
         req.user = { ...(user as any), id: String((user as any)._id) };
         next();
     } catch (e: any) {

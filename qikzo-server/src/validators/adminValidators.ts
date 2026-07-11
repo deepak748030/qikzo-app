@@ -7,6 +7,8 @@ export const listQuerySchema = z.object({
     q: z.string().optional(),
     online: z.enum(['true', 'false']).optional(),
     kycStatus: z.string().optional(),
+    role: z.enum(['customer', 'rider', 'admin']).optional(),
+    blocked: z.enum(['true', 'false']).optional(),
 }).partial();
 
 export const rejectSchema = z.object({
@@ -20,4 +22,15 @@ export const approvePayoutSchema = z.object({
 export const blockRiderSchema = z.object({
     blocked: z.boolean(),
     reason: z.string().max(500).optional(),
+});
+
+export const blockUserSchema = z.object({
+    blocked: z.boolean(),
+    reason: z.string().max(500).optional(),
+});
+
+export const updateUserSchema = z.object({
+    name: z.string().min(1).max(120).optional(),
+    email: z.string().email().max(200).optional().or(z.literal('')),
+    role: z.enum(['customer', 'rider', 'admin']).optional(),
 });

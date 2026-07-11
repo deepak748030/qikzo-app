@@ -40,6 +40,19 @@ export const adminController = {
     }))),
     setRiderBlocked: asyncHandler(async (req, res) => ok(res, { rider: await adminService.setRiderBlocked(req.params.id, !!req.body.blocked, req.body.reason || '') }, 'Rider updated')),
 
+    // Users
+    listUsers: asyncHandler(async (req, res) => ok(res, await adminService.listUsers({
+        q: req.query.q as any,
+        role: req.query.role as any,
+        blocked: req.query.blocked === undefined ? undefined : req.query.blocked === 'true',
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        cursor: req.query.cursor as any,
+    }))),
+    getUser: asyncHandler(async (req, res) => ok(res, await adminService.getUser(req.params.id))),
+    updateUser: asyncHandler(async (req, res) => ok(res, { user: await adminService.updateUser(req.user!.id, req.params.id, req.body) }, 'User updated')),
+    setUserBlocked: asyncHandler(async (req, res) => ok(res, { user: await adminService.setUserBlocked(req.user!.id, req.params.id, !!req.body.blocked, req.body.reason || '') }, 'User updated')),
+    deleteUser: asyncHandler(async (req, res) => ok(res, await adminService.deleteUser(req.user!.id, req.params.id), 'User deleted')),
+
     // Bookings
     listBookings: asyncHandler(async (req, res) => ok(res, await adminService.listBookings({
         status: req.query.status as any,

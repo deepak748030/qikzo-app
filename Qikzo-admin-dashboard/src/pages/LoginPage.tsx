@@ -24,7 +24,9 @@ export default function LoginPage() {
       .catch(() => setAdminExists(true));
   }, []);
 
-  const normalized = () => phone.startsWith('+91') ? phone : `+91${phone.replace(/\D/g, '')}`;
+  const digits = () => phone.replace(/\D/g, '').slice(-10);
+  const normalized = () => `+91${digits()}`;
+  const onPhoneChange = (v: string) => setPhone(v.replace(/\D/g, '').slice(0, 10));
 
   const onSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,9 +79,12 @@ export default function LoginPage() {
           <form onSubmit={onSendOtp} className="space-y-4">
             <div>
               <label className="text-sm font-medium block mb-1.5">Phone number</label>
-              <Input inputMode="tel" placeholder="+91 98765 43210" value={phone} onChange={e => setPhone(e.target.value)} autoFocus required />
+              <div className="flex items-stretch gap-2">
+                <div className="grid place-items-center px-3 rounded-md border border-input bg-muted text-sm font-medium text-muted-foreground select-none">+91</div>
+                <Input inputMode="numeric" maxLength={10} placeholder="98765 43210" value={phone} onChange={e => onPhoneChange(e.target.value)} autoFocus required className="flex-1" />
+              </div>
             </div>
-            <Button type="submit" className="w-full" loading={loading}><LogIn className="h-4 w-4" /> Send OTP</Button>
+            <Button type="submit" className="w-full" loading={loading} disabled={digits().length !== 10}><LogIn className="h-4 w-4" /> Send OTP</Button>
           </form>
         )}
 
@@ -103,9 +108,12 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="text-sm font-medium block mb-1.5">Phone number</label>
-              <Input inputMode="tel" placeholder="+91 98765 43210" value={phone} onChange={e => setPhone(e.target.value)} required />
+              <div className="flex items-stretch gap-2">
+                <div className="grid place-items-center px-3 rounded-md border border-input bg-muted text-sm font-medium text-muted-foreground select-none">+91</div>
+                <Input inputMode="numeric" maxLength={10} placeholder="98765 43210" value={phone} onChange={e => onPhoneChange(e.target.value)} required className="flex-1" />
+              </div>
             </div>
-            <Button type="submit" className="w-full" loading={loading}><UserPlus className="h-4 w-4" /> Create admin</Button>
+            <Button type="submit" className="w-full" loading={loading} disabled={digits().length !== 10}><UserPlus className="h-4 w-4" /> Create admin</Button>
             <button type="button" onClick={() => setMode('login-phone')} className="w-full text-sm text-muted-foreground hover:text-foreground">Back to sign in</button>
           </form>
         )}

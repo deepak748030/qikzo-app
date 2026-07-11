@@ -4,6 +4,7 @@ import Layout from '@/components/Layout';
 import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import RidersPage from '@/pages/RidersPage';
+import UsersPage from '@/pages/UsersPage';
 import KycPage from '@/pages/KycPage';
 import BookingsPage from '@/pages/BookingsPage';
 import PayoutsPage from '@/pages/PayoutsPage';
@@ -27,6 +28,7 @@ export default function App() {
       <Route element={<Protected><Layout /></Protected>}>
         <Route index element={<DashboardPage />} />
         <Route path="riders" element={<RidersPage />} />
+        <Route path="users" element={<UsersPage />} />
         <Route path="kyc" element={<KycPage />} />
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="payouts" element={<PayoutsPage />} />

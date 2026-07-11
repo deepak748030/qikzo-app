@@ -1,7 +1,69 @@
-node_modules
+# ===================================================================
+# Qikzo Server (Node.js + TypeScript + Express + MongoDB)
+# ===================================================================
+
+# ---------- Dependencies ----------
+node_modules/
+.pnp/
+.pnp.js
+
+# ---------- Build output ----------
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# ---------- Env & secrets ----------
 .env
-.env.local
-.DS_Store
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+service-account*.json
+firebase-adminsdk*.json
+google-credentials*.json
+
+# ---------- Logs ----------
+logs/
+*.log
 npm-debug.log*
-coverage
-dist
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---------- Runtime / uploads ----------
+uploads/
+public/uploads/
+storage/
+tmp/
+temp/
+
+# ---------- Coverage & tests ----------
+coverage/
+*.lcov
+.nyc_output/
+.jest/
+
+# ---------- Cache ----------
+.cache/
+.turbo/
+.eslintcache
+
+# ---------- Deploy ----------
+.vercel
+.serverless/
+.netlify
+
+# ---------- Editor / OS ----------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---------- Bun ----------
+.bun/
