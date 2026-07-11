@@ -11,13 +11,7 @@ type N = { id: string; title: string; body: string; time: string; read: boolean;
 
 const ICONS = { job: Package, payout: Wallet, doc: FileCheck2, rating: Star, info: Info } as const;
 
-const SEED: N[] = [
-    { id: '1', kind: 'payout', title: 'Payout credited', body: "₹940 for today's trips has been sent to your bank account.", time: '10m ago', read: false },
-    { id: '2', kind: 'job', title: 'New job nearby', body: 'A parcel pickup from Karol Bagh is 400 m from you.', time: '32m ago', read: false },
-    { id: '3', kind: 'rating', title: '5-star rating received', body: 'Priya rated your last trip 5 stars. Great work!', time: '2h ago', read: true },
-    { id: '4', kind: 'doc', title: 'Insurance under review', body: 'Your uploaded insurance document is being verified.', time: 'Yesterday', read: true },
-    { id: '5', kind: 'info', title: 'Weekly earnings summary', body: 'You earned ₹5,820 across 42 trips this week.', time: '2d ago', read: true },
-];
+// No mock/seed data — notifications are strictly server-driven.
 
 function topicToKind(t: string): Kind {
     if (t === 'trip' || t === 'booking') return 'job';
@@ -41,11 +35,11 @@ function fmtTime(iso: string): string {
 
 export default function NotificationsScreen() {
     const phone = useAuth((s) => s.phone);
-    const [items, setItems] = useState<N[]>(SEED);
+    const [items, setItems] = useState<N[]>([]);
     const [refreshing, setRefreshing] = useState(false);
 
     const load = useCallback(async () => {
-        if (!phone) { setItems(SEED); return; }
+        if (!phone) { setItems([]); return; }
         try {
             const { items: server } = await api.notifications.list({ limit: 50 });
             setItems(server.map((n) => ({
@@ -57,7 +51,7 @@ export default function NotificationsScreen() {
                 read: !!n.readAt,
             })));
         } catch {
-            setItems(SEED);
+            setItems([]);
         }
     }, [phone]);
 

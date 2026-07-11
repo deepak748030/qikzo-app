@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator, Image } from 'react-native';
 import { FileCheck2, Upload, ImagePlus, FileText } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -30,7 +30,7 @@ const REQUIRED = [
     { kind: 'profile_photo', name: 'Profile photo' },
 ] as const;
 
-type Row = { id: string; kind: string; name: string; status: string; updatedAt: string };
+type Row = { id: string; kind: string; name: string; status: string; updatedAt: string; url?: string; mimeType?: string };
 
 function fmtDate(iso?: string) {
     if (!iso) return '—';
@@ -66,6 +66,8 @@ export default function Documents() {
                     name: REQUIRED.find((r) => r.kind === it.kind)?.name || it.kind,
                     status: it.status,
                     updatedAt: fmtDate(it.updatedAt),
+                    url: it.url,
+                    mimeType: it.mimeType,
                 };
             }
             const merged: Row[] = REQUIRED.map((r) => byKind[r.kind] || {
@@ -160,14 +162,21 @@ export default function Documents() {
                     {rows.map((d) => {
                         const color = STATUS_COLOR[d.status as keyof typeof STATUS_COLOR] || colors.warning;
                         const busy = busyKind === d.kind;
+                        const isImg = d.url && (!d.mimeType || d.mimeType.startsWith('image/'));
                         return (
                             <View key={d.kind} style={styles.row}>
-                                <View style={styles.iconWrap}>
-                                    <FileCheck2 size={18} color={colors.primary} strokeWidth={2} />
-                                </View>
+                                {isImg ? (
+                                    <Image source={{ uri: d.url }} style={styles.thumb} />
+                                ) : d.url ? (
+                                    <View style={[styles.thumb, styles.thumbFile]}><Text style={styles.thumbFileText}>PDF</Text></View>
+                                ) : (
+                                    <View style={styles.iconWrap}>
+                                        <FileCheck2 size={18} color={colors.primary} strokeWidth={2} />
+                                    </View>
+                                )}
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.name}>{d.name}</Text>
-                                    <Text style={styles.sub}>{d.updatedAt}</Text>
+                                    <Text style={styles.sub}>{d.url ? `Uploaded · ${d.updatedAt}` : d.updatedAt}</Text>
                                 </View>
                                 <View style={[styles.pill, { borderColor: color }]}>
                                     <Text style={[styles.pillText, { color }]}>{d.status}</Text>
@@ -220,6 +229,9 @@ const styles = StyleSheet.create({
     list: { marginTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border },
     row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.divider },
     iconWrap: { width: 34, height: 34, borderRadius: radius.sm, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
+    thumb: { width: 42, height: 42, borderRadius: radius.sm, backgroundColor: colors.chipBg, borderWidth: 1, borderColor: colors.border },
+    thumbFile: { alignItems: 'center', justifyContent: 'center' },
+    thumbFileText: { fontSize: 10, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.5 },
     name: { fontSize: 14, fontFamily: fonts.bodyBold, color: colors.foreground },
     sub: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 2 },
     pill: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },

@@ -13,13 +13,7 @@ type N = { id: string; title: string; body: string; time: string; read: boolean;
 
 const ICONS = { order: Package, offer: Tag, delivery: Truck, reward: Gift, info: Info } as const;
 
-const SEED: N[] = [
-    { id: '1', type: 'order', title: 'Booking confirmed', body: 'Your booking #QZ2104 has been placed. Searching for a rider near you.', time: '2m ago', read: false },
-    { id: '2', type: 'delivery', title: 'Rider on the way', body: 'Rohit is arriving at your pickup location on Honda Activa.', time: '15m ago', read: false },
-    { id: '3', type: 'offer', title: 'Flat ₹30 off your next ride', body: 'Use code QIZ30 on your next delivery booking. Valid today only.', time: '1h ago', read: true },
-    { id: '4', type: 'reward', title: 'You earned ₹15 cashback', body: 'Cashback credited to your Qikzo wallet for booking #QZ2018.', time: '3h ago', read: true },
-    { id: '5', type: 'info', title: 'New saved place added', body: 'Office address has been saved successfully.', time: 'Yesterday', read: true },
-];
+// No mock/seed data — notifications are strictly server-driven.
 
 function topicToType(t: string): NType {
     if (t === 'booking') return 'order';
@@ -43,12 +37,12 @@ function fmtTime(iso: string): string {
 
 export default function NotificationsScreen() {
     const phone = useAuth((s) => s.phone);
-    const [items, setItems] = useState<N[]>(SEED);
+    const [items, setItems] = useState<N[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const loading = useInitialLoad();
 
     const load = useCallback(async () => {
-        if (!phone) { setItems(SEED); return; }
+        if (!phone) { setItems([]); return; }
         try {
             const { items: server } = await api.notifications.list({ limit: 50 });
             setItems(server.map((n) => ({
@@ -60,7 +54,7 @@ export default function NotificationsScreen() {
                 read: !!n.readAt,
             })));
         } catch {
-            setItems(SEED);
+            setItems([]);
         }
     }, [phone]);
 

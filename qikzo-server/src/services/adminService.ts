@@ -26,6 +26,7 @@ export const adminService = {
             .sort({ _id: -1 })
             .limit(limit + 1)
             .populate({ path: 'rider', select: 'name phone user vehicle vehicleNo kycStatus' })
+            .populate({ path: 'documentIds', select: 'kind url mimeType status' })
             .lean();
         const hasMore = items.length > limit;
         return {

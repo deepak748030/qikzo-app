@@ -16,7 +16,7 @@ export const documentService = {
         const rider = await riderService.getOrCreateForUser(userId);
         // Replace any existing document of the same kind (latest wins).
         await Document.deleteMany({ owner: rider._id, ownerRole: 'rider', kind: input.kind });
-        return Document.create({
+        const doc = await Document.create({
             owner: rider._id,
             ownerRole: 'rider',
             kind: input.kind,
@@ -26,6 +26,31 @@ export const documentService = {
             expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
             status: 'pending',
         });
+        // Ensure a KYC dossier exists and reflects the latest uploads so the
+        // admin dashboard can review documents even before the rider submits
+        // the KYC form. We only bump status forward from not_started/rejected —
+        // never overwrite an already approved/in_review state.
+        const allDocs = await Document.find({ owner: rider._id, ownerRole: 'rider' }).select('_id').lean();
+        const existing = await KYC.findOne({ rider: rider._id });
+        const nextStatus = !existing || existing.status === 'not_started' || existing.status === 'rejected'
+            ? 'submitted'
+            : existing.status;
+        await KYC.findOneAndUpdate(
+            { rider: rider._id },
+            {
+                $set: {
+                    documentIds: allDocs.map((d) => d._id),
+                    status: nextStatus,
+                    ...(nextStatus === 'submitted' && !existing?.submittedAt ? { submittedAt: new Date() } : {}),
+                },
+            },
+            { new: true, upsert: true },
+        );
+        if (rider.kycStatus === 'not_started' || rider.kycStatus === 'rejected') {
+            rider.kycStatus = 'submitted';
+            await rider.save();
+        }
+        return doc;
     },
 
     async remove(userId: string, id: string) {

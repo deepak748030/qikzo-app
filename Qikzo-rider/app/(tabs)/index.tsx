@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
-import { Power, MapPin, Bell } from 'lucide-react-native';
+import { Power, MapPin, Bell, ShieldAlert } from 'lucide-react-native';
+import { ridersApi } from '@/lib/api/endpoints/riders';
 import { colors, fonts, radius } from '@/lib/theme';
 import LeafletMap from '@/components/LeafletMap';
 import JobRequestCard from '@/components/JobRequestCard';
@@ -41,6 +42,7 @@ export default function DispatchHome() {
 
     const [incoming, setIncoming] = useState<IncomingJob | null>(null);
     const [acceptBusy, setAcceptBusy] = useState(false);
+    const [kycStatus, setKycStatus] = useState<string | null>(null);
     // Live GPS center for the map — resolves as soon as permission is granted.
     const [center, setCenter] = useState(FALLBACK_CENTER);
 
@@ -67,6 +69,22 @@ export default function DispatchHome() {
 
     // On mount: resume an in-flight trip from the server (survives app restart).
     useEffect(() => { hydrateActiveFromServer(); }, [hydrateActiveFromServer]);
+
+    // Fetch KYC status so we can gate "Go online" client-side and surface a banner.
+    // The server also enforces this (returns KYC_NOT_APPROVED) — this is UX only.
+    const refreshKyc = React.useCallback(async () => {
+        if (!isSignedIn()) return;
+        try {
+            const rider = await ridersApi.me();
+            const status = (rider as any)?.kycStatus ?? null;
+            setKycStatus(status);
+            // Safety: if the server somehow has us online while KYC isn't approved, force offline.
+            if (status !== 'approved' && (rider as any)?.online) {
+                try { await setOnlineOnServer(false); } catch { /* ignore */ }
+            }
+        } catch { /* ignore */ }
+    }, [setOnlineOnServer]);
+    useEffect(() => { refreshKyc(); }, [refreshKyc]);
 
     // If a job is active, jump to the active-job screen.
     useEffect(() => { if (active) router.push('/active-job'); }, [active]);
@@ -119,6 +137,20 @@ export default function DispatchHome() {
     }, [online, active, incoming, fetchIncoming]);
 
     const goOnline = async () => {
+        // Client-side KYC gate — server also enforces (KYC_NOT_APPROVED).
+        if (isSignedIn() && kycStatus && kycStatus !== 'approved') {
+            sheet.show({
+                variant: 'warning',
+                title: 'KYC verification needed',
+                message: kycStatus === 'pending'
+                    ? 'Your documents are under review. You can go online once KYC is approved.'
+                    : 'Upload and verify your documents before going online.',
+                confirmText: 'Open documents',
+                cancelText: 'Later',
+                onConfirm: () => router.push('/documents'),
+            });
+            return;
+        }
         if (!locationGranted) {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
@@ -143,7 +175,8 @@ export default function DispatchHome() {
                 const msg = e instanceof ApiError ? e.message : 'Could not go online.';
                 const code = (e instanceof ApiError ? e.code : '') || '';
                 if (code === 'KYC_NOT_APPROVED') {
-                    // Guide the rider straight to the Documents screen so they can upload.
+                    // Refresh local status so the banner appears immediately.
+                    refreshKyc();
                     sheet.show({
                         variant: 'warning',
                         title: 'KYC verification needed',
@@ -251,25 +284,54 @@ export default function DispatchHome() {
                 ) : online && incoming ? (
                     <JobRequestCard job={incoming} onAccept={onAccept} onDecline={onDecline} />
                 ) : (
-                    <View style={styles.statusCard}>
-                        <View style={styles.statusText}>
-                            <Text style={styles.statusTitle}>
-                                {online ? 'You are online' : 'You are offline'}
-                            </Text>
-                            <Text style={styles.statusSub}>
-                                {online ? 'Waiting for a nearby job request…' : 'Go online to start receiving jobs.'}
-                            </Text>
+                    <View style={{ gap: 8 }}>
+                        {kycStatus && kycStatus !== 'approved' && (
+                            <Pressable
+                                onPress={() => router.push('/documents')}
+                                style={styles.kycBanner}
+                            >
+                                <ShieldAlert size={16} color={colors.danger} strokeWidth={2.4} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.kycTitle}>
+                                        {kycStatus === 'pending' ? 'KYC under review' : 'KYC not verified'}
+                                    </Text>
+                                    <Text style={styles.kycSub}>
+                                        {kycStatus === 'pending'
+                                            ? 'You can go online once your documents are approved.'
+                                            : 'Upload your documents to start receiving jobs.'}
+                                    </Text>
+                                </View>
+                                <Text style={styles.kycCta}>Fix</Text>
+                            </Pressable>
+                        )}
+                        <View style={styles.statusCard}>
+                            <View style={styles.statusText}>
+                                <Text style={styles.statusTitle}>
+                                    {online ? 'You are online' : 'You are offline'}
+                                </Text>
+                                <Text style={styles.statusSub}>
+                                    {online
+                                        ? 'Waiting for a nearby job request…'
+                                        : kycStatus && kycStatus !== 'approved'
+                                            ? 'Verify KYC to start receiving jobs.'
+                                            : 'Go online to start receiving jobs.'}
+                                </Text>
+                            </View>
+                            <Pressable
+                                style={[
+                                    styles.powerBtn,
+                                    online && styles.powerBtnOn,
+                                    kycStatus && kycStatus !== 'approved' && !online && styles.powerBtnDisabled,
+                                ]}
+                                onPress={toggleOnline}
+                                hitSlop={6}
+                            >
+                                <Power size={22} color={online ? colors.accentForeground : colors.primaryForeground} strokeWidth={2.4} />
+                                <Text style={[styles.powerText, online && styles.powerTextOn]}>
+                                    {online ? 'Go offline' : 'Go online'}
+                                </Text>
+                            </Pressable>
                         </View>
-                        <Pressable
-                            style={[styles.powerBtn, online && styles.powerBtnOn]}
-                            onPress={toggleOnline}
-                            hitSlop={6}
-                        >
-                            <Power size={22} color={online ? colors.accentForeground : colors.primaryForeground} strokeWidth={2.4} />
-                            <Text style={[styles.powerText, online && styles.powerTextOn]}>
-                                {online ? 'Go offline' : 'Go online'}
-                            </Text>
-                        </Pressable>
                     </View>
                 )}
             </View>
@@ -298,6 +360,11 @@ const styles = StyleSheet.create({
     statusSub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 3 },
     powerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 12, borderRadius: radius.pill },
     powerBtnOn: { backgroundColor: colors.accent },
+    powerBtnDisabled: { opacity: 0.55 },
+    kycBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.danger, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10 },
+    kycTitle: { fontSize: 13, fontFamily: fonts.displayBold, color: colors.foreground },
+    kycSub: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 2 },
+    kycCta: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.danger, letterSpacing: 0.4, textTransform: 'uppercase' },
     powerText: { color: colors.primaryForeground, fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.3 },
     powerTextOn: { color: colors.accentForeground },
     onlinePill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.accent, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.pill },

@@ -122,10 +122,13 @@ export default function ProfileScreen() {
                         <Text style={styles.phone}>{phone || 'Not signed in'}</Text>
                         <Pressable
                             onPress={() => { if (!kycVerified) router.push('/documents'); }}
-                            style={[styles.kycPill, { borderColor: kycVerified ? colors.success : colors.danger }]}
+                            style={[styles.kycPill, { borderColor: kycVerified ? colors.success : colors.danger, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                         >
+                            {kycVerified
+                                ? <ShieldCheck size={11} color={colors.success} strokeWidth={2.4} />
+                                : <ShieldAlert size={11} color={colors.danger} strokeWidth={2.4} />}
                             <Text style={[styles.kycPillText, { color: kycVerified ? colors.success : colors.danger }]}>
-                                {kycLabel}{!kycVerified ? ' · Tap to fix' : ''}
+                                {kycLabel}
                             </Text>
                         </Pressable>
                     </View>

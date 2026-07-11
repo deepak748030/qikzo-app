@@ -8,11 +8,13 @@ import { DataTable, type Column } from '@/components/DataTable';
 import { fmtDate, fmtPhone } from '@/lib/utils';
 import { ShieldCheck, CheckCircle2, XCircle } from 'lucide-react';
 
+type KycDoc = { _id: string; kind: string; url: string; mimeType?: string; status?: string };
 type KycRow = {
   _id: string;
   status: 'pending' | 'submitted' | 'approved' | 'rejected';
   submittedAt?: string;
   rider?: { name?: string; phone?: string; vehicle?: string; vehicleNo?: string };
+  documentIds?: KycDoc[];
 };
 
 export default function KycPage() {
@@ -52,6 +54,35 @@ export default function KycPage() {
         <div className="text-xs text-muted-foreground">{r.rider?.vehicleNo || '—'}</div>
       </div>
     )},
+    { key: 'documents', header: 'Documents', render: r => {
+      const docs = r.documentIds || [];
+      if (!docs.length) return <span className="text-xs text-muted-foreground">No uploads</span>;
+      return (
+        <div className="flex items-center gap-1.5 flex-wrap max-w-[260px]">
+          {docs.slice(0, 6).map(d => {
+            const isImg = !d.mimeType || d.mimeType.startsWith('image/');
+            return (
+              <a
+                key={d._id}
+                href={d.url}
+                target="_blank"
+                rel="noreferrer"
+                title={`${d.kind} · ${d.status || 'pending'}`}
+                onClick={e => e.stopPropagation()}
+                className="block h-10 w-10 overflow-hidden rounded border border-border bg-muted"
+              >
+                {isImg ? (
+                  <img src={d.url} alt={d.kind} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[9px] uppercase text-muted-foreground">PDF</div>
+                )}
+              </a>
+            );
+          })}
+          {docs.length > 6 ? <span className="text-xs text-muted-foreground">+{docs.length - 6}</span> : null}
+        </div>
+      );
+    }},
     { key: 'status', header: 'Status', render: r => {
       const tone = r.status === 'approved' ? 'success' : r.status === 'rejected' ? 'danger' : 'warning';
       return <Badge tone={tone}>{r.status}</Badge>;
