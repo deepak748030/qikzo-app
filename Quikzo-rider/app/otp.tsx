@@ -9,14 +9,19 @@ import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useAuth } from '@/lib/authStore';
+import { authApi } from '@/lib/api/endpoints/auth';
+import { ApiError } from '@/lib/api/errors';
 
 const HERO = require('../assets/images/otp-hero.png');
 const LEN = 6;
 
 export default function OtpScreen() {
   const insets = useSafeAreaInsets();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
-  const [digits, setDigits] = useState<string[]>(Array(LEN).fill(''));
+  const { phone, devCode } = useLocalSearchParams<{ phone: string; devCode?: string }>();
+  const initial = (devCode && /^\d{4,8}$/.test(devCode))
+    ? devCode.padEnd(LEN, '').slice(0, LEN).split('')
+    : Array(LEN).fill('');
+  const [digits, setDigits] = useState<string[]>(initial.length === LEN ? initial : Array(LEN).fill(''));
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(30);
   const inputs = useRef<(TextInput | null)[]>([]);
@@ -42,19 +47,38 @@ export default function OtpScreen() {
     if (e.nativeEvent.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
   };
 
-  const onVerify = () => {
+  const onVerify = async () => {
     const code = digits.join('');
     if (code.length < LEN) {
       sheet.show({ variant: 'error', title: 'Incomplete OTP', message: `Enter the ${LEN}-digit code sent to your number.` });
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await authApi.verifyOtp(String(phone), code);
       setPhone(`+91 ${phone}`);
+      try { (await import('@/lib/socket')).connectSocket(); } catch {}
+      import('@/lib/push').then((m) => m.registerForPushAsync('rider').catch(() => {}));
       router.replace(profileComplete ? '/(tabs)' : '/vehicle-setup');
-    }, 800);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Verification failed. Please try again.';
+      sheet.show({ variant: 'error', title: 'Verification failed', message: msg });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const onResend = async () => {
+    try {
+      await authApi.requestOtp(String(phone));
+      setTimer(30);
+      sheet.show({ variant: 'success', title: 'OTP sent', message: 'A new code has been sent to your number.' });
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Could not resend OTP.';
+      sheet.show({ variant: 'error', title: 'Resend failed', message: msg });
+    }
+  };
+
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
@@ -96,7 +120,7 @@ export default function OtpScreen() {
           {timer > 0 ? (
             <Text style={styles.resendMuted}>Resend code in 0:{timer.toString().padStart(2, '0')}</Text>
           ) : (
-            <Pressable onPress={() => { setTimer(30); sheet.show({ variant: 'success', title: 'OTP sent', message: 'A new code has been sent to your number.' }); }}>
+            <Pressable onPress={onResend}>
               <Text style={styles.resend}>Resend OTP</Text>
             </Pressable>
           )}

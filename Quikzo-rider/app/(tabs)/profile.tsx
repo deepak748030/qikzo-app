@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { router, Href } from 'expo-router';
 import { User, Bike, FileCheck2, Bell, HelpCircle, Info, Shield, FileText, LogOut, Star, Landmark } from 'lucide-react-native';
@@ -12,6 +12,8 @@ import { useAuth } from '@/lib/authStore';
 import { useJobs } from '@/lib/jobStore';
 import { useInitialLoad } from '@/lib/useInitialLoad';
 import { stats } from '@/lib/mockData';
+import { authApi } from '@/lib/api/endpoints/auth';
+import { tokenStore } from '@/lib/api/tokenStore';
 
 type Item = { icon: any; label: string; route: Href };
 
@@ -33,8 +35,21 @@ export default function ProfileScreen() {
     const vehicle = useAuth((s) => s.vehicle);
     const vehicleNo = useAuth((s) => s.vehicleNo);
     const signOut = useAuth((s) => s.signOut);
+    const setName = useAuth((s) => s.setName);
+    const setPhone = useAuth((s) => s.setPhone);
     const setOnline = useJobs((s) => s.setOnline);
     const loading = useInitialLoad();
+
+    // Refresh identity from the server when the tab mounts so name/phone stay in
+    // sync after edits on other devices.
+    useEffect(() => {
+        const { accessToken } = tokenStore.get();
+        if (!accessToken) return;
+        authApi.me().then((u) => {
+            if (u.name) setName(u.name);
+            if (u.phone) setPhone(u.phone);
+        }).catch(() => { /* ignore */ });
+    }, [setName, setPhone]);
 
     const confirmLogout = () => {
         sheet.show({
@@ -43,7 +58,12 @@ export default function ProfileScreen() {
             message: 'You will need to verify your number again to log back in.',
             confirmText: 'Log out',
             cancelText: 'Cancel',
-            onConfirm: () => { setOnline(false); signOut(); router.replace('/login'); },
+            onConfirm: async () => {
+                setOnline(false);
+                try { await authApi.logout(); } catch { /* best-effort */ }
+                signOut();
+                router.replace('/login');
+            },
         });
     };
 

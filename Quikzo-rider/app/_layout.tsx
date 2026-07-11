@@ -1,11 +1,16 @@
-import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Sora_600SemiBold, Sora_700Bold, Sora_800ExtraBold } from '@expo-google-fonts/sora';
 import { Manrope_400Regular, Manrope_500Medium, Manrope_700Bold } from '@expo-google-fonts/manrope';
 import { colors } from '@/lib/theme';
+import { tokenStore } from '@/lib/api/tokenStore';
+import { onUnauthorized } from '@/lib/api/client';
+import { useAuth } from '@/lib/authStore';
+import { connectSocket, disconnectSocket } from '@/lib/socket';
+import { registerForPushAsync, unregisterPushAsync } from '@/lib/push';
 
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
@@ -14,9 +19,32 @@ export default function RootLayout() {
     Sora_600SemiBold, Sora_700Bold, Sora_800ExtraBold,
     Manrope_400Regular, Manrope_500Medium, Manrope_700Bold,
   });
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => { if (loaded) SplashScreen.hideAsync().catch(() => { }); }, [loaded]);
-  if (!loaded) return null;
+  // Hydrate access/refresh tokens before any authenticated request fires.
+  useEffect(() => {
+    tokenStore.hydrate().finally(() => {
+      setReady(true);
+      try { connectSocket(); } catch {}
+      registerForPushAsync('rider').catch(() => {});
+    });
+    return () => { try { disconnectSocket(); } catch {} };
+  }, []);
+
+  // Bounce to /login when refresh terminally fails.
+  useEffect(() => {
+    const off = onUnauthorized(() => {
+      try { useAuth.getState().signOut(); } catch { /* noop */ }
+      try { disconnectSocket(); } catch { /* noop */ }
+      unregisterPushAsync().catch(() => {});
+      try { router.replace('/login'); } catch { /* noop */ }
+    });
+    return off;
+  }, []);
+
+  useEffect(() => { if (loaded && ready) SplashScreen.hideAsync().catch(() => { }); }, [loaded, ready]);
+  if (!loaded || !ready) return null;
+
 
   return (
     <SafeAreaProvider>

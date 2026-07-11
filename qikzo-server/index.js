@@ -1,27 +1,24 @@
-require('dotenv').config();
-const http = require('http');
-const app = require('./src/app');
-const env = require('./src/config/env');
-const { connectDB } = require('./src/config/db');
-const { initSockets } = require('./src/sockets');
-
-// When invoked directly (`node index.js`), spin up an HTTP + Socket.io server.
-// When imported (Vercel serverless), just export the Express app.
-if (require.main === module) {
-    const server = http.createServer(app);
-    initSockets(server, { corsOrigin: env.CORS_ORIGIN });
-    connectDB()
-        .then(() => {
-            server.listen(env.PORT, () => {
-                // eslint-disable-next-line no-console
-                console.log(`⚡ Qikzo API ready on http://localhost:${env.PORT}`);
-            });
-        })
-        .catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error('Failed to start Qikzo server:', err);
-            process.exit(1);
-        });
+// Runtime entry. Works for both `node index.js` (prod, after `npm run build`)
+// and Vercel serverless (which imports this file). In dev use `npm run dev`
+// (tsx watch) — do NOT invoke this file directly for TS sources.
+/* eslint-disable */
+try {
+    // Prefer compiled output when present.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    module.exports = require('./dist/src/app').default || require('./dist/src/app');
+} catch (e) {
+    // Fallback: register tsx at runtime (useful for Vercel builds that
+    // haven't produced dist yet). Requires `tsx` in dependencies.
+    require('tsx/cjs');
+    module.exports = require('./src/app').default;
 }
 
-module.exports = app;
+if (require.main === module) {
+    // Delegate to the standalone server bootstrapper.
+    try {
+        require('./dist/src/server');
+    } catch {
+        require('tsx/cjs');
+        require('./src/server');
+    }
+}

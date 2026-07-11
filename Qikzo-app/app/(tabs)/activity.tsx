@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import {
     Package, ShoppingCart, UtensilsCrossed, Pill, Sparkles,
@@ -9,8 +9,11 @@ import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Button from '@/components/Button';
 import AnimatedIcon from '@/components/AnimatedIcon';
+import Skeleton, { SkeletonRow } from '@/components/Skeleton';
+import { useInitialLoad } from '@/lib/useInitialLoad';
 import { useBooking } from '@/lib/bookingStore';
 import { categories, Booking, BookingStatus } from '@/lib/mockData';
+
 
 const STATUS_COLOR: Record<BookingStatus, string> = {
     'Searching rider': colors.warning,
@@ -54,6 +57,33 @@ function fmtTime(ts: number) {
 
 export default function ActivityScreen() {
     const bookings = useBooking((s) => s.bookings);
+    const hydrateFromServer = useBooking((s) => s.hydrateFromServer);
+    const storeLoading = useBooking((s) => s.loading);
+    const [refreshing, setRefreshing] = useState(false);
+    const initialLoading = useInitialLoad();
+
+    // Pull from server on mount so activity reflects real bookings, not just the
+    // local mock seed. The store is a no-op when the user isn't signed in.
+    useEffect(() => { hydrateFromServer(); }, [hydrateFromServer]);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        try { await hydrateFromServer(); } finally { setRefreshing(false); }
+    };
+
+    const loading = initialLoading || (storeLoading && bookings.length === 0);
+
+    if (loading) {
+        return (
+            <View style={styles.container}>
+                <ScreenHeader title="Activity" showBack={false} />
+                <View style={{ paddingTop: 4 }}>
+                    {[0, 1, 2, 3, 4, 5].map((i) => <SkeletonRow key={i} />)}
+                </View>
+            </View>
+        );
+    }
+
 
     if (bookings.length === 0) {
         return (
@@ -118,6 +148,7 @@ export default function ActivityScreen() {
                 ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 24 }}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             />
         </View>
     );

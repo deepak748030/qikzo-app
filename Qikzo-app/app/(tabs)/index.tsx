@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -10,10 +10,15 @@ import { colors, fonts, radius } from '@/lib/theme';
 import Brand from '@/components/Brand';
 import ServiceToggle from '@/components/ServiceToggle';
 import AssetIcon from '@/components/AssetIcon';
-import { categories, savedPlaces, DeliveryCategory } from '@/lib/mockData';
+import { categories as mockCategories, savedPlaces as mockSavedPlaces, DeliveryCategory, SavedPlace } from '@/lib/mockData';
 import { useBooking } from '@/lib/bookingStore';
 import { useServiceMode, rideOptions } from '@/lib/serviceMode';
 import PromoBanners from '@/components/PromoBanners';
+import Skeleton, { SkeletonCard } from '@/components/Skeleton';
+import { useInitialLoad } from '@/lib/useInitialLoad';
+import { catalogApi } from '@/lib/api/endpoints/catalog';
+import { placesApi } from '@/lib/api/endpoints/places';
+import { tokenStore } from '@/lib/api/tokenStore';
 
 const PLACE_ICON: Record<string, LucideIcon> = {
   home: HomeIcon,
@@ -36,6 +41,47 @@ export default function HomeScreen() {
   const mode = useServiceMode((s) => s.mode);
   const setMode = useServiceMode((s) => s.setMode);
   const [selectedRide, setSelectedRide] = React.useState<string>(rideOptions[0].id);
+
+  const loading = useInitialLoad();
+
+  // Server-backed catalog + saved places, with mock fallback when signed out
+  // or if the request fails so the UI never goes blank.
+  const [categories, setCategories] = useState<DeliveryCategory[]>(mockCategories);
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>(mockSavedPlaces);
+
+  useEffect(() => {
+    let cancelled = false;
+    catalogApi.listCategories()
+      .then((items) => {
+        if (cancelled || !items?.length) return;
+        setCategories(items.map((c) => ({
+          id: c.slug,
+          name: c.name,
+          emoji: c.emoji || '📦',
+          hint: c.hint || '',
+        })));
+      })
+      .catch(() => { /* keep mock */ });
+
+    const { accessToken } = tokenStore.get();
+    if (accessToken) {
+      placesApi.list()
+        .then((items) => {
+          if (cancelled) return;
+          if (items?.length) {
+            setSavedPlaces(items.map((p) => ({
+              id: p._id,
+              label: p.label,
+              address: p.address,
+              emoji: p.emoji || '📍',
+            })));
+          }
+        })
+        .catch(() => { /* keep mock */ });
+    }
+
+    return () => { cancelled = true; };
+  }, []);
 
   const openWithCategory = (categoryId: string, drop?: string) => {
     const patch: Parameters<typeof setDraft>[0] = { mode, categoryId };
@@ -69,7 +115,22 @@ export default function HomeScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
 
-
+        {loading ? (
+          <View style={{ padding: 6, gap: 8, marginTop: 12 }}>
+            <SkeletonCard height={68} />
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+              <Skeleton width={80} height={30} rounded="pill" />
+              <Skeleton width={90} height={30} rounded="pill" />
+              <Skeleton width={110} height={30} rounded="pill" />
+            </View>
+            <Skeleton width={130} height={12} style={{ marginTop: 14, marginBottom: 4 }} />
+            <SkeletonCard height={72} />
+            <SkeletonCard height={72} />
+            <SkeletonCard height={72} />
+            <SkeletonCard height={140} />
+          </View>
+        ) : (
+        <>
         {/* "Where to?" primary CTA */}
         <Pressable style={styles.whereBtn} onPress={() => openMap('drop')}>
           <View style={styles.whereIcon}>
@@ -194,6 +255,8 @@ export default function HomeScreen() {
 
             <PromoBanners />
           </>
+        )}
+        </>
         )}
       </ScrollView>
     </View>

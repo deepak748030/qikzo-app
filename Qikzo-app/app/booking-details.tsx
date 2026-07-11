@@ -12,6 +12,8 @@ import { useSheet } from '@/lib/useSheet';
 import { useBooking } from '@/lib/bookingStore';
 import { BookingStatus, categories } from '@/lib/mockData';
 import { useAuth } from '@/lib/authStore';
+import { tokenStore } from '@/lib/api/tokenStore';
+import { subscribe as subscribeSocket, emit as socketEmit, connectSocket } from '@/lib/socket';
 import BookingStageOverlay, { Stage, VehicleKind } from '@/components/BookingStageOverlay';
 
 // Map booking category → vehicle rendered on the "accepted" overlay.
@@ -40,21 +42,44 @@ export default function BookingDetailsScreen() {
     const booking = useBooking((s) => s.bookings.find((b) => b.id === id));
     const updateStatus = useBooking((s) => s.updateStatus);
     const assignRider = useBooking((s) => s.assignRider);
+    const refreshOne = useBooking((s) => s.refreshOne);
+    const cancelOnServer = useBooking((s) => s.cancelOnServer);
     const sheet = useSheet();
     const [cancelling, setCancelling] = useState(false);
     const userName = useAuth((s) => s.name);
-    // Track when the user has dismissed the delivered celebration so we don't
-    // pop it up again if they navigate back to this screen.
     const [deliveredDismissed, setDeliveredDismissed] = useState(false);
-    // Momentarily show the "rider accepted" full-screen even after status advances.
     const [acceptedShown, setAcceptedShown] = useState(false);
 
     useEffect(() => {
         if (booking?.status === 'Rider accepted') setAcceptedShown(true);
     }, [booking?.status]);
 
-    // Auto-progression timer (simulated rider matching + trip).
+    // Real-time booking/trip updates via socket + a 10s poll safety net.
     useEffect(() => {
+        if (!id || !tokenStore.get().accessToken) return;
+        if (!booking || booking.status === 'Delivered' || booking.status === 'Cancelled') return;
+        const serverId = (booking as any).serverId as string | undefined;
+        connectSocket();
+        if (serverId) socketEmit('booking:subscribe', serverId);
+        const offBooking = subscribeSocket('booking:update', (p: any) => {
+            if (!serverId || String(p?.id) === String(serverId)) refreshOne(String(id));
+        });
+        const offTrip = subscribeSocket('trip:update', (p: any) => {
+            if (!serverId || String(p?.booking) === String(serverId)) refreshOne(String(id));
+        });
+        const poll = setInterval(() => { refreshOne(String(id)); }, 10000);
+        return () => {
+            offBooking(); offTrip(); clearInterval(poll);
+            if (serverId) socketEmit('booking:unsubscribe', serverId);
+        };
+    }, [id, booking?.status, refreshOne]);
+
+
+    // Auto-progression timer (simulated rider matching + trip). Only runs when
+    // the user is signed OUT — otherwise the server is the source of truth and
+    // the poll above drives status transitions.
+    useEffect(() => {
+        if (tokenStore.get().accessToken) return;
         if (!booking) return;
         if (booking.status === 'Delivered' || booking.status === 'Cancelled') return;
         const idx = FLOW.indexOf(booking.status);
@@ -71,6 +96,7 @@ export default function BookingDetailsScreen() {
 
         return () => clearTimeout(timer);
     }, [booking?.status, booking?.id]);
+
 
     // Pulse animation while searching for a rider.
     const pulse = useRef(new Animated.Value(0)).current;
@@ -112,12 +138,10 @@ export default function BookingDetailsScreen() {
                     ? 'delivered'
                     : null;
 
-    const onOverlayCancel = () => {
+    const onOverlayCancel = async () => {
         setCancelling(true);
-        setTimeout(() => {
-            updateStatus(booking.id, 'Cancelled');
-            setCancelling(false);
-        }, 300);
+        try { await cancelOnServer(booking.id, 'User cancelled from overlay'); }
+        finally { setCancelling(false); }
     };
 
     const onCancel = () => {
@@ -127,16 +151,17 @@ export default function BookingDetailsScreen() {
             message: 'The rider will be notified. Repeated cancellations may affect your account.',
             confirmText: 'Yes, cancel',
             cancelText: 'Keep booking',
-            onConfirm: () => {
+            onConfirm: async () => {
                 setCancelling(true);
-                setTimeout(() => {
-                    updateStatus(booking.id, 'Cancelled');
+                try { await cancelOnServer(booking.id, 'User cancelled'); }
+                finally {
                     setCancelling(false);
                     sheet.hide();
-                }, 600);
+                }
             },
         });
     };
+
 
     const onCallRider = () => {
         if (!booking.rider) return;

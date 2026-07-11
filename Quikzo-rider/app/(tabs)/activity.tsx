@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Skeleton, { SkeletonRow } from '@/components/Skeleton';
@@ -30,7 +30,11 @@ function Row({ item }: { item: CompletedJob }) {
 
 export default function Activity() {
     const completed = useJobs((s) => s.completed);
+    const storeLoading = useJobs((s) => s.loading);
+    const hydrateFromServer = useJobs((s) => s.hydrateFromServer);
     const loading = useInitialLoad();
+
+    useEffect(() => { hydrateFromServer(); }, [hydrateFromServer]);
 
     if (loading) {
         return (
@@ -79,6 +83,7 @@ export default function Activity() {
                         <Text style={styles.emptySub}>Go online from Home to receive your first job.</Text>
                     </View>
                 }
+                refreshControl={<RefreshControl refreshing={storeLoading} onRefresh={hydrateFromServer} tintColor={colors.foreground} />}
             />
         </View>
     );

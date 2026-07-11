@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { router, Href } from 'expo-router';
 import { User, MapPin, Activity, HelpCircle, Info, Shield, FileText, ChevronRight, LogOut, Bell } from 'lucide-react-native';
@@ -7,6 +7,11 @@ import ScreenHeader from '@/components/ScreenHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useAuth } from '@/lib/authStore';
+import Skeleton from '@/components/Skeleton';
+import { useInitialLoad } from '@/lib/useInitialLoad';
+import { authApi } from '@/lib/api/endpoints/auth';
+import { tokenStore } from '@/lib/api/tokenStore';
+
 
 type Item = { icon: any; label: string; route?: Href };
 
@@ -24,7 +29,26 @@ export default function ProfileScreen() {
   const sheet = useSheet();
   const name = useAuth((s) => s.name);
   const phone = useAuth((s) => s.phone);
+  const setSession = useAuth((s) => s.setSession);
   const signOut = useAuth((s) => s.signOut);
+  const loading = useInitialLoad();
+
+  // Reconcile with the server on mount so the profile card always reflects
+  // truth (name updates, phone changes, admin edits).
+  useEffect(() => {
+    if (!tokenStore.get().accessToken) return;
+    let cancelled = false;
+    authApi.me().then((u) => {
+      if (cancelled || !u) return;
+      setSession({
+        id: (u as any)._id || u.id,
+        name: u.name && u.name !== 'Guest' ? u.name : undefined,
+        phone: u.phone ? `+91 ${String(u.phone).replace(/^\+?91/, '')}` : undefined,
+      });
+    }).catch(() => { /* 401 already handled by client refresh dance */ });
+    return () => { cancelled = true; };
+  }, [setSession]);
+
 
   const confirmLogout = () => {
     sheet.show({
@@ -33,7 +57,7 @@ export default function ProfileScreen() {
       message: 'You will need to verify your number again to log back in.',
       confirmText: 'Log out',
       cancelText: 'Cancel',
-      onConfirm: () => { signOut(); router.replace('/login'); },
+      onConfirm: async () => { await signOut(); router.replace('/login'); },
     });
   };
 
@@ -43,6 +67,20 @@ export default function ProfileScreen() {
         title="Profile"
         showBack={false}
       />
+      {loading ? (
+        <View style={{ padding: 6, gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 }}>
+            <Skeleton width={48} height={48} rounded="sm" />
+            <View style={{ flex: 1, gap: 6 }}>
+              <Skeleton width="55%" height={14} />
+              <Skeleton width="40%" height={11} />
+            </View>
+          </View>
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <Skeleton key={i} width="100%" height={44} rounded="sm" />
+          ))}
+        </View>
+      ) : (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.head}>
           <View style={styles.avatar}><Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text></View>
@@ -70,6 +108,7 @@ export default function ProfileScreen() {
 
         <Text style={styles.version}>Qikzo v1.0.0</Text>
       </ScrollView>
+      )}
 
       <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
     </View>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useAuth } from '@/lib/authStore';
+import { api } from '@/lib/api';
 
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
@@ -21,6 +22,7 @@ export default function PayoutDetailsScreen() {
     const payout = useAuth((s) => s.payout);
     const setPayout = useAuth((s) => s.setPayout);
     const riderName = useAuth((s) => s.name);
+    const phone = useAuth((s) => s.phone);
 
     const [holder, setHolder] = useState(payout?.accountHolder ?? riderName);
     const [acct, setAcct] = useState(payout?.accountNumber ?? '');
@@ -30,7 +32,29 @@ export default function PayoutDetailsScreen() {
     const [upi, setUpi] = useState(payout?.upiId ?? '');
     const [loading, setLoading] = useState(false);
 
-    const save = () => {
+    useEffect(() => {
+        if (!phone) return;
+        (async () => {
+            try {
+                const m = await api.payouts.getMethod();
+                if (!m) return;
+                if (m.accountHolder) setHolder(m.accountHolder);
+                if (m.accountNumber) { setAcct(m.accountNumber); setConfirmAcct(m.accountNumber); }
+                if (m.ifsc) setIfsc(m.ifsc);
+                if (m.bankName) setBank(m.bankName);
+                if (m.upiId) setUpi(m.upiId);
+                setPayout({
+                    accountHolder: m.accountHolder || '',
+                    accountNumber: m.accountNumber || '',
+                    ifsc: m.ifsc || '',
+                    bankName: m.bankName || '',
+                    upiId: m.upiId,
+                });
+            } catch { /* keep local state */ }
+        })();
+    }, [phone, setPayout]);
+
+    const save = async () => {
         if (holder.trim().length < 2) return sheet.show({ variant: 'error', title: 'Name required', message: 'Enter the account holder name as on the bank passbook.' });
         const clean = acct.replace(/\s+/g, '');
         if (!/^\d{9,18}$/.test(clean)) return sheet.show({ variant: 'error', title: 'Invalid account number', message: 'Account number must be 9–18 digits.' });
@@ -39,9 +63,18 @@ export default function PayoutDetailsScreen() {
         if (bank.trim().length < 2) return sheet.show({ variant: 'error', title: 'Bank name required', message: 'Enter the bank name (e.g. HDFC Bank).' });
 
         setLoading(true);
-        setTimeout(() => {
+        try {
+            if (phone) {
+                await api.payouts.setMethod({
+                    method: 'bank',
+                    accountHolder: holder,
+                    accountNumber: clean,
+                    ifsc: ifsc.toUpperCase().trim(),
+                    bankName: bank,
+                    upiId: upi || undefined,
+                });
+            }
             setPayout({ accountHolder: holder, accountNumber: clean, ifsc, bankName: bank, upiId: upi });
-            setLoading(false);
             sheet.show({
                 variant: 'success',
                 title: 'Bank account saved',
@@ -49,7 +82,11 @@ export default function PayoutDetailsScreen() {
                 confirmText: 'Done',
                 onConfirm: () => router.back(),
             });
-        }, 700);
+        } catch (e: any) {
+            sheet.show({ variant: 'error', title: 'Could not save', message: e?.message || 'Please try again.' });
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

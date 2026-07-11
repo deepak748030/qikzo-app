@@ -1,0 +1,270 @@
+import KYC from '../models/KYC';
+import Rider from '../models/Rider';
+import User from '../models/User';
+import Document from '../models/Document';
+import Payout from '../models/Payout';
+import Wallet from '../models/Wallet';
+import Booking from '../models/Booking';
+import Coupon from '../models/Coupon';
+import { errors } from '../lib/errors';
+import notificationService from './notificationService';
+import { audit } from './auditService';
+
+/**
+ * Admin backoffice service. All calls assume `requireAdmin` has already run,
+ * so we never re-check the caller's role here — but we do mirror decisions
+ * back onto the Rider doc + notify the affected user.
+ */
+export const adminService = {
+    // ---------- KYC ----------
+    async listKyc(opts: { status?: string; limit?: number; cursor?: string } = {}) {
+        const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+        const filter: any = {};
+        if (opts.status) filter.status = opts.status;
+        if (opts.cursor) filter._id = { $lt: opts.cursor };
+        const items = await KYC.find(filter)
+            .sort({ _id: -1 })
+            .limit(limit + 1)
+            .populate({ path: 'rider', select: 'name phone user vehicle vehicleNo kycStatus' })
+            .lean();
+        const hasMore = items.length > limit;
+        return {
+            items: items.slice(0, limit),
+            nextCursor: hasMore ? String(items[limit - 1]._id) : null,
+        };
+    },
+
+    async getKyc(id: string) {
+        const kyc = await KYC.findById(id)
+            .populate({ path: 'rider' })
+            .populate({ path: 'documentIds' })
+            .lean();
+        if (!kyc) throw errors.notFound('KYC not found', 'KYC_NOT_FOUND');
+        return kyc;
+    },
+
+    async approveKyc(adminUserId: string, id: string) {
+        const kyc = await KYC.findByIdAndUpdate(
+            id,
+            { status: 'approved', reviewedBy: adminUserId, reviewedAt: new Date(), rejectionReason: '' },
+            { new: true },
+        );
+        if (!kyc) throw errors.notFound('KYC not found', 'KYC_NOT_FOUND');
+        const rider = await Rider.findByIdAndUpdate(kyc.rider, { kycStatus: 'approved' }, { new: true });
+        await Document.updateMany({ owner: kyc.rider, ownerRole: 'rider' }, { status: 'approved' });
+        if (rider?.user) {
+            void notificationService.emit({
+                user: String(rider.user),
+                audience: 'rider',
+                topic: 'system',
+                title: 'KYC approved',
+                body: 'You can now go online and accept jobs.',
+                data: { event: 'kyc:approved' },
+            }).catch(() => {});
+        }
+        void audit({ actorId: adminUserId, actorRole: 'admin', action: 'kyc.approve', targetType: 'kyc', targetId: id, meta: { rider: String(kyc.rider) } });
+        return kyc;
+    },
+
+    async rejectKyc(adminUserId: string, id: string, reason: string) {
+        const kyc = await KYC.findByIdAndUpdate(
+            id,
+            { status: 'rejected', reviewedBy: adminUserId, reviewedAt: new Date(), rejectionReason: reason || 'Not specified' },
+            { new: true },
+        );
+        if (!kyc) throw errors.notFound('KYC not found', 'KYC_NOT_FOUND');
+        const rider = await Rider.findByIdAndUpdate(kyc.rider, { kycStatus: 'rejected' }, { new: true });
+        if (rider?.user) {
+            void notificationService.emit({
+                user: String(rider.user),
+                audience: 'rider',
+                topic: 'system',
+                title: 'KYC rejected',
+                body: reason || 'Please re-submit your documents.',
+                data: { event: 'kyc:rejected', reason },
+            }).catch(() => {});
+        }
+        void audit({ actorId: adminUserId, actorRole: 'admin', action: 'kyc.reject', targetType: 'kyc', targetId: id, meta: { reason } });
+        return kyc;
+    },
+
+    // ---------- Payouts ----------
+    async listPayouts(opts: { status?: string; limit?: number; cursor?: string } = {}) {
+        const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+        const filter: any = {};
+        if (opts.status) filter.status = opts.status;
+        if (opts.cursor) filter._id = { $lt: opts.cursor };
+        const items = await Payout.find(filter)
+            .sort({ _id: -1 })
+            .limit(limit + 1)
+            .populate({ path: 'rider', select: 'name phone user vehicle vehicleNo' })
+            .lean();
+        const hasMore = items.length > limit;
+        return {
+            items: items.slice(0, limit),
+            nextCursor: hasMore ? String(items[limit - 1]._id) : null,
+        };
+    },
+
+    async approvePayout(id: string, providerRef = '') {
+        const p = await Payout.findById(id);
+        if (!p) throw errors.notFound('Payout not found', 'PAYOUT_NOT_FOUND');
+        if (p.status !== 'requested' && p.status !== 'processing') {
+            throw errors.badRequest(`Payout already ${p.status}`, 'PAYOUT_TERMINAL');
+        }
+        const wallet = await Wallet.findOne({ owner: p.rider, kind: 'rider' });
+        if (!wallet || wallet.balance < p.amount) {
+            throw errors.badRequest('Insufficient balance', 'INSUFFICIENT_BALANCE');
+        }
+        wallet.balance -= p.amount;
+        await wallet.save();
+        p.status = 'paid';
+        p.processedAt = new Date();
+        if (providerRef) p.providerRef = providerRef;
+        await p.save();
+        const rider = await Rider.findById(p.rider).lean();
+        if ((rider as any)?.user) {
+            void notificationService.emit({
+                user: String((rider as any).user),
+                audience: 'rider',
+                topic: 'payment',
+                title: 'Payout sent',
+                body: `₹${p.amount} has been paid out.`,
+                data: { event: 'payout:paid', payoutId: String(p._id), amount: p.amount },
+            }).catch(() => {});
+        }
+        void audit({ actorRole: 'admin', action: 'payout.approve', targetType: 'payout', targetId: id, meta: { amount: p.amount, providerRef } });
+        return p;
+    },
+
+    async rejectPayout(id: string, reason: string) {
+        const p = await Payout.findById(id);
+        if (!p) throw errors.notFound('Payout not found', 'PAYOUT_NOT_FOUND');
+        if (p.status === 'paid') throw errors.badRequest('Cannot reject a paid payout', 'PAYOUT_PAID');
+        p.status = 'failed';
+        p.failureReason = reason || 'Rejected by admin';
+        p.processedAt = new Date();
+        await p.save();
+        const rider = await Rider.findById(p.rider).lean();
+        if ((rider as any)?.user) {
+            void notificationService.emit({
+                user: String((rider as any).user),
+                audience: 'rider',
+                topic: 'payment',
+                title: 'Payout rejected',
+                body: p.failureReason,
+                data: { event: 'payout:rejected', payoutId: String(p._id) },
+            }).catch(() => {});
+        }
+        void audit({ actorRole: 'admin', action: 'payout.reject', targetType: 'payout', targetId: id, meta: { reason } });
+        return p;
+    },
+
+    // ---------- Riders ----------
+    async listRiders(opts: { q?: string; online?: boolean; kycStatus?: string; limit?: number; cursor?: string } = {}) {
+        const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+        const filter: any = {};
+        if (opts.online !== undefined) filter.online = opts.online;
+        if (opts.kycStatus) filter.kycStatus = opts.kycStatus;
+        if (opts.q) {
+            const rx = new RegExp(opts.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            filter.$or = [{ name: rx }, { phone: rx }, { vehicleNo: rx }];
+        }
+        if (opts.cursor) filter._id = { $lt: opts.cursor };
+        const items = await Rider.find(filter).sort({ _id: -1 }).limit(limit + 1).lean();
+        const hasMore = items.length > limit;
+        return {
+            items: items.slice(0, limit),
+            nextCursor: hasMore ? String(items[limit - 1]._id) : null,
+        };
+    },
+
+    async setRiderBlocked(id: string, blocked: boolean, reason = '') {
+        const rider = await Rider.findByIdAndUpdate(
+            id,
+            blocked
+                ? { online: false, available: false, kycStatus: 'rejected' }
+                : { available: true },
+            { new: true },
+        );
+        if (!rider) throw errors.notFound('Rider not found', 'RIDER_NOT_FOUND');
+        if (rider.user) {
+            void notificationService.emit({
+                user: String(rider.user),
+                audience: 'rider',
+                topic: 'system',
+                title: blocked ? 'Account suspended' : 'Account reinstated',
+                body: blocked ? (reason || 'Contact support for details.') : 'You can accept jobs again.',
+                data: { event: blocked ? 'rider:blocked' : 'rider:unblocked' },
+            }).catch(() => {});
+        }
+        void audit({ actorRole: 'admin', action: blocked ? 'rider.block' : 'rider.unblock', targetType: 'rider', targetId: id, meta: { reason } });
+        return rider;
+    },
+
+    // ---------- Bookings ----------
+    async listBookings(opts: { status?: string; limit?: number; cursor?: string } = {}) {
+        const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+        const filter: any = {};
+        if (opts.status) filter.status = opts.status;
+        if (opts.cursor) filter._id = { $lt: opts.cursor };
+        const items = await Booking.find(filter)
+            .sort({ _id: -1 })
+            .limit(limit + 1)
+            .populate('rider')
+            .lean();
+        const hasMore = items.length > limit;
+        return {
+            items: items.slice(0, limit),
+            nextCursor: hasMore ? String(items[limit - 1]._id) : null,
+        };
+    },
+
+    // ---------- Coupons ----------
+    async listCoupons(opts: { active?: boolean; limit?: number; cursor?: string } = {}) {
+        const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
+        const filter: any = {};
+        if (opts.active !== undefined) filter.active = opts.active;
+        if (opts.cursor) filter._id = { $lt: opts.cursor };
+        const items = await Coupon.find(filter).sort({ _id: -1 }).limit(limit + 1).lean();
+        const hasMore = items.length > limit;
+        return { items: items.slice(0, limit), nextCursor: hasMore ? String(items[limit - 1]._id) : null };
+    },
+    async createCoupon(input: any) {
+        const code = String(input.code || '').trim().toUpperCase();
+        if (!code) throw errors.badRequest('Code required', 'CODE_REQUIRED');
+        const existing = await Coupon.findOne({ code });
+        if (existing) throw errors.badRequest('Coupon code already exists', 'CODE_EXISTS');
+        return Coupon.create({ ...input, code });
+    },
+    async updateCoupon(id: string, patch: any) {
+        const doc = await Coupon.findByIdAndUpdate(id, patch, { new: true });
+        if (!doc) throw errors.notFound('Coupon not found', 'COUPON_NOT_FOUND');
+        return doc;
+    },
+    async deleteCoupon(id: string) {
+        const r = await Coupon.deleteOne({ _id: id });
+        if (!r.deletedCount) throw errors.notFound('Coupon not found', 'COUPON_NOT_FOUND');
+    },
+
+    async summary() {
+        const [
+            usersTotal,
+            ridersTotal,
+            ridersOnline,
+            kycPending,
+            payoutsPending,
+            bookingsToday,
+        ] = await Promise.all([
+            User.countDocuments({}),
+            Rider.countDocuments({}),
+            Rider.countDocuments({ online: true }),
+            KYC.countDocuments({ status: { $in: ['submitted', 'in_review'] } }),
+            Payout.countDocuments({ status: { $in: ['requested', 'processing'] } }),
+            Booking.countDocuments({ createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
+        ]);
+        return { usersTotal, ridersTotal, ridersOnline, kycPending, payoutsPending, bookingsToday };
+    },
+};
+
+export default adminService;

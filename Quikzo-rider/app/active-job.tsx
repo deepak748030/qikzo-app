@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -12,6 +12,9 @@ import OtpVerifySheet from '@/components/OtpVerifySheet';
 import { useSheet } from '@/lib/useSheet';
 import { useJobs } from '@/lib/jobStore';
 import { CATEGORY_META, JOB_STAGES } from '@/lib/mockData';
+import { tokenStore } from '@/lib/api/tokenStore';
+import { ApiError } from '@/lib/api/errors';
+import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
 
 const CENTER = { lat: 28.6139, lng: 77.2090 };
 
@@ -37,11 +40,30 @@ export default function ActiveJob() {
     const active = useJobs((s) => s.active);
     const advance = useJobs((s) => s.advanceStage);
     const cancel = useJobs((s) => s.cancelActive);
+    const advanceOnServer = useJobs((s) => s.advanceOnServer);
+    const cancelOnServer = useJobs((s) => s.cancelOnServer);
+    const hydrateActiveFromServer = useJobs((s) => s.hydrateActiveFromServer);
     const [cancelOpen, setCancelOpen] = useState(false);
     const [otpOpen, setOtpOpen] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    const isSignedIn = () => !!tokenStore.get().accessToken;
+
+    // Sync active trip on mount + realtime trip:update from server. Kept a
+    // light 15s poll as a safety net if socket is disconnected.
+    useEffect(() => {
+        hydrateActiveFromServer();
+        connectSocket();
+        const off = subscribeSocket('trip:update', () => {
+            if (isSignedIn()) hydrateActiveFromServer();
+        });
+        const t = setInterval(() => {
+            if (isSignedIn()) hydrateActiveFromServer();
+        }, 15000);
+        return () => { off(); clearInterval(t); };
+    }, [hydrateActiveFromServer]);
 
     if (!active) {
-        // Nothing in progress — give the rider a calm, on-brand landing instead of a raw text line.
         return (
             <View style={[styles.empty, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
                 <View style={styles.emptyIconWrap}>
@@ -62,25 +84,30 @@ export default function ActiveJob() {
     const cat = CATEGORY_META[active.category];
     const isFinal = active.stage === JOB_STAGES[JOB_STAGES.length - 1];
 
-    const onCta = () => {
-        // Gate the pickup step behind a customer-supplied OTP so admin has
-        // proof the rider actually met the customer/parcel.
-        if (active.stage === 'Arrived at pickup') {
-            setOtpOpen(true);
-            return;
+    // Prefer the server-driven advance whenever this trip has a tripId (i.e.
+    // it was accepted online). Falls back to local advance in preview.
+    const runAdvance = async () => {
+        setBusy(true);
+        try {
+            if (active.tripId && isSignedIn()) await advanceOnServer();
+            else advance();
+        } catch (e) {
+            const msg = e instanceof ApiError ? e.message : 'Could not update trip.';
+            sheet.show({ variant: 'error', title: 'Update failed', message: msg });
+        } finally {
+            setBusy(false);
         }
-        // At 'Delivered' stage the CTA is 'Done' — clear the job and go home.
-        if (isFinal) {
-            advance();
-            router.replace('/(tabs)');
-            return;
-        }
-        advance();
     };
 
-    const onOtpVerified = () => {
+    const onCta = async () => {
+        if (active.stage === 'Arrived at pickup') { setOtpOpen(true); return; }
+        if (isFinal) { await runAdvance(); router.replace('/(tabs)'); return; }
+        await runAdvance();
+    };
+
+    const onOtpVerified = async () => {
         setOtpOpen(false);
-        advance(); // Arrived at pickup → Picked up
+        await runAdvance();
         sheet.show({
             variant: 'success',
             title: 'Pickup verified',
@@ -88,10 +115,19 @@ export default function ActiveJob() {
         });
     };
 
-    const chooseReason = (reason: string) => {
+    const chooseReason = async (reason: string) => {
         setCancelOpen(false);
-        cancel(reason);
-        router.replace('/(tabs)');
+        setBusy(true);
+        try {
+            if (active.tripId && isSignedIn()) await cancelOnServer(reason);
+            else cancel(reason);
+            router.replace('/(tabs)');
+        } catch (e) {
+            const msg = e instanceof ApiError ? e.message : 'Could not cancel trip.';
+            sheet.show({ variant: 'error', title: 'Cancel failed', message: msg });
+        } finally {
+            setBusy(false);
+        }
     };
 
     // Delivered → show a dedicated trip-summary screen. Much richer than a toast:
@@ -139,7 +175,7 @@ export default function ActiveJob() {
 
                 <View style={{ height: 24 }} />
                 <Button label="Finish & go home" onPress={onCta} />
-                <Pressable style={styles.summaryGhost} onPress={() => { advance(); router.replace('/(tabs)'); }}>
+                <Pressable style={styles.summaryGhost} onPress={async () => { await runAdvance(); router.replace('/(tabs)'); }}>
                     <HomeIcon size={14} color={colors.mutedForeground} strokeWidth={2} />
                     <Text style={styles.summaryGhostText}>Skip for now</Text>
                 </Pressable>
@@ -246,7 +282,7 @@ export default function ActiveJob() {
                     </View>
                 ) : null}
 
-                <Button label={CTA_BY_STAGE[active.stage]} onPress={onCta} style={{ marginTop: 12 }} />
+                <Button label={CTA_BY_STAGE[active.stage]} loading={busy} onPress={onCta} style={{ marginTop: 12 }} />
 
                 <Pressable style={styles.cancelBtn} onPress={() => setCancelOpen(true)}>
                     <Text style={styles.cancelText}>Cancel job</Text>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius } from '@/lib/theme';
@@ -8,6 +8,10 @@ import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useAuth, Gender } from '@/lib/authStore';
+import { authApi } from '@/lib/api/endpoints/auth';
+import { usersApi } from '@/lib/api/endpoints/users';
+import { tokenStore } from '@/lib/api/tokenStore';
+import { ApiError } from '@/lib/api/errors';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DOB_RE = /^\d{2}\/\d{2}\/\d{4}$/;
@@ -44,7 +48,17 @@ export default function PersonalInfo() {
 
   const err = (title: string, message: string) => sheet.show({ variant: 'error', title, message });
 
-  const save = () => {
+  // Hydrate the freshest name/email from the server on mount.
+  useEffect(() => {
+    const { accessToken } = tokenStore.get();
+    if (!accessToken) return;
+    authApi.me().then((u) => {
+      if (u.name) setFullName(u.name);
+      if ((u as any).email) setEmail((u as any).email);
+    }).catch(() => { /* ignore */ });
+  }, []);
+
+  const save = async () => {
     if (fullName.trim().length < 2) return err('Name required', 'Please enter your full name.');
     if (!EMAIL_RE.test(email)) return err('Invalid email', 'Enter a valid email address.');
     if (!DOB_RE.test(dob)) return err('Invalid date of birth', 'Use DD/MM/YYYY format.');
@@ -56,12 +70,24 @@ export default function PersonalInfo() {
     if (!PHONE_RE.test(emergencyPhone)) return err('Invalid contact number', 'Emergency phone must be 10 digits.');
 
     setLoading(true);
-    setTimeout(() => {
-      setName(fullName.trim());
+    try {
+      // Extended fields (dob, gender, address, emergency contact) are stored
+      // locally until the rider profile schema supports them server-side.
+      const { accessToken } = tokenStore.get();
+      if (accessToken) {
+        const user = await usersApi.updateMe({ name: fullName.trim(), email: email.trim() });
+        setName(user.name || fullName.trim());
+      } else {
+        setName(fullName.trim());
+      }
       setPersonal({ email, dob, gender, address, city, pincode, emergencyName, emergencyPhone });
-      setLoading(false);
       sheet.show({ variant: 'success', title: 'Saved', message: 'Your personal details have been updated.' });
-    }, 700);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Could not save. Please try again.';
+      sheet.show({ variant: 'error', title: 'Save failed', message: msg });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

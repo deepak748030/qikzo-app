@@ -8,6 +8,8 @@ import Input from '@/components/Input';
 import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
+import { authApi } from '@/lib/api/endpoints/auth';
+import { ApiError } from '@/lib/api/errors';
 
 // Illustrations replace the marketing copy on the login screen.
 const HERO = require('../assets/images/login-hero.png');
@@ -19,17 +21,26 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const sheet = useSheet();
 
-  const onContinue = () => {
+  const onContinue = async () => {
     if (!/^[6-9]\d{9}$/.test(phone)) {
       sheet.show({ variant: 'error', title: 'Invalid number', message: 'Enter a valid 10-digit Indian mobile number.' });
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await authApi.requestOtp(phone);
+      // Server returns { devCode } only when OTP_DEV_MODE=true — surface it in dev
+      // so testers don't need an SMS gateway to log in.
+      const devCode = (res as any)?.devCode as string | undefined;
+      router.push({ pathname: '/otp', params: { phone, devCode: devCode ?? '' } });
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Could not send OTP. Please try again.';
+      sheet.show({ variant: 'error', title: 'Unable to send OTP', message: msg });
+    } finally {
       setLoading(false);
-      router.push({ pathname: '/otp', params: { phone } });
-    }, 700);
+    }
   };
+
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10 }]}>

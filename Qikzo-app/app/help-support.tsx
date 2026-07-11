@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
+import Skeleton from '@/components/Skeleton';
+import { useInitialLoad } from '@/lib/useInitialLoad';
 
 const FAQS = [
   { q: 'How does Qikzo work?', a: 'Set your pickup and drop locations, add a note for what to fetch, confirm — and a nearby rider picks it up and delivers it to you.' },
@@ -13,9 +15,20 @@ const FAQS = [
 ];
 
 export default function HelpSupport() {
+  const loading = useInitialLoad();
   return (
     <View style={styles.container}>
       <ScreenHeader title="Help & support" />
+      {loading ? (
+        <View style={{ padding: 6, gap: 8 }}>
+          <Skeleton width="90%" height={12} />
+          <Skeleton width="70%" height={12} />
+          <Skeleton width={140} height={16} style={{ marginTop: 14 }} />
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} width="100%" height={64} rounded="sm" />
+          ))}
+        </View>
+      ) : (
       <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <Text style={styles.lead}>Need a hand? Reach us anytime at support@qikzo.in or call +91 1800 123 456.</Text>
         <Text style={styles.section}>Frequently asked</Text>
@@ -26,6 +39,7 @@ export default function HelpSupport() {
           </View>
         ))}
       </ScrollView>
+      )}
     </View>
   );
 }

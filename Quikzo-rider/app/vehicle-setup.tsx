@@ -17,6 +17,15 @@ import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useAuth, VehicleType } from '@/lib/authStore';
+import { ridersApi } from '@/lib/api/endpoints/riders';
+import { tokenStore } from '@/lib/api/tokenStore';
+import { ApiError } from '@/lib/api/errors';
+
+const VEHICLE_LABEL: Record<VehicleType, string> = {
+    bike: 'Two-wheeler',
+    auto: 'Auto rickshaw',
+    sedan: 'Sedan',
+};
 
 // Post-OTP setup: pick vehicle, register the number plate, enable location.
 const OPTIONS: { key: VehicleType; label: string; sub: string }[] = [
@@ -54,7 +63,7 @@ export default function VehicleSetup() {
         }
     };
 
-    const onFinish = () => {
+    const onFinish = async () => {
         const normalized = plate.trim().toUpperCase();
         if (!PLATE_RE.test(normalized)) {
             sheet.show({ variant: 'error', title: 'Invalid vehicle number', message: 'Enter a valid Indian registration, e.g. DL 8S CB 4421.' });
@@ -65,11 +74,19 @@ export default function VehicleSetup() {
             return;
         }
         setLoading(true);
-        setTimeout(() => {
+        try {
+            const { accessToken } = tokenStore.get();
+            if (accessToken) {
+                await ridersApi.updateVehicle({ vehicle: VEHICLE_LABEL[type], vehicleNo: normalized });
+            }
             setVehicleProfile(type, normalized);
-            setLoading(false);
             router.replace('/(tabs)');
-        }, 500);
+        } catch (e) {
+            const msg = e instanceof ApiError ? e.message : 'Could not save vehicle.';
+            sheet.show({ variant: 'error', title: 'Save failed', message: msg });
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

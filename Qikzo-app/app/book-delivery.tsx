@@ -14,12 +14,15 @@ import { categories, estimateTrip, savedPlaces } from '@/lib/mockData';
 import AssetIcon from '@/components/AssetIcon';
 import { rideOptions, estimateRide } from '@/lib/serviceMode';
 import { newBookingId, useBooking } from '@/lib/bookingStore';
+import { ApiError } from '@/lib/api/errors';
+import { tokenStore } from '@/lib/api/tokenStore';
 
 export default function BookDeliveryScreen() {
     const insets = useSafeAreaInsets();
     const draft = useBooking((s) => s.draft);
     const setDraft = useBooking((s) => s.setDraft);
     const addBooking = useBooking((s) => s.addBooking);
+    const createOnServer = useBooking((s) => s.createOnServer);
     const resetDraft = useBooking((s) => s.resetDraft);
     const sheet = useSheet();
     const [loading, setLoading] = useState(false);
@@ -53,7 +56,7 @@ export default function BookDeliveryScreen() {
         router.push({ pathname: '/select-location', params: { field } });
     };
 
-    const confirm = () => {
+    const confirm = async () => {
         if (!draft.pickup.trim() || !draft.drop.trim()) {
             sheet.show({ variant: 'error', title: 'Locations required', message: 'Please set both pickup and drop locations.' });
             return;
@@ -64,6 +67,42 @@ export default function BookDeliveryScreen() {
         }
         if (!trip) return;
         setLoading(true);
+
+        // Signed-in users create on the server so the booking persists, gets a
+        // real id, and is dispatched to riders. Signed-out preview keeps the
+        // legacy local flow so the demo stays browsable.
+        if (tokenStore.get().accessToken) {
+            try {
+                const created = await createOnServer({
+                    mode: draft.mode,
+                    categoryId: draft.categoryId,
+                    pickup: {
+                        address: draft.pickup.trim(),
+                        lat: draft.pickupCoord?.lat ?? null,
+                        lng: draft.pickupCoord?.lng ?? null,
+                    },
+                    drop: {
+                        address: draft.drop.trim(),
+                        lat: draft.dropCoord?.lat ?? null,
+                        lng: draft.dropCoord?.lng ?? null,
+                    },
+                    notes: draft.notes.trim() || (isRide ? 'Passenger ride' : ''),
+                    recipientPhone: draft.recipientPhone.trim() || undefined,
+                    payment: draft.payment,
+                });
+                resetDraft();
+                setLoading(false);
+                router.replace({ pathname: '/booking-details', params: { id: created.id } });
+                return;
+            } catch (e) {
+                setLoading(false);
+                const msg = e instanceof ApiError ? e.message : 'Could not create booking. Please try again.';
+                sheet.show({ variant: 'error', title: 'Booking failed', message: msg });
+                return;
+            }
+        }
+
+        // Fallback: local-only booking (no server session).
         const id = newBookingId();
         addBooking({
             id,
@@ -83,8 +122,9 @@ export default function BookDeliveryScreen() {
             resetDraft();
             setLoading(false);
             router.replace({ pathname: '/booking-details', params: { id } });
-        }, 600);
+        }, 400);
     };
+
 
     const categoryList = isRide ? rideOptions : categories;
 

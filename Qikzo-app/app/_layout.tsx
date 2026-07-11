@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
@@ -15,6 +15,10 @@ import {
   Manrope_700Bold,
 } from '@expo-google-fonts/manrope';
 import { colors } from '@/lib/theme';
+import { useAuth } from '@/lib/authStore';
+import { onUnauthorized } from '@/lib/api/client';
+import { connectSocket, disconnectSocket } from '@/lib/socket';
+import { registerForPushAsync, unregisterPushAsync } from '@/lib/push';
 
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
@@ -27,12 +31,39 @@ export default function RootLayout() {
     Manrope_500Medium,
     Manrope_700Bold,
   });
+  const [authReady, setAuthReady] = useState(false);
+  const hydrate = useAuth((s) => s.hydrate);
+
+  // Hydrate token cache + persisted profile before rendering routes so gate
+  // decisions (login vs tabs) are based on real state, not defaults.
+  useEffect(() => {
+    hydrate().finally(() => {
+      setAuthReady(true);
+      try { connectSocket(); } catch {}
+      // Fire-and-forget push registration (silent if signed out / denied).
+      registerForPushAsync('customer').catch(() => {});
+    });
+    return () => { try { disconnectSocket(); } catch {} };
+  }, [hydrate]);
+
+  // If refresh ultimately fails, the API client clears tokens and fires this;
+  // we mirror that into the app store and bounce to /login.
+  useEffect(() => {
+    const off = onUnauthorized(() => {
+      useAuth.getState().setSession(null);
+      try { disconnectSocket(); } catch { /* noop */ }
+      unregisterPushAsync().catch(() => {});
+      try { router.replace('/login'); } catch { /* noop */ }
+    });
+    return off;
+  }, []);
 
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync().catch(() => { });
-  }, [loaded]);
+    if (loaded && authReady) SplashScreen.hideAsync().catch(() => { });
+  }, [loaded, authReady]);
 
-  if (!loaded) return null;
+  if (!loaded || !authReady) return null;
+
 
   return (
     <SafeAreaProvider>

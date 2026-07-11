@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
 import { Power, MapPin, Bell } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import LeafletMap from '@/components/LeafletMap';
@@ -13,8 +14,13 @@ import { useJobs, nextIncoming } from '@/lib/jobStore';
 import { useAuth } from '@/lib/authStore';
 import { useInitialLoad } from '@/lib/useInitialLoad';
 import { IncomingJob } from '@/lib/mockData';
+import { tokenStore } from '@/lib/api/tokenStore';
+import { ApiError } from '@/lib/api/errors';
+import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
 
 const CENTER = { lat: 28.6139, lng: 77.2090 }; // New Delhi
+const LOCATION_INTERVAL_MS = 10_000;   // heartbeat while online
+const INCOMING_POLL_MS = 5_000;         // job-request feed poll
 
 export default function DispatchHome() {
     const insets = useSafeAreaInsets();
@@ -22,36 +28,103 @@ export default function DispatchHome() {
     const name = useAuth((s) => s.name);
     const loading = useInitialLoad();
     const locationGranted = useAuth((s) => s.locationGranted);
+    const setLocationGranted = useAuth((s) => s.setLocationGranted);
     const online = useJobs((s) => s.online);
     const setOnline = useJobs((s) => s.setOnline);
+    const setOnlineOnServer = useJobs((s) => s.setOnlineOnServer);
+    const pushLocation = useJobs((s) => s.pushLocation);
+    const fetchIncoming = useJobs((s) => s.fetchIncoming);
+    const acceptFromServer = useJobs((s) => s.acceptFromServer);
+    const declineFromServer = useJobs((s) => s.declineFromServer);
+    const hydrateActiveFromServer = useJobs((s) => s.hydrateActiveFromServer);
     const active = useJobs((s) => s.active);
-    const acceptJob = useJobs((s) => s.acceptJob);
 
     const [incoming, setIncoming] = useState<IncomingJob | null>(null);
+    const [acceptBusy, setAcceptBusy] = useState(false);
+
+    // Auth-aware helpers — real online/toggle when signed in, mock in preview.
+    const isSignedIn = () => !!tokenStore.get().accessToken;
+
+    // On mount: resume an in-flight trip from the server (survives app restart).
+    useEffect(() => { hydrateActiveFromServer(); }, [hydrateActiveFromServer]);
 
     // If a job is active, jump to the active-job screen.
     useEffect(() => { if (active) router.push('/active-job'); }, [active]);
 
-    // While online with no active job, surface a new request every few seconds.
+    // Location heartbeat: while online, push GPS every ~10s so the server-side
+    // /riders/me/incoming query can $near-filter correctly.
+    useEffect(() => {
+        if (!online || !isSignedIn()) return;
+        let stopped = false;
+        const tick = async () => {
+            try {
+                const { status } = await Location.getForegroundPermissionsAsync();
+                if (status !== 'granted') return;
+                const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                if (stopped) return;
+                await pushLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+            } catch { /* ignore */ }
+        };
+        tick();
+        const t = setInterval(tick, LOCATION_INTERVAL_MS);
+        return () => { stopped = true; clearInterval(t); };
+    }, [online, pushLocation]);
+
+    // Incoming-jobs poller (fallback) + realtime job:offer push.
     useEffect(() => {
         if (!online || active || incoming) return;
-        const t = setTimeout(() => setIncoming(nextIncoming()), 2500);
-        return () => clearTimeout(t);
-    }, [online, active, incoming]);
+        let cancelled = false;
+        const pull = async () => {
+            if (isSignedIn()) {
+                const items = await fetchIncoming();
+                if (!cancelled && items.length) setIncoming(items[0]);
+            } else if (!cancelled) {
+                setIncoming(nextIncoming());
+            }
+        };
+        // 1) Poll every 5s as a safety net if socket is down.
+        const t = setTimeout(pull, INCOMING_POLL_MS);
+        // 2) Realtime: on job:offer instantly try to grab a fresh incoming.
+        connectSocket();
+        const offOffer = subscribeSocket('job:offer', () => { if (!cancelled) pull(); });
+        // 3) If someone else takes the current offer, drop it.
+        const offCancel = subscribeSocket('job:cancelled', (p: any) => {
+            if (!cancelled && incoming && p?.id && String(p.id) === String((incoming as any).id)) {
+                setIncoming(null);
+            }
+        });
+        return () => { cancelled = true; clearTimeout(t); offOffer(); offCancel(); };
+    }, [online, active, incoming, fetchIncoming]);
 
-    const goOnline = () => {
+    const goOnline = async () => {
         if (!locationGranted) {
-            sheet.show({
-                variant: 'warning',
-                title: 'Enable live location',
-                message: 'Turn on live location to start receiving jobs near you.',
-                confirmText: 'Enable',
-                cancelText: 'Not now',
-                onConfirm: () => router.push('/vehicle-setup'),
-            });
-            return;
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                sheet.show({
+                    variant: 'warning',
+                    title: 'Enable live location',
+                    message: 'Turn on live location to start receiving jobs near you.',
+                });
+                return;
+            }
+            setLocationGranted(true);
         }
-        setOnline(true);
+        if (isSignedIn()) {
+            try {
+                await setOnlineOnServer(true);
+                // seed initial location so incoming feed has a $near anchor
+                try {
+                    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                    await pushLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+                } catch { /* ignore */ }
+            } catch (e) {
+                const msg = e instanceof ApiError ? e.message : 'Could not go online.';
+                sheet.show({ variant: 'error', title: 'Failed to go online', message: msg });
+                return;
+            }
+        } else {
+            setOnline(true);
+        }
     };
 
     const goOffline = () => {
@@ -63,19 +136,42 @@ export default function DispatchHome() {
                 : 'You will stop receiving new job requests.',
             confirmText: 'Go offline',
             cancelText: 'Stay online',
-            onConfirm: () => { setOnline(false); setIncoming(null); },
+            onConfirm: async () => {
+                if (isSignedIn()) { try { await setOnlineOnServer(false); } catch { /* ignore */ } }
+                else { setOnline(false); }
+                setIncoming(null);
+            },
         });
     };
 
     const toggleOnline = () => (online ? goOffline() : goOnline());
 
-    const onAccept = () => {
+    const onAccept = async () => {
         if (!incoming) return;
-        acceptJob(incoming);
-        setIncoming(null);
+        if (!isSignedIn()) {
+            // preview / signed-out: use local store
+            useJobs.getState().acceptJob(incoming);
+            setIncoming(null);
+            return;
+        }
+        setAcceptBusy(true);
+        try {
+            await acceptFromServer(incoming.id);
+            setIncoming(null);
+        } catch (e) {
+            const msg = e instanceof ApiError ? e.message : 'Could not accept the job.';
+            sheet.show({ variant: 'error', title: 'Accept failed', message: msg });
+        } finally {
+            setAcceptBusy(false);
+        }
     };
 
-    const onDecline = () => setIncoming(null);
+    const onDecline = async () => {
+        if (incoming && isSignedIn()) {
+            await declineFromServer(incoming.id, 'Rider declined');
+        }
+        setIncoming(null);
+    };
 
     return (
         <View style={styles.container}>

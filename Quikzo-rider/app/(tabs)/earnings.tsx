@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { Banknote, Smartphone, Package as PackageIcon, Clock, IndianRupee, ArrowRight, Plus } from 'lucide-react-native';
@@ -8,6 +8,8 @@ import Skeleton from '@/components/Skeleton';
 import { useInitialLoad } from '@/lib/useInitialLoad';
 import { useAuth, formatPayoutLabel } from '@/lib/authStore';
 import { stats, weeklyEarnings, weekDays, nextPayout } from '@/lib/mockData';
+import { api } from '@/lib/api';
+import type { EarningsSummary } from '@/lib/api/endpoints/earnings';
 
 type Range = 'today' | 'week' | 'month';
 
@@ -16,14 +18,37 @@ export default function Earnings() {
     const [range, setRange] = useState<Range>('today');
     const loading = useInitialLoad();
     const payout = useAuth((s) => s.payout);
+    const phone = useAuth((s) => s.phone);
     const payoutLabel = formatPayoutLabel(payout);
+    const [summary, setSummary] = useState<EarningsSummary | null>(null);
 
-    const value = range === 'today' ? stats.todayEarnings : range === 'week' ? stats.weekEarnings : stats.monthEarnings;
-    const trips = range === 'today' ? stats.todayTrips : range === 'week' ? stats.weekTrips : stats.monthTrips;
-    const hours = range === 'today' ? `${stats.todayHours.toFixed(1)}h` : range === 'week' ? '31h' : '128h';
+    useEffect(() => {
+        if (!phone) { setSummary(null); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const s = await api.earnings.summary();
+                if (!cancelled) setSummary(s);
+            } catch { /* keep mock fallback */ }
+        })();
+        return () => { cancelled = true; };
+    }, [phone]);
+
+    const todayEarnings = summary?.today ?? stats.todayEarnings;
+    const weekEarnings = summary?.week ?? stats.weekEarnings;
+    const monthEarnings = summary?.month ?? stats.monthEarnings;
+    const todayTrips = summary?.todayTrips ?? stats.todayTrips;
+    const weekTrips = summary?.weekTrips ?? stats.weekTrips;
+    const monthTrips = summary?.monthTrips ?? stats.monthTrips;
+    const todayHours = summary?.todayHours ?? stats.todayHours;
+    const weeklyData = summary?.weekly ?? weeklyEarnings;
+
+    const value = range === 'today' ? todayEarnings : range === 'week' ? weekEarnings : monthEarnings;
+    const trips = range === 'today' ? todayTrips : range === 'week' ? weekTrips : monthTrips;
+    const hours = range === 'today' ? `${todayHours.toFixed(1)}h` : range === 'week' ? '31h' : '128h';
     const avg = `₹${Math.round(value / Math.max(1, trips))}`;
 
-    const max = useMemo(() => Math.max(...weeklyEarnings), []);
+    const max = useMemo(() => Math.max(...weeklyData, 1), [weeklyData]);
     const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
 
     if (loading) {
@@ -74,7 +99,7 @@ export default function Earnings() {
                 <Text style={styles.section}>This week</Text>
                 <View style={styles.chartCard}>
                     <View style={styles.chartRow}>
-                        {weeklyEarnings.map((v, i) => {
+                        {weeklyData.map((v, i) => {
                             const h = 8 + (v / max) * 96;
                             const isToday = i === todayIdx;
                             return (

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl } from 'react-native';
 import { BellRing, Wallet, FileCheck2, Package, Star, Info } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
+import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authStore';
 
 type Kind = 'job' | 'payout' | 'doc' | 'rating' | 'info';
 type N = { id: string; title: string; body: string; time: string; read: boolean; kind: Kind };
@@ -10,25 +12,79 @@ type N = { id: string; title: string; body: string; time: string; read: boolean;
 const ICONS = { job: Package, payout: Wallet, doc: FileCheck2, rating: Star, info: Info } as const;
 
 const SEED: N[] = [
-    { id: '1', kind: 'payout', title: 'Payout credited', body: '₹940 for today\'s trips has been sent to your bank account.', time: '10m ago', read: false },
+    { id: '1', kind: 'payout', title: 'Payout credited', body: "₹940 for today's trips has been sent to your bank account.", time: '10m ago', read: false },
     { id: '2', kind: 'job', title: 'New job nearby', body: 'A parcel pickup from Karol Bagh is 400 m from you.', time: '32m ago', read: false },
     { id: '3', kind: 'rating', title: '5-star rating received', body: 'Priya rated your last trip 5 stars. Great work!', time: '2h ago', read: true },
     { id: '4', kind: 'doc', title: 'Insurance under review', body: 'Your uploaded insurance document is being verified.', time: 'Yesterday', read: true },
     { id: '5', kind: 'info', title: 'Weekly earnings summary', body: 'You earned ₹5,820 across 42 trips this week.', time: '2d ago', read: true },
 ];
 
+function topicToKind(t: string): Kind {
+    if (t === 'trip' || t === 'booking') return 'job';
+    if (t === 'payment' || t === 'wallet') return 'payout';
+    if (t === 'support') return 'doc';
+    if (t === 'promo') return 'info';
+    return 'info';
+}
+function fmtTime(iso: string): string {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.round(diff / 60_000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.round(h / 24);
+    if (d === 1) return 'Yesterday';
+    if (d < 7) return `${d}d ago`;
+    return new Date(iso).toLocaleDateString();
+}
+
 export default function NotificationsScreen() {
+    const phone = useAuth((s) => s.phone);
     const [items, setItems] = useState<N[]>(SEED);
-    const markAllRead = () => setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    const [refreshing, setRefreshing] = useState(false);
+
+    const load = useCallback(async () => {
+        if (!phone) { setItems(SEED); return; }
+        try {
+            const { items: server } = await api.notifications.list({ limit: 50 });
+            setItems(server.map((n) => ({
+                id: n._id,
+                kind: topicToKind(n.topic),
+                title: n.title,
+                body: n.body,
+                time: fmtTime(n.createdAt),
+                read: !!n.readAt,
+            })));
+        } catch {
+            setItems(SEED);
+        }
+    }, [phone]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await load();
+        setRefreshing(false);
+    };
+
+    const markAllRead = async () => {
+        setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+        if (phone) { try { await api.notifications.markAllRead(); } catch {} }
+    };
+
+    const markOne = async (id: string) => {
+        setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+        if (phone) { try { await api.notifications.markRead(id); } catch {} }
+    };
+
     const unread = items.filter((n) => !n.read).length;
 
     const renderItem = ({ item }: { item: N }) => {
         const Icon = ICONS[item.kind];
         return (
-            <Pressable
-                style={[styles.row, !item.read && styles.rowUnread]}
-                onPress={() => setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)))}
-            >
+            <Pressable style={[styles.row, !item.read && styles.rowUnread]} onPress={() => markOne(item.id)}>
                 <View style={styles.iconWrap}><Icon size={18} color={colors.foreground} strokeWidth={1.8} /></View>
                 <View style={{ flex: 1 }}>
                     <View style={styles.titleRow}>
@@ -52,6 +108,7 @@ export default function NotificationsScreen() {
                 data={items}
                 keyExtractor={(n) => n.id}
                 renderItem={renderItem}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.foreground} />}
                 ItemSeparatorComponent={() => <View style={{ height: 0, borderBottomWidth: 1, borderBottomColor: colors.divider }} />}
                 contentContainerStyle={{ paddingBottom: 24 }}
                 ListEmptyComponent={

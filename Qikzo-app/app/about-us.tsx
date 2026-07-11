@@ -3,11 +3,29 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { colors, fonts } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Brand from '@/components/Brand';
+import Skeleton from '@/components/Skeleton';
+import { useInitialLoad } from '@/lib/useInitialLoad';
 
 export default function AboutUs() {
+  const loading = useInitialLoad();
   return (
     <View style={styles.container}>
       <ScreenHeader title="About us" />
+      {loading ? (
+        <View style={{ padding: 6, gap: 8 }}>
+          <Skeleton width={140} height={34} rounded="sm" style={{ marginVertical: 10 }} />
+          <Skeleton width="100%" height={12} />
+          <Skeleton width="95%" height={12} />
+          <Skeleton width="80%" height={12} />
+          <Skeleton width={130} height={16} style={{ marginTop: 14 }} />
+          <Skeleton width="100%" height={12} />
+          <Skeleton width="70%" height={12} />
+          <Skeleton width={130} height={16} style={{ marginTop: 14 }} />
+          <Skeleton width="100%" height={12} />
+          <Skeleton width="100%" height={12} />
+          <Skeleton width="90%" height={12} />
+        </View>
+      ) : (
       <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <View style={{ marginVertical: 10 }}><Brand size={34} /></View>
         <Text style={styles.p}>
@@ -28,6 +46,7 @@ export default function AboutUs() {
         </Text>
         <Text style={styles.muted}>Made with care in India 🇮🇳</Text>
       </ScrollView>
+      )}
     </View>
   );
 }
