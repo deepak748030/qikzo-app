@@ -103,14 +103,14 @@ export default function Documents() {
             if (source === 'camera') {
                 const perm = await ImagePicker.requestCameraPermissionsAsync();
                 if (!perm.granted) throw new Error('Camera permission is required to capture the document.');
-                const res = await ImagePicker.launchCameraAsync({ quality: 0.85, mediaTypes: ImagePicker.MediaTypeOptions.Images });
+                const res = await ImagePicker.launchCameraAsync({ quality: 0.85, mediaTypes: ['images'] });
                 if (res.canceled || !res.assets?.length) return;
                 const a = res.assets[0];
                 localUri = a.uri; fileName = a.fileName || `${kind}.jpg`; mimeType = a.mimeType || 'image/jpeg'; sizeBytes = a.fileSize;
             } else if (source === 'gallery') {
                 const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
                 if (!perm.granted) throw new Error('Photo library permission is required.');
-                const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.85, mediaTypes: ImagePicker.MediaTypeOptions.Images });
+                const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.85, mediaTypes: ['images'] });
                 if (res.canceled || !res.assets?.length) return;
                 const a = res.assets[0];
                 localUri = a.uri; fileName = a.fileName || `${kind}.jpg`; mimeType = a.mimeType || 'image/jpeg'; sizeBytes = a.fileSize;

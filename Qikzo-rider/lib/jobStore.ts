@@ -132,7 +132,7 @@ type State = {
 export const useJobs = create<State>((set, get) => ({
     online: false,
     active: null,
-    completed: seedCompleted,
+    completed: [],
     loading: false,
 
     // -------- Local (fallback / preview) --------

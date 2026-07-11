@@ -39,6 +39,10 @@ export function initSockets(httpServer: http.Server, opts: { corsOrigin?: string
         if (socket.role === 'rider' && socket.userId) {
             socket.join(`rider:${socket.userId}`);
             socket.join('riders'); // broadcast room for open dispatch
+        } else if (socket.userId) {
+            // Non-rider users (customers) join a shared room so they receive
+            // live nearby-vehicle location fanout for the map.
+            socket.join('customers');
         }
         socket.on('booking:subscribe', (bookingId: string) => {
             if (bookingId) socket.join(`booking:${bookingId}`);
@@ -161,6 +165,34 @@ export function emitKycUpdate(riderUserId: string, kycStatus: string, extra: Rec
     const payload = { kycStatus, ...extra, at: new Date().toISOString() };
     io.to(`rider:${String(riderUserId)}`).emit('kyc:update', payload);
     io.to(`user:${String(riderUserId)}`).emit('kyc:update', payload);
+}
+
+/**
+ * Broadcast a rider's live location to all connected customers so their
+ * map markers move in real time. Payload includes vehicle info so the
+ * customer app can pick the right icon (bike / auto / cab).
+ */
+export function emitNearbyRider(params: {
+    riderId: string;
+    vehicle?: string;
+    online: boolean;
+    lat: number;
+    lng: number;
+}): void {
+    if (!io) return;
+    io.to('customers').emit('rider:location', {
+        id: String(params.riderId),
+        vehicle: params.vehicle || '',
+        online: params.online,
+        lat: params.lat,
+        lng: params.lng,
+        at: new Date().toISOString(),
+    });
+}
+
+export function emitRiderOffline(riderId: string): void {
+    if (!io) return;
+    io.to('customers').emit('rider:offline', { id: String(riderId) });
 }
 
 export const getIO = (): Server | null => io;

@@ -101,7 +101,7 @@ export default function PersonalInfo() {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) return err('Permission needed', 'Please allow photo access to change your picture.');
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 0.7,
         allowsEditing: true,
         aspect: [1, 1],

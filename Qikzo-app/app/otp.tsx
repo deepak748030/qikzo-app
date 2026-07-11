@@ -15,10 +15,9 @@ const LEN = 6;
 
 export default function OtpScreen() {
   const insets = useSafeAreaInsets();
-  const { phone, devCode } = useLocalSearchParams<{ phone: string; devCode?: string }>();
-  // Pre-fill from the server's dev OTP so testers can just tap Verify.
-  const initial = (devCode && /^\d{4,8}$/.test(devCode)) ? devCode.padEnd(LEN, '').slice(0, LEN).split('') : Array(LEN).fill('');
-  const [digits, setDigits] = useState<string[]>(initial.length === LEN ? initial : Array(LEN).fill(''));
+  const { phone } = useLocalSearchParams<{ phone: string }>();
+  // Always start empty — the user types their OTP; we never pre-fill a dev code.
+  const [digits, setDigits] = useState<string[]>(Array(LEN).fill(''));
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(30);
   const inputs = useRef<(TextInput | null)[]>([]);

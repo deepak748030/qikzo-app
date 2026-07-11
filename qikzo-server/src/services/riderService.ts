@@ -4,7 +4,7 @@ import Booking from '../models/Booking';
 import Trip from '../models/Trip';
 import RideRequest from '../models/RideRequest';
 import { errors } from '../lib/errors';
-import { emitRiderLocation } from '../sockets';
+import { emitRiderLocation, emitNearbyRider, emitRiderOffline } from '../sockets';
 
 /**
  * Rider domain service.
@@ -81,9 +81,14 @@ export const riderService = {
                 'KYC_NOT_APPROVED',
             );
         }
+        const wasOnline = rider.online;
         if (patch.online !== undefined) rider.online = patch.online;
         if (patch.available !== undefined) rider.available = patch.available;
         await rider.save();
+        // Fanout to customers so their map removes the marker on go-offline.
+        if (wasOnline && rider.online === false) {
+            try { emitRiderOffline(String(rider._id)); } catch {}
+        }
         return rider;
     },
 
@@ -95,6 +100,20 @@ export const riderService = {
             updatedAt: new Date(),
         };
         await rider.save();
+
+        // Fanout to all customers so their maps update the marker in real time,
+        // regardless of whether this rider owns an active trip.
+        if (rider.online) {
+            try {
+                emitNearbyRider({
+                    riderId: String(rider._id),
+                    vehicle: (rider as any).vehicle || '',
+                    online: true,
+                    lat: coord.lat,
+                    lng: coord.lng,
+                });
+            } catch { /* ignore */ }
+        }
 
         // Fanout to the customer if this rider currently owns an active trip.
         // Silent — never let a socket hiccup break the location write.

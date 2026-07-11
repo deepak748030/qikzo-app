@@ -149,18 +149,33 @@ export default function DispatchHome() {
 
     const goOnline = async () => {
         // Client-side KYC gate — server also enforces (KYC_NOT_APPROVED).
-        if (isSignedIn() && kycStatus && kycStatus !== 'approved') {
-            sheet.show({
-                variant: 'warning',
-                title: 'KYC verification needed',
-                message: kycStatus === 'pending'
-                    ? 'Your documents are under review. You can go online once KYC is approved.'
-                    : 'Upload and verify your documents before going online.',
-                confirmText: 'Open documents',
-                cancelText: 'Later',
-                onConfirm: () => router.push('/documents'),
-            });
-            return;
+        // If signed in, KYC MUST be 'approved'. If status not yet loaded (null),
+        // fetch it now and block the tap so we never flip online before verifying.
+        if (isSignedIn()) {
+            let status = kycStatus;
+            if (!status) {
+                try {
+                    const rider = await ridersApi.me();
+                    status = ((rider as any)?.kycStatus ?? null) as string | null;
+                    setKycStatus(status);
+                } catch {
+                    sheet.show({ variant: 'error', title: 'Please try again', message: 'Could not verify your KYC status. Check your connection and retry.' });
+                    return;
+                }
+            }
+            if (status !== 'approved') {
+                sheet.show({
+                    variant: 'warning',
+                    title: 'KYC verification needed',
+                    message: status === 'pending' || status === 'submitted'
+                        ? 'Your documents are under review. You can go online once KYC is approved.'
+                        : 'Upload and verify your documents before going online.',
+                    confirmText: 'Open documents',
+                    cancelText: 'Later',
+                    onConfirm: () => router.push('/documents'),
+                });
+                return;
+            }
         }
         if (!locationGranted) {
             const { status } = await Location.requestForegroundPermissionsAsync();

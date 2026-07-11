@@ -78,13 +78,30 @@ export const bookingService = {
         }
         const initialStatus = scheduledAt ? 'Scheduled' : 'Searching rider';
 
+        // Build GeoJSON-shaped points. Mongo's 2dsphere index rejects a
+        // `location` sub-doc that has `type: 'Point'` without coordinates,
+        // so we either fill both coordinates + type, or drop `location`
+        // entirely when no lat/lng is available.
+        const toPoint = (p: { address: string; lat?: number | null; lng?: number | null }) => {
+            const lat = p.lat, lng = p.lng;
+            if (lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng)) {
+                return {
+                    address: p.address,
+                    lat,
+                    lng,
+                    location: { type: 'Point' as const, coordinates: [lng, lat] as [number, number] },
+                };
+            }
+            return { address: p.address, lat: lat ?? null, lng: lng ?? null };
+        };
+
         const booking = await Booking.create({
             code: await nextCode(),
             user: input.userId,
             mode: input.mode || 'delivery',
             categorySlug: input.categorySlug,
-            pickup: input.pickup,
-            drop: input.drop,
+            pickup: toPoint(input.pickup),
+            drop: toPoint(input.drop),
             notes: input.notes || '',
             recipientPhone: input.recipientPhone || '',
             payment: input.payment || 'cash',

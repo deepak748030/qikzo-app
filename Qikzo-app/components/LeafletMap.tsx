@@ -5,6 +5,7 @@ import { colors } from '@/lib/theme';
 
 export type LatLng = { lat: number; lng: number };
 export type RouteInfo = { distanceKm: number; durationMin: number };
+export type LiveRider = { id: string; lat: number; lng: number; vehicle?: string };
 
 type Props = {
   center: LatLng;
@@ -13,8 +14,12 @@ type Props = {
   // when true, a fixed centered pin appears and `onCenterChange` fires while panning
   pickerMode?: boolean;
   pinColor?: string;
-  // Show simulated bikes/cabs/taxis moving on nearby roads. Defaults to true.
+  // Show simulated bikes/cabs/taxis moving on nearby roads. Ignored when
+  // `liveRiders` is provided — real markers take over.
   showTraffic?: boolean;
+  // Real online riders from the server, updated live via socket. When set,
+  // the fake simulated fleet is disabled and these markers move instead.
+  liveRiders?: LiveRider[];
   onCenterChange?: (c: LatLng) => void;
   onReady?: () => void;
   // Fires once the pickup->drop route has been resolved along real roads.
@@ -22,9 +27,17 @@ type Props = {
   style?: any;
 };
 
+// Map a rider's vehicle field to an emoji. Only three categories exist
+// in the catalog today: bike, taxi (auto-style), and sedan (cab).
+function vehicleEmoji(vehicle?: string): string {
+  const v = (vehicle || '').toLowerCase();
+  if (v.includes('bike') || v.includes('two') || v.includes('scoot') || v.includes('moped')) return '🏍️';
+  if (v.includes('taxi') || v.includes('auto') || v.includes('rick')) return '🚕';
+  return '🚗'; // sedan / cab default
+}
+
 // Free, no-API-key map using Leaflet + OpenStreetMap tiles rendered inside a WebView.
-// Routing + nearby vehicle simulation both use the public OSRM demo server
-// (router.project-osrm.org) — no key required.
+// Routing uses the public OSRM demo server (router.project-osrm.org) — no key required.
 function buildHtml({
   center,
   pickup,
@@ -32,9 +45,11 @@ function buildHtml({
   pickerMode,
   pinColor,
   showTraffic,
-}: Required<Pick<Props, 'center'>> & Partial<Props>) {
+  hasLiveRiders,
+}: Required<Pick<Props, 'center'>> & Partial<Props> & { hasLiveRiders?: boolean }) {
   const accent = pinColor || colors.accent;
-  const traffic = showTraffic !== false;
+  // Fake traffic is only used when caller opted in AND there are no real riders yet.
+  const traffic = showTraffic !== false && !hasLiveRiders;
   return `<!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -226,6 +241,34 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   })();
   ` : ''}
 
+  // ------------- Real online riders (server-driven via socket) -------------
+  var liveMarkers = {}; // id -> { marker, vehicle }
+  function vehEmoji(v){
+    v = (v||'').toLowerCase();
+    if(v.indexOf('bike')>=0||v.indexOf('two')>=0||v.indexOf('scoot')>=0||v.indexOf('moped')>=0) return '🏍️';
+    if(v.indexOf('taxi')>=0||v.indexOf('auto')>=0||v.indexOf('rick')>=0) return '🚕';
+    return '🚗';
+  }
+  function vehIcon(v){
+    return L.divIcon({
+      className:'',
+      html:'<div class="veh">'+vehEmoji(v)+'</div>',
+      iconSize:[26,26], iconAnchor:[13,13]
+    });
+  }
+  function upsertLiveRider(r){
+    if(!r || typeof r.lat!=='number' || typeof r.lng!=='number') return;
+    var ex = liveMarkers[r.id];
+    if(ex){ ex.marker.setLatLng([r.lat, r.lng]); if(r.vehicle && r.vehicle!==ex.vehicle){ ex.marker.setIcon(vehIcon(r.vehicle)); ex.vehicle=r.vehicle; } }
+    else { var m = L.marker([r.lat,r.lng],{icon:vehIcon(r.vehicle||''),interactive:false}).addTo(map); liveMarkers[r.id]={marker:m,vehicle:r.vehicle||''}; }
+  }
+  function removeLiveRider(id){ var ex=liveMarkers[id]; if(ex){ try{ map.removeLayer(ex.marker); }catch(e){} delete liveMarkers[id]; } }
+  function setLiveRiders(list){
+    var seen = {};
+    (list||[]).forEach(function(r){ upsertLiveRider(r); seen[r.id]=true; });
+    Object.keys(liveMarkers).forEach(function(id){ if(!seen[id]) removeLiveRider(id); });
+  }
+
   ${pickerMode ? `
     var timer=null;
     map.on('move', function(){
@@ -245,6 +288,9 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
     try{
       var d = JSON.parse(ev.data);
       if(d.type==='setCenter'){ map.setView([d.lat, d.lng], d.zoom || 16); }
+      else if(d.type==='setLiveRiders'){ setLiveRiders(d.riders||[]); }
+      else if(d.type==='upsertLiveRider'){ upsertLiveRider(d.rider); }
+      else if(d.type==='removeLiveRider'){ removeLiveRider(d.id); }
     }catch(e){}
   }
 </script>
@@ -252,14 +298,15 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
 }
 
 export default function LeafletMap({
-  center, pickup, drop, pickerMode, pinColor, showTraffic, onCenterChange, onReady, onRoute, style,
+  center, pickup, drop, pickerMode, pinColor, showTraffic, liveRiders, onCenterChange, onReady, onRoute, style,
 }: Props) {
   const ref = useRef<WebView>(null);
+  const hasLiveRiders = Array.isArray(liveRiders);
   const html = useMemo(
-    () => buildHtml({ center, pickup, drop, pickerMode, pinColor, showTraffic }),
+    () => buildHtml({ center, pickup, drop, pickerMode, pinColor, showTraffic, hasLiveRiders }),
     // Only rebuild when these change meaningfully
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, showTraffic]
+    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, showTraffic, hasLiveRiders]
   );
 
   const onMessage = (e: WebViewMessageEvent) => {
@@ -277,6 +324,14 @@ export default function LeafletMap({
     const js = `(function(){try{window.postMessage(JSON.stringify({type:'setCenter',lat:${center.lat},lng:${center.lng},zoom:16}));}catch(e){}})();true;`;
     ref.current.injectJavaScript(js);
   }, [center.lat, center.lng]);
+
+  // Push the current liveRiders list into the WebView whenever it changes.
+  const ridersJson = useMemo(() => JSON.stringify(liveRiders || []), [liveRiders]);
+  React.useEffect(() => {
+    if (!ref.current || !hasLiveRiders) return;
+    const js = `(function(){try{window.postMessage(JSON.stringify({type:'setLiveRiders',riders:${ridersJson}}));}catch(e){}})();true;`;
+    ref.current.injectJavaScript(js);
+  }, [ridersJson, hasLiveRiders]);
 
   return (
     <View style={[styles.wrap, style]}>

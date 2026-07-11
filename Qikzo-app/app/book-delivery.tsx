@@ -16,6 +16,7 @@ import { rideOptions, estimateRide } from '@/lib/serviceMode';
 import { newBookingId, useBooking } from '@/lib/bookingStore';
 import { ApiError } from '@/lib/api/errors';
 import { tokenStore } from '@/lib/api/tokenStore';
+import { useLiveRiders } from '@/lib/useLiveRiders';
 
 export default function BookDeliveryScreen() {
     const insets = useSafeAreaInsets();
@@ -139,12 +140,11 @@ export default function BookDeliveryScreen() {
                 {/* Route map preview — always visible at the top, full-bleed.
                     Falls back to a Delhi center when no coords are picked yet. */}
                 <View style={styles.mapWrap}>
-                    <LeafletMap
+                    <BookMapWithRiders
                         center={draft.pickupCoord || draft.dropCoord || { lat: 28.6139, lng: 77.2090 }}
                         pickup={draft.pickupCoord || undefined}
                         drop={draft.dropCoord || undefined}
                         onRoute={(r) => setRouteInfo(r)}
-                        style={{ height: 170 }}
                     />
                     {!(draft.pickupCoord || draft.dropCoord) ? (
                         <Pressable style={styles.mapHint} onPress={() => openMap('drop')}>
@@ -357,6 +357,23 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
             <Text style={[styles.billLabel, bold && styles.billBold]} numberOfLines={1}>{label}</Text>
             <Text style={[styles.billValue, bold && styles.billBold]}>{value}</Text>
         </View>
+    );
+}
+
+// Isolated so the useLiveRiders hook only fires when the map is on-screen.
+function BookMapWithRiders({
+    center, pickup, drop, onRoute,
+}: { center: { lat: number; lng: number }; pickup?: any; drop?: any; onRoute: (r: any) => void }) {
+    const liveRiders = useLiveRiders(center, 6);
+    return (
+        <LeafletMap
+            center={center}
+            pickup={pickup}
+            drop={drop}
+            onRoute={onRoute}
+            liveRiders={liveRiders}
+            style={{ height: 170 }}
+        />
     );
 }
 
