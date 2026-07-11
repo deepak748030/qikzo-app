@@ -129,8 +129,11 @@ export const bookingService = {
         // Scheduled bookings skip dispatch — the cron below wakes them up ~15 min
         // before pickup and re-enters the normal Searching rider fanout.
         if (!scheduledAt) {
+            // Realtime dispatch: notify nearby riders via socket + push.
+            // The booking stays in "Searching rider" until a rider taps
+            // Accept in their app (rider claim flow). No auto-assign — that
+            // would steal the offer before the rider popup surfaces.
             void this._fanoutJobOffer(String(booking._id)).catch(() => {});
-            setTimeout(() => this._legacyAutoAssign(String(booking._id)).catch(() => { }), 4000);
         }
         return booking;
     },

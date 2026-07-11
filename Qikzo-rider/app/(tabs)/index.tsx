@@ -133,8 +133,9 @@ export default function DispatchHome() {
                 setIncoming(nextIncoming());
             }
         };
-        // 1) Poll every 5s as a safety net if socket is down.
-        const t = setTimeout(pull, INCOMING_POLL_MS);
+        // 1) Kick off immediately, then poll every 5s as a safety net if socket is down.
+        pull();
+        const t = setInterval(pull, INCOMING_POLL_MS);
         // 2) Realtime: on job:offer instantly try to grab a fresh incoming.
         connectSocket();
         const offOffer = subscribeSocket('job:offer', () => { if (!cancelled) pull(); });
@@ -144,7 +145,7 @@ export default function DispatchHome() {
                 setIncoming(null);
             }
         });
-        return () => { cancelled = true; clearTimeout(t); offOffer(); offCancel(); };
+        return () => { cancelled = true; clearInterval(t); offOffer(); offCancel(); };
     }, [online, active, incoming, fetchIncoming]);
 
     const goOnline = async () => {
