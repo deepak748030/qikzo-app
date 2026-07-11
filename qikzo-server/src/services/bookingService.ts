@@ -163,25 +163,41 @@ export const bookingService = {
         const lat = (booking.pickup as any)?.lat ?? (booking.pickup as any)?.location?.coordinates?.[1];
         let riderUserIds: string[] = [];
         const vehicleSlug = String((booking as any).vehicleTypeSlug || '').trim().toLowerCase();
+
+        // Base rider filter: only riders whose registered vehicle type matches
+        // the customer's selection. Rides without a slug (delivery flows) fall
+        // through to any online rider.
+        const riderFilter: any = { online: true, available: true };
+        if (vehicleSlug) riderFilter.vehicleTypeSlug = vehicleSlug;
+
         if (Number.isFinite(lng) && Number.isFinite(lat)) {
-            const query: any = {
-                online: true,
-                available: true,
+            const nearby = await Rider.find({
+                ...riderFilter,
                 currentLocation: {
                     $near: {
                         $geometry: { type: 'Point', coordinates: [lng, lat] },
                         $maxDistance: 5000,
                     },
                 },
-            };
-            // Only match riders whose registered vehicle type matches the
-            // customer's selected ride type. Bookings without a vehicle slug
-            // (older / delivery flows) fall through to all vehicles.
-            if (vehicleSlug) query.vehicleTypeSlug = vehicleSlug;
-            const nearby = await Rider.find(query).select('user').limit(25).lean();
+            }).select('user').limit(25).lean();
             riderUserIds = nearby.map((r) => String((r as any).user)).filter(Boolean);
+        } else if (vehicleSlug) {
+            // No pickup coords: still target only vehicle-matched riders so
+            // we never broadcast a typed ride to everyone.
+            const matched = await Rider.find(riderFilter).select('user').limit(25).lean();
+            riderUserIds = matched.map((r: any) => String((r as any).user)).filter(Boolean);
         }
-        emitJobOffer(booking, riderUserIds);
+
+        // For typed rides (bike/auto/sedan) we NEVER broadcast to the shared
+        // `riders` room — that would send a sedan ride to bike riders. Only
+        // untyped delivery bookings may fall back to the broadcast room.
+        if (vehicleSlug) {
+            if (riderUserIds.length) emitJobOffer(booking, riderUserIds);
+            // else: no matching rider online — the incoming poll (also
+            // filtered by vehicleTypeSlug) will pick it up when one comes on.
+        } else {
+            emitJobOffer(booking, riderUserIds);
+        }
 
         // Push notification to targeted riders too so backgrounded apps
         // wake up and can accept. Silent if no riders in range.

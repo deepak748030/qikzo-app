@@ -35,14 +35,14 @@ export const tripService = {
             .sort({ createdAt: -1 })
             .limit(Math.min(Math.max(limit, 1), 100))
             .populate('rider')
-            .populate('booking')
+            .populate({ path: 'booking', populate: { path: 'user', select: 'name phone' } })
             .lean();
     },
 
     async getMine(userId: string, id: string) {
         const trip = await Trip.findOne({ _id: id, user: userId })
             .populate('rider')
-            .populate('booking')
+            .populate({ path: 'booking', populate: { path: 'user', select: 'name phone' } })
             .lean();
         if (!trip) throw errors.notFound('Trip not found', 'TRIP_NOT_FOUND');
         return trip;
@@ -61,7 +61,7 @@ export const tripService = {
         })
             .sort({ createdAt: -1 })
             .populate('rider')
-            .populate('booking')
+            .populate({ path: 'booking', populate: { path: 'user', select: 'name phone' } })
             .lean();
     },
 
@@ -142,7 +142,7 @@ export const tripService = {
             body: `${rider.name} is on the way for booking ${booking.code}.`,
             data: { bookingId: String(booking._id), tripId: String(trip._id), event: 'trip:assigned' },
         }).catch(() => {});
-        return trip.populate(['rider', 'booking']);
+        return trip.populate([{ path: 'rider' }, { path: 'booking', populate: { path: 'user', select: 'name phone' } }]);
     },
 
     async declineBooking(userIdOfRider: string, bookingId: string, reason = '') {
@@ -215,7 +215,7 @@ export const tripService = {
                 data: { bookingId: String(trip.booking), tripId: String(trip._id), stage: nextStage },
             }).catch(() => {});
         }
-        return trip.populate(['rider', 'booking']);
+        return trip.populate([{ path: 'rider' }, { path: 'booking', populate: { path: 'user', select: 'name phone' } }]);
     },
 
     async cancelByRider(userIdOfRider: string, tripId: string, reason = '') {
@@ -254,7 +254,7 @@ export const tripService = {
                 data: { bookingId: String(trip.booking), tripId: String(trip._id), event: 'trip:cancelled' },
             }).catch(() => {});
         }
-        return trip.populate(['rider', 'booking']);
+        return trip.populate([{ path: 'rider' }, { path: 'booking', populate: { path: 'user', select: 'name phone' } }]);
     },
 };
 

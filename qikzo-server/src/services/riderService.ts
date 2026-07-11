@@ -177,12 +177,18 @@ export const riderService = {
             rider: null,
             _id: { $nin: declined },
         };
-        // Only surface offers matching this rider's vehicle type. Bookings
-        // that never captured a vehicleTypeSlug (older / delivery-only) stay
-        // visible to everyone so they still get picked up.
+        // Match rides to the rider's registered vehicle type. A rider WITH a
+        // slug sees only matching rides + untyped (delivery) bookings. A rider
+        // WITHOUT a slug sees only untyped bookings — otherwise unregistered
+        // riders would receive every typed ride (sedan/auto/bike) on the app.
         if (riderVehicleSlug) {
             baseFilter.$or = [
                 { vehicleTypeSlug: riderVehicleSlug },
+                { vehicleTypeSlug: { $in: ['', null] } },
+                { vehicleTypeSlug: { $exists: false } },
+            ];
+        } else {
+            baseFilter.$or = [
                 { vehicleTypeSlug: { $in: ['', null] } },
                 { vehicleTypeSlug: { $exists: false } },
             ];
@@ -197,10 +203,10 @@ export const riderService = {
                         $maxDistance: maxDistance,
                     },
                 },
-            }).limit(limit).lean();
+            }).populate('user', 'name phone').limit(limit).lean();
         }
 
-        return Booking.find(baseFilter).sort({ createdAt: -1 }).limit(limit).lean();
+        return Booking.find(baseFilter).sort({ createdAt: -1 }).populate('user', 'name phone').limit(limit).lean();
     },
 
     async recordDecline(userId: string, bookingId: string, reason = '') {

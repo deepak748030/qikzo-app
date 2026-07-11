@@ -41,12 +41,18 @@ const CATEGORY_FROM_SLUG: Record<string, JobCategory> = {
     parcel: 'parcel', other: 'other',
 };
 
+function customerNameOf(u: any): string {
+    const raw = (u && typeof u === 'object' ? String(u.name || '').trim() : '');
+    if (!raw || raw.toLowerCase() === 'guest') return 'Customer';
+    return raw;
+}
+
 function bookingToIncomingJob(b: any): IncomingJob {
     const cat = CATEGORY_FROM_SLUG[b.categorySlug] || 'parcel';
     return {
         id: String(b._id),
-        customerName: b.recipientPhone ? 'Customer' : 'Customer',
-        customerPhone: b.recipientPhone || '',
+        customerName: customerNameOf(b.user),
+        customerPhone: (b.user && typeof b.user === 'object' ? String(b.user.phone || '') : '') || b.recipientPhone || '',
         category: cat,
         pickup: b.pickup?.address || '—',
         drop: b.drop?.address || '—',
@@ -83,8 +89,8 @@ function tripToActive(t: Trip): ActiveJob {
         id: String(t._id).slice(-4).toUpperCase(),
         tripId: String(t._id),
         bookingId: b ? String((b as any)._id) : undefined,
-        customerName: 'Customer',
-        customerPhone: b?.recipientPhone || '',
+        customerName: customerNameOf(b?.user),
+        customerPhone: (b?.user && typeof b.user === 'object' ? String((b.user as any).phone || '') : '') || b?.recipientPhone || '',
         category: cat,
         pickup: b?.pickup?.address || '—',
         drop: b?.drop?.address || '—',

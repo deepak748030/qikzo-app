@@ -176,10 +176,23 @@ export const useBooking = create<State>((set, get) => ({
     createOnServer: async (input) => {
         set({ loading: true, lastError: null });
         try {
+            // Ride category ids used in the UI don't always match the rider's
+            // vehicleTypeSlug (e.g. UI 'cab' vs rider registration 'sedan').
+            // Normalize here so dispatch matches the right vehicle class.
+            const RIDE_SLUG_MAP: Record<string, string> = {
+                bike: 'bike',
+                auto: 'auto',
+                cab: 'sedan',
+                sedan: 'sedan',
+                taxi: 'sedan',
+            };
+            const rideSlug = input.mode === 'ride'
+                ? (RIDE_SLUG_MAP[input.categoryId] || input.categoryId)
+                : undefined;
             const created = await bookingsApi.create({
                 mode: input.mode,
                 categorySlug: input.categoryId,
-                vehicleTypeSlug: input.vehicleTypeSlug ?? (input.mode === 'ride' ? input.categoryId : undefined),
+                vehicleTypeSlug: input.vehicleTypeSlug ?? rideSlug,
                 pickup: input.pickup,
                 drop: input.drop,
                 notes: input.notes,

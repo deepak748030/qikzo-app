@@ -121,6 +121,10 @@ export default function DispatchHome() {
         return () => { stopped = true; clearInterval(t); };
     }, [online, pushLocation]);
 
+    // Track bookings the server told us are cancelled so we don't re-show
+    // them if a poll response is already in flight when the cancel arrives.
+    const cancelledIdsRef = useRef<Set<string>>(new Set());
+
     // Incoming-jobs poller (fallback) + realtime job:offer push.
     useEffect(() => {
         if (!online || active || incoming) return;
@@ -128,7 +132,11 @@ export default function DispatchHome() {
         const pull = async () => {
             if (isSignedIn()) {
                 const items = await fetchIncoming();
-                if (!cancelled && items.length) setIncoming(items[0]);
+                if (cancelled) return;
+                // Drop any items already known-cancelled (race: cancel event
+                // fired while this poll was in flight).
+                const fresh = items.filter((it: any) => !cancelledIdsRef.current.has(String(it.id)));
+                if (fresh.length) setIncoming(fresh[0]);
             } else if (!cancelled) {
                 setIncoming(nextIncoming());
             }
@@ -139,14 +147,19 @@ export default function DispatchHome() {
         // 2) Realtime: on job:offer instantly try to grab a fresh incoming.
         connectSocket();
         const offOffer = subscribeSocket('job:offer', () => { if (!cancelled) pull(); });
-        // 3) If someone else takes the current offer, drop it.
+        // 3) If the customer cancels (or someone else takes it) drop the card
+        //    immediately. Use functional setState so we always compare against
+        //    the latest incoming — even if this handler was registered before
+        //    setIncoming ran. Also remember the id to filter in-flight polls.
         const offCancel = subscribeSocket('job:cancelled', (p: any) => {
-            if (!cancelled && incoming && p?.id && String(p.id) === String((incoming as any).id)) {
-                setIncoming(null);
-            }
+            if (cancelled || !p?.id) return;
+            const cancelledId = String(p.id);
+            cancelledIdsRef.current.add(cancelledId);
+            setIncoming((cur) => (cur && String((cur as any).id) === cancelledId ? null : cur));
         });
         return () => { cancelled = true; clearInterval(t); offOffer(); offCancel(); };
     }, [online, active, incoming, fetchIncoming]);
+
 
     const goOnline = async () => {
         // Client-side KYC gate — server also enforces (KYC_NOT_APPROVED).

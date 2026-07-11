@@ -1,4 +1,5 @@
 import User from '../models/User';
+import Rider from '../models/Rider';
 import { errors } from '../lib/errors';
 
 type UpdatePatch = Partial<{
@@ -26,6 +27,13 @@ export const userService = {
         if (typeof patch.avatarUrl === 'string') clean.avatarUrl = patch.avatarUrl.trim();
         const user = await User.findByIdAndUpdate(id, clean, { new: true });
         if (!user) throw errors.notFound('User not found', 'USER_NOT_FOUND');
+
+        // Keep the denormalised Rider profile in sync so booking/ratings/admin
+        // views (which read rider.name directly) don't keep serving a stale
+        // "Guest" after the user renames themselves.
+        if (typeof clean.name === 'string' && (clean.name as string).length) {
+            await Rider.updateOne({ user: id }, { $set: { name: clean.name } }).catch(() => {});
+        }
         return user;
     },
     async deleteMe(id: string) {
@@ -34,3 +42,4 @@ export const userService = {
 };
 
 export default userService;
+
