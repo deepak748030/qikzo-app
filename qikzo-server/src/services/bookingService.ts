@@ -5,6 +5,7 @@ import { errors } from '../lib/errors';
 import { emitBookingUpdate, emitJobOffer, emitJobCancelled } from '../sockets';
 import notificationService from './notificationService';
 import couponService from './couponService';
+import { vehicleAliasRegex } from '../utils/vehicleSlug';
 
 // Serial code generator with a retry loop. Not a crypto-safe id but never
 // collides in practice and stays human-readable.
@@ -168,7 +169,22 @@ export const bookingService = {
         // the customer's selection. Rides without a slug (delivery flows) fall
         // through to any online rider.
         const riderFilter: any = { online: true, available: true };
-        if (vehicleSlug) riderFilter.vehicleTypeSlug = vehicleSlug;
+        if (vehicleSlug) {
+            // Match riders who either registered with the canonical slug OR
+            // whose free-form vehicle label matches (legacy riders that never
+            // stored a slug). Without this fallback the dispatch filter
+            // silently excludes older riders and no offer goes anywhere.
+            const rx = vehicleAliasRegex(vehicleSlug);
+            const unsetSlug = [
+                { vehicleTypeSlug: '' },
+                { vehicleTypeSlug: null },
+                { vehicleTypeSlug: { $exists: false } },
+            ];
+            riderFilter.$or = [
+                { vehicleTypeSlug: vehicleSlug },
+                ...(rx ? [{ $and: [{ $or: unsetSlug }, { vehicle: rx }] }] : []),
+            ];
+        }
 
         if (Number.isFinite(lng) && Number.isFinite(lat)) {
             const nearby = await Rider.find({

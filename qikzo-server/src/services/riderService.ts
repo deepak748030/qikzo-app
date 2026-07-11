@@ -5,6 +5,7 @@ import Trip from '../models/Trip';
 import RideRequest from '../models/RideRequest';
 import { errors } from '../lib/errors';
 import { emitRiderLocation, emitNearbyRider, emitRiderOffline } from '../sockets';
+import { inferVehicleSlug } from '../utils/vehicleSlug';
 
 /**
  * Rider domain service.
@@ -171,7 +172,17 @@ export const riderService = {
         const maxDistance = Math.min(Math.max(opts.radiusM ?? 5000, 500), 25_000);
         const limit = Math.min(Math.max(opts.limit ?? 10, 1), 25);
 
-        const riderVehicleSlug = String((rider as any).vehicleTypeSlug || '').trim().toLowerCase();
+        let riderVehicleSlug = String((rider as any).vehicleTypeSlug || '').trim().toLowerCase();
+        // Legacy riders may have no explicit slug. Infer once from their
+        // free-form `vehicle` label and backfill so future dispatch is fast.
+        if (!riderVehicleSlug) {
+            const inferred = inferVehicleSlug((rider as any).vehicle);
+            if (inferred) {
+                riderVehicleSlug = inferred;
+                (rider as any).vehicleTypeSlug = inferred;
+                try { await rider.save(); } catch { /* non-fatal */ }
+            }
+        }
         const baseFilter: any = {
             status: 'Searching rider',
             rider: null,
