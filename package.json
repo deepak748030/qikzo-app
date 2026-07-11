@@ -1,0 +1,12 @@
+{
+  "name": "qikzo-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Qikzo — on-demand delivery & ride booking platform (server + customer app + rider app + admin dashboard). Root scripts proxy to the admin dashboard for the Lovable preview.",
+  "scripts": {
+    "dev": "cd Qikzo-admin-dashboard && npm install --silent && npm run dev -- --host 0.0.0.0 --port 8080",
+    "build": "cd Qikzo-admin-dashboard && npm install --silent && npm run build",
+    "build:dev": "cd Qikzo-admin-dashboard && npm install --silent && npm run build",
+    "preview": "cd Qikzo-admin-dashboard && npm run preview"
+  }
+}
