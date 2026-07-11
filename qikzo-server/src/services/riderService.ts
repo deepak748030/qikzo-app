@@ -140,10 +140,13 @@ export const riderService = {
     },
 
 
-    async updateVehicle(userId: string, patch: { vehicle: string; vehicleNo: string }) {
+    async updateVehicle(userId: string, patch: { vehicle: string; vehicleNo: string; vehicleTypeSlug?: string }) {
         const rider = await this.getOrCreateForUser(userId);
         rider.vehicle = patch.vehicle.trim();
         rider.vehicleNo = patch.vehicleNo.trim().toUpperCase();
+        if (patch.vehicleTypeSlug) {
+            (rider as any).vehicleTypeSlug = String(patch.vehicleTypeSlug).trim().toLowerCase();
+        }
         await rider.save();
         return rider;
     },
@@ -168,11 +171,22 @@ export const riderService = {
         const maxDistance = Math.min(Math.max(opts.radiusM ?? 5000, 500), 25_000);
         const limit = Math.min(Math.max(opts.limit ?? 10, 1), 25);
 
-        const baseFilter = {
+        const riderVehicleSlug = String((rider as any).vehicleTypeSlug || '').trim().toLowerCase();
+        const baseFilter: any = {
             status: 'Searching rider',
             rider: null,
             _id: { $nin: declined },
         };
+        // Only surface offers matching this rider's vehicle type. Bookings
+        // that never captured a vehicleTypeSlug (older / delivery-only) stay
+        // visible to everyone so they still get picked up.
+        if (riderVehicleSlug) {
+            baseFilter.$or = [
+                { vehicleTypeSlug: riderVehicleSlug },
+                { vehicleTypeSlug: { $in: ['', null] } },
+                { vehicleTypeSlug: { $exists: false } },
+            ];
+        }
 
         if (hasLocation) {
             return Booking.find({

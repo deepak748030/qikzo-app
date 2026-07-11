@@ -77,7 +77,7 @@ export default function VehicleSetup() {
         try {
             const { accessToken } = tokenStore.get();
             if (accessToken) {
-                await ridersApi.updateVehicle({ vehicle: VEHICLE_LABEL[type], vehicleNo: normalized });
+                await ridersApi.updateVehicle({ vehicle: VEHICLE_LABEL[type], vehicleNo: normalized, vehicleTypeSlug: type });
             }
             setVehicleProfile(type, normalized);
             router.replace('/(tabs)');

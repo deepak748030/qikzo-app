@@ -21,6 +21,7 @@ export interface CreateBookingInput {
     userId: string;
     mode?: 'ride' | 'delivery';
     categorySlug: string;
+    vehicleTypeSlug?: string;
     pickup: { address: string; lat?: number | null; lng?: number | null };
     drop: { address: string; lat?: number | null; lng?: number | null };
     notes?: string;
@@ -100,6 +101,7 @@ export const bookingService = {
             user: input.userId,
             mode: input.mode || 'delivery',
             categorySlug: input.categorySlug,
+            vehicleTypeSlug: String(input.vehicleTypeSlug || '').trim().toLowerCase(),
             pickup: toPoint(input.pickup),
             drop: toPoint(input.drop),
             notes: input.notes || '',
@@ -160,8 +162,9 @@ export const bookingService = {
         const lng = (booking.pickup as any)?.lng ?? (booking.pickup as any)?.location?.coordinates?.[0];
         const lat = (booking.pickup as any)?.lat ?? (booking.pickup as any)?.location?.coordinates?.[1];
         let riderUserIds: string[] = [];
+        const vehicleSlug = String((booking as any).vehicleTypeSlug || '').trim().toLowerCase();
         if (Number.isFinite(lng) && Number.isFinite(lat)) {
-            const nearby = await Rider.find({
+            const query: any = {
                 online: true,
                 available: true,
                 currentLocation: {
@@ -170,7 +173,12 @@ export const bookingService = {
                         $maxDistance: 5000,
                     },
                 },
-            }).select('user').limit(25).lean();
+            };
+            // Only match riders whose registered vehicle type matches the
+            // customer's selected ride type. Bookings without a vehicle slug
+            // (older / delivery flows) fall through to all vehicles.
+            if (vehicleSlug) query.vehicleTypeSlug = vehicleSlug;
+            const nearby = await Rider.find(query).select('user').limit(25).lean();
             riderUserIds = nearby.map((r) => String((r as any).user)).filter(Boolean);
         }
         emitJobOffer(booking, riderUserIds);

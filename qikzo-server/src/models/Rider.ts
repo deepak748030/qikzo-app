@@ -13,6 +13,10 @@ const RiderSchema = new Schema(
         phone: { type: String, default: '', trim: true, index: true },
         vehicle: { type: String, required: true },
         vehicleNo: { type: String, required: true, uppercase: true, trim: true },
+        // Slug of the vehicle category the rider drives (bike / auto / sedan …).
+        // Used to route ride offers only to riders whose vehicle matches the
+        // customer's selected ride type.
+        vehicleTypeSlug: { type: String, default: '', index: true, lowercase: true, trim: true },
         // Rating starts at 0 — new riders have no ride history yet, so we
         // never seed a fake 5-star reputation. Rated after their first trip.
         rating: { type: Number, default: 0, min: 0, max: 5 },

@@ -49,8 +49,14 @@ export const tripService = {
     },
 
     async getActive(userId: string) {
+        // Resolve rider-side lookup: a rider's active trip is keyed by their
+        // Rider._id, not their auth user id. Fall back to the customer path
+        // (Trip.user) so the same endpoint serves both apps.
+        const rider = await (await import('../models/Rider')).default.findOne({ user: userId }).select('_id').lean();
+        const or: any[] = [{ user: userId }];
+        if (rider?._id) or.push({ rider: rider._id });
         return Trip.findOne({
-            user: userId,
+            $or: or,
             stage: { $in: ['assigned', 'arriving', 'arrived', 'started'] },
         })
             .sort({ createdAt: -1 })

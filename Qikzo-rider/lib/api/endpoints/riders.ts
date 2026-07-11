@@ -41,7 +41,7 @@ export const ridersApi = {
         return res.rider;
     },
 
-    async updateVehicle(patch: { vehicle: string; vehicleNo: string }): Promise<Rider> {
+    async updateVehicle(patch: { vehicle: string; vehicleNo: string; vehicleTypeSlug?: string }): Promise<Rider> {
         const res = await http.patch<{ rider: Rider }>('/riders/me/vehicle', patch);
         return res.rider;
     },

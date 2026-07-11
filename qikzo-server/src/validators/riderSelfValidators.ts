@@ -18,6 +18,7 @@ export const updateRiderLocationSchema = z.object({
 export const updateRiderVehicleSchema = z.object({
     vehicle: z.string().min(1).max(60),
     vehicleNo: z.string().min(3).max(20),
+    vehicleTypeSlug: z.string().min(1).max(40).optional(),
 });
 
 // Rider-actionable trip stages (subset — no re-assigning; no going back).

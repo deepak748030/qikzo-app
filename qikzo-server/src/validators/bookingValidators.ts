@@ -17,6 +17,7 @@ export const estimateSchema = z.object({
 export const createBookingSchema = z.object({
     mode: z.enum(['ride', 'delivery']).optional(),
     categorySlug: z.string().min(1),
+    vehicleTypeSlug: z.string().min(1).max(40).optional(),
     pickup: PointSchema,
     drop: PointSchema,
     notes: z.string().max(500).optional(),

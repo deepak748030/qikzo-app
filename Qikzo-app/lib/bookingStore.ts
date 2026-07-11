@@ -54,19 +54,27 @@ type State = {
         notes?: string;
         recipientPhone?: string;
         payment: 'cash' | 'upi';
+        vehicleTypeSlug?: string;
     }) => Promise<Booking>;
     cancelOnServer: (id: string, reason?: string) => Promise<void>;
 };
 
 // ---------- Server → UI mappers ----------
 
-// Server exposes richer status vocabulary than the mock UI. Collapse to the UI set.
-const STATUS_MAP: Record<ServerBookingStatus, BookingStatus> = {
+// Map every possible server BookingStatus into the UI's simplified set.
+// The server enum is the source of truth (see qikzo-server BOOKING_STATUSES).
+// Missing keys here previously caused a fallback to 'Searching rider',
+// which made the user app pop the "Finding your rider" overlay again the
+// moment the rider tapped "I've arrived".
+const STATUS_MAP: Record<string, BookingStatus> = {
+    'Scheduled': 'Searching rider',
     'Searching rider': 'Searching rider',
     'Rider accepted': 'Rider accepted',
+    'Arriving for pickup': 'Arriving for pickup',
     'Rider arriving': 'Arriving for pickup',
     'Rider arrived': 'Arriving for pickup',
     'Picked up': 'Picked up',
+    'On the way': 'On the way',
     'In transit': 'On the way',
     'Delivered': 'Delivered',
     'Cancelled': 'Cancelled',
@@ -171,12 +179,13 @@ export const useBooking = create<State>((set, get) => ({
             const created = await bookingsApi.create({
                 mode: input.mode,
                 categorySlug: input.categoryId,
+                vehicleTypeSlug: input.vehicleTypeSlug ?? (input.mode === 'ride' ? input.categoryId : undefined),
                 pickup: input.pickup,
                 drop: input.drop,
                 notes: input.notes,
                 recipientPhone: input.recipientPhone,
                 payment: input.payment,
-            });
+            } as any);
             const mapped = mapBooking(created);
             set((s) => ({ bookings: [mapped, ...s.bookings], loading: false }));
             return mapped;

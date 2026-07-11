@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, Pressable } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { Navigation2, ChevronRight } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Skeleton, { SkeletonRow } from '@/components/Skeleton';
@@ -33,8 +35,10 @@ function Row({ item }: { item: CompletedJob }) {
 
 export default function Activity() {
     const completed = useJobs((s) => s.completed);
+    const active = useJobs((s) => s.active);
     const storeLoading = useJobs((s) => s.loading);
     const hydrateFromServer = useJobs((s) => s.hydrateFromServer);
+    const hydrateActiveFromServer = useJobs((s) => s.hydrateActiveFromServer);
     const loading = useInitialLoad();
     const phone = useAuth((s) => s.phone);
 
@@ -44,6 +48,17 @@ export default function Activity() {
         if (!phone) { setSummary(null); return; }
         try { setSummary(await api.earnings.summary()); } catch { /* keep last */ }
     }, [phone]);
+
+    // Refresh active trip + history whenever the tab regains focus. Ensures
+    // that a rider returning after a crash / relaunch always sees any trip
+    // still in-flight and can tap Resume to jump straight back into it.
+    useFocusEffect(
+        React.useCallback(() => {
+            hydrateActiveFromServer();
+            hydrateFromServer();
+            loadSummary();
+        }, [hydrateActiveFromServer, hydrateFromServer, loadSummary])
+    );
 
     useEffect(() => { hydrateFromServer(); loadSummary(); }, [hydrateFromServer, loadSummary]);
 
@@ -76,7 +91,31 @@ export default function Activity() {
                 renderItem={({ item }) => <Row item={item} />}
                 ListHeaderComponent={
                     <View>
-                        {/* Compact today strip — full breakdown lives in the Earnings tab */}
+                        {/* Resume-active-trip card — surfaces any in-flight trip
+                            so a rider who backgrounded / relaunched the app
+                            can jump straight back to it. This unblocks them
+                            from starting a new trip. */}
+                        {active ? (
+                            <Pressable
+                                onPress={() => router.push('/active-job')}
+                                style={styles.activeCard}
+                            >
+                                <View style={styles.activeIconWrap}>
+                                    <Navigation2 size={18} color={colors.primaryForeground} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.activeLabel}>Trip in progress</Text>
+                                    <Text style={styles.activeTitle} numberOfLines={1}>
+                                        {active.pickup} → {active.drop}
+                                    </Text>
+                                    <Text style={styles.activeMeta}>
+                                        {active.stage} · ₹{active.fare} · {active.distanceKm.toFixed(1)} km
+                                    </Text>
+                                </View>
+                                <ChevronRight size={18} color={colors.foreground} />
+                            </Pressable>
+                        ) : null}
+
                         {/* Compact today strip — full breakdown lives in the Earnings tab */}
                         <View style={styles.strip}>
                             <View style={{ flex: 1 }}>
@@ -99,7 +138,7 @@ export default function Activity() {
                         <Text style={styles.emptySub}>Go online from Home to receive your first job.</Text>
                     </View>
                 }
-                refreshControl={<RefreshControl refreshing={storeLoading} onRefresh={() => { hydrateFromServer(); loadSummary(); }} tintColor={colors.foreground} />}
+                refreshControl={<RefreshControl refreshing={storeLoading} onRefresh={() => { hydrateActiveFromServer(); hydrateFromServer(); loadSummary(); }} tintColor={colors.foreground} />}
             />
         </View>
     );
@@ -120,4 +159,20 @@ const styles = StyleSheet.create({
     empty: { alignItems: 'center', paddingTop: 60, gap: 6 },
     emptyTitle: { fontSize: 14, fontFamily: fonts.displayBold, color: colors.foreground },
     emptySub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground },
+    activeCard: {
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        marginHorizontal: 6, marginTop: 10, padding: 12,
+        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary,
+        borderRadius: radius.md,
+    },
+    activeIconWrap: {
+        width: 36, height: 36, borderRadius: radius.sm,
+        backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+    },
+    activeLabel: {
+        fontSize: 10, fontFamily: fonts.bodyBold, color: colors.primary,
+        letterSpacing: 0.5, textTransform: 'uppercase',
+    },
+    activeTitle: { fontSize: 13, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 2 },
+    activeMeta: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 2 },
 });

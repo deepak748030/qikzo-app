@@ -46,10 +46,9 @@ export type BookingStatus =
     | 'Scheduled'
     | 'Searching rider'
     | 'Rider accepted'
-    | 'Rider arriving'
-    | 'Rider arrived'
+    | 'Arriving for pickup'
     | 'Picked up'
-    | 'In transit'
+    | 'On the way'
     | 'Delivered'
     | 'Cancelled';
 
