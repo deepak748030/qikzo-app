@@ -6,6 +6,7 @@ import Payout from '../models/Payout';
 import Wallet from '../models/Wallet';
 import Booking from '../models/Booking';
 import Coupon from '../models/Coupon';
+import PromoBanner from '../models/PromoBanner';
 import { errors } from '../lib/errors';
 import notificationService from './notificationService';
 import { audit } from './auditService';
@@ -250,6 +251,63 @@ export const adminService = {
     async deleteCoupon(id: string) {
         const r = await Coupon.deleteOne({ _id: id });
         if (!r.deletedCount) throw errors.notFound('Coupon not found', 'COUPON_NOT_FOUND');
+    },
+
+    // ---------- Promo Banners ----------
+    async listBanners(opts: { active?: boolean; limit?: number; cursor?: string } = {}) {
+        const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
+        const filter: any = {};
+        if (opts.active !== undefined) filter.active = opts.active;
+        if (opts.cursor) filter._id = { $lt: opts.cursor };
+        // Order by display `order` first (asc), then newest for stable pagination.
+        const items = await PromoBanner.find(filter)
+            .sort({ order: 1, _id: -1 })
+            .limit(limit + 1)
+            .lean();
+        const hasMore = items.length > limit;
+        return { items: items.slice(0, limit), nextCursor: hasMore ? String(items[limit - 1]._id) : null };
+    },
+    async createBanner(input: any) {
+        const slug = String(input.slug || '').trim().toLowerCase();
+        const title = String(input.title || '').trim();
+        if (!slug) throw errors.badRequest('Slug required', 'SLUG_REQUIRED');
+        if (!title) throw errors.badRequest('Title required', 'TITLE_REQUIRED');
+        const lat = Number(input?.coord?.lat);
+        const lng = Number(input?.coord?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            throw errors.badRequest('Coordinates required', 'COORD_REQUIRED');
+        }
+        const existing = await PromoBanner.findOne({ slug });
+        if (existing) throw errors.badRequest('Banner slug already exists', 'SLUG_EXISTS');
+        return PromoBanner.create({
+            slug,
+            title,
+            subtitle: String(input.subtitle || '').trim(),
+            address: String(input.address || '').trim(),
+            imageUrl: String(input.imageUrl || '').trim(),
+            coord: { lat, lng },
+            active: input.active !== false,
+            order: Number.isFinite(Number(input.order)) ? Number(input.order) : 0,
+        });
+    },
+    async updateBanner(id: string, patch: any) {
+        const clean: any = {};
+        if (typeof patch.title === 'string') clean.title = patch.title.trim();
+        if (typeof patch.subtitle === 'string') clean.subtitle = patch.subtitle.trim();
+        if (typeof patch.address === 'string') clean.address = patch.address.trim();
+        if (typeof patch.imageUrl === 'string') clean.imageUrl = patch.imageUrl.trim();
+        if (typeof patch.active === 'boolean') clean.active = patch.active;
+        if (patch.order !== undefined && Number.isFinite(Number(patch.order))) clean.order = Number(patch.order);
+        if (patch.coord && Number.isFinite(Number(patch.coord.lat)) && Number.isFinite(Number(patch.coord.lng))) {
+            clean.coord = { lat: Number(patch.coord.lat), lng: Number(patch.coord.lng) };
+        }
+        const doc = await PromoBanner.findByIdAndUpdate(id, clean, { new: true });
+        if (!doc) throw errors.notFound('Banner not found', 'BANNER_NOT_FOUND');
+        return doc;
+    },
+    async deleteBanner(id: string) {
+        const r = await PromoBanner.deleteOne({ _id: id });
+        if (!r.deletedCount) throw errors.notFound('Banner not found', 'BANNER_NOT_FOUND');
     },
 
     // ---------- Users ----------

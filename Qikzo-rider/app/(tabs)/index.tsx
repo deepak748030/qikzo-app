@@ -23,6 +23,10 @@ const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 }; // Only used until GPS r
 const LOCATION_INTERVAL_MS = 10_000;   // heartbeat while online
 const INCOMING_POLL_MS = 5_000;         // job-request feed poll
 
+// Module-scoped so the "already navigated for this trip" guard survives
+// Home unmount/remount cycles caused by router.replace('/(tabs)').
+let lastNavActiveKey: string | null = null;
+
 export default function DispatchHome() {
     const insets = useSafeAreaInsets();
     const sheet = useSheet();
@@ -97,8 +101,18 @@ export default function DispatchHome() {
         return () => { off(); };
     }, [refreshKyc]);
 
-    // If a job is active, jump to the active-job screen.
-    useEffect(() => { if (active) router.push('/active-job'); }, [active]);
+    // If a job is active, jump to the active-job screen — but only ONCE per
+    // trip. `lastNavActiveKey` is module-scoped so it survives Home remounts
+    // (e.g. after pressing X on Active Job → router.replace('/(tabs)')),
+    // preventing the blink/loop where Home re-pushes on every remount.
+    useEffect(() => {
+        const key = active ? String(active.tripId || active.id || '') : '';
+        if (!key) { lastNavActiveKey = null; return; }
+        if (lastNavActiveKey === key) return;
+        lastNavActiveKey = key;
+        // replace (not push) so back-stack doesn't fill with duplicates.
+        router.replace('/active-job');
+    }, [active]);
 
     // Location heartbeat: while online, push GPS every ~10s so the server-side
     // /riders/me/incoming query can $near-filter correctly.

@@ -265,8 +265,27 @@ export const useJobs = create<State>((set, get) => ({
         if (!accessToken) return;
         try {
             const trip = await tripsApi.active();
-            if (trip) set({ active: tripToActive(trip) });
-        } catch { /* ignore */ }
+            const cur = get().active;
+            // Server is source of truth. If there's no live trip (or it's a
+            // terminal state), clear any stale local active so the rider
+            // isn't trapped on the Active Job screen after force-close/login.
+            if (!trip || trip.stage === 'completed' || trip.stage === 'cancelled') {
+                if (cur) set({ active: null });
+                return;
+            }
+            const next = tripToActive(trip);
+            // Skip identical updates — prevents re-render / re-nav loops.
+            if (cur
+                && cur.tripId === next.tripId
+                && cur.stage === next.stage
+                && cur.pickup === next.pickup
+                && cur.drop === next.drop
+                && cur.fare === next.fare
+                && cur.customerName === next.customerName
+                && cur.customerPhone === next.customerPhone
+            ) return;
+            set({ active: next });
+        } catch { /* ignore — keep whatever we have */ }
     },
 }));
 

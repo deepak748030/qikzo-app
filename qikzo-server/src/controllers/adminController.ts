@@ -73,6 +73,19 @@ export const adminController = {
         return ok(res, {}, 'Coupon deleted');
     }),
 
+    // Promo Banners
+    listBanners: asyncHandler(async (req, res) => ok(res, await adminService.listBanners({
+        active: req.query.active === undefined ? undefined : req.query.active === 'true',
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        cursor: req.query.cursor as any,
+    }))),
+    createBanner: asyncHandler(async (req, res) => ok(res, { banner: await adminService.createBanner(req.body) }, 'Banner created')),
+    updateBanner: asyncHandler(async (req, res) => ok(res, { banner: await adminService.updateBanner(req.params.id, req.body) }, 'Banner updated')),
+    deleteBanner: asyncHandler(async (req, res) => {
+        await adminService.deleteBanner(req.params.id);
+        return ok(res, {}, 'Banner deleted');
+    }),
+
     // Audit log
     listAudit: asyncHandler(async (req, res) => {
         const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);

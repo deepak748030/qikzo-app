@@ -53,6 +53,12 @@ router.post('/coupons', adminController.createCoupon);
 router.patch('/coupons/:id', adminController.updateCoupon);
 router.delete('/coupons/:id', adminController.deleteCoupon);
 
+// Promo banners
+router.get('/banners', validate(listQuerySchema, 'query'), adminController.listBanners);
+router.post('/banners', adminController.createBanner);
+router.patch('/banners/:id', adminController.updateBanner);
+router.delete('/banners/:id', adminController.deleteBanner);
+
 // Audit log
 router.get('/audit', adminController.listAudit);
 

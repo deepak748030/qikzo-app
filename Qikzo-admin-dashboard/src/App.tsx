@@ -9,6 +9,7 @@ import KycPage from '@/pages/KycPage';
 import BookingsPage from '@/pages/BookingsPage';
 import PayoutsPage from '@/pages/PayoutsPage';
 import CouponsPage from '@/pages/CouponsPage';
+import BannersPage from '@/pages/BannersPage';
 import SupportPage from '@/pages/SupportPage';
 import SupportDetailPage from '@/pages/SupportDetailPage';
 import AuditPage from '@/pages/AuditPage';
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="payouts" element={<PayoutsPage />} />
         <Route path="coupons" element={<CouponsPage />} />
+        <Route path="banners" element={<BannersPage />} />
         <Route path="support" element={<SupportPage />} />
         <Route path="support/:id" element={<SupportDetailPage />} />
         <Route path="audit" element={<AuditPage />} />
