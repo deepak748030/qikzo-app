@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
-import { Bike, Car, MapPin, Check, Truck } from 'lucide-react-native';
+import { MapPin, Check } from 'lucide-react-native';
+
+const VEHICLE_IMAGES: Record<VehicleType, any> = {
+    bike: require('../assets/icons/bike.png'),
+    auto: require('../assets/icons/auto.png'),
+    sedan: require('../assets/icons/sedan.png'),
+};
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Input from '@/components/Input';
@@ -13,10 +19,10 @@ import { useSheet } from '@/lib/useSheet';
 import { useAuth, VehicleType } from '@/lib/authStore';
 
 // Post-OTP setup: pick vehicle, register the number plate, enable location.
-const OPTIONS: { key: VehicleType; label: string; sub: string; Icon: any }[] = [
-    { key: 'bike', label: 'Two-wheeler', sub: 'Bike / scooter for parcels, food, groceries', Icon: Bike },
-    { key: 'auto', label: 'Auto rickshaw', sub: 'Three-wheeler for rides and small cargo', Icon: Truck },
-    { key: 'sedan', label: 'Sedan', sub: 'Four-wheeler for rides and premium delivery', Icon: Car },
+const OPTIONS: { key: VehicleType; label: string; sub: string }[] = [
+    { key: 'bike', label: 'Two-wheeler', sub: 'Bike / scooter for parcels, food, groceries' },
+    { key: 'auto', label: 'Auto rickshaw', sub: 'Three-wheeler for rides and small cargo' },
+    { key: 'sedan', label: 'Sedan', sub: 'Four-wheeler for rides and premium delivery' },
 ];
 
 // Loose Indian plate pattern: 2 letters + 1-2 digits + 1-3 letters + 4 digits.
@@ -88,8 +94,8 @@ export default function VehicleSetup() {
                                 onPress={() => setType(o.key)}
                                 style={[styles.option, active && styles.optionActive]}
                             >
-                                <View style={[styles.optionIcon, active && styles.optionIconActive]}>
-                                    <o.Icon size={20} color={active ? colors.primaryForeground : colors.primary} strokeWidth={2} />
+                                <View style={styles.optionImageWrap}>
+                                    <Image source={VEHICLE_IMAGES[o.key]} style={styles.optionImage} resizeMode="contain" />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.optionLabel}>{o.label}</Text>
@@ -151,8 +157,8 @@ const styles = StyleSheet.create({
     optionList: { gap: 6 },
     option: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12 },
     optionActive: { borderColor: colors.primary, backgroundColor: colors.card },
-    optionIcon: { width: 40, height: 40, borderRadius: radius.sm, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
-    optionIconActive: { backgroundColor: colors.primary },
+    optionImageWrap: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    optionImage: { width: 52, height: 52 },
     optionLabel: { fontSize: 14, fontFamily: fonts.bodyBold, color: colors.foreground },
     optionSub: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 2 },
     radio: { width: 20, height: 20, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
