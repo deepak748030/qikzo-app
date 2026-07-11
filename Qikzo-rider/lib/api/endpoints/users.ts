@@ -17,6 +17,7 @@ export type UpdateMeInput = {
     pincode?: string;
     emergencyName?: string;
     emergencyPhone?: string;
+    avatarUrl?: string;
 };
 
 export const usersApi = {

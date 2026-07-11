@@ -20,4 +20,5 @@ export const updateMeSchema = z.object({
     pincode: z.string().regex(/^\d{6}$/, 'PIN must be 6 digits').optional(),
     emergencyName: z.string().max(80).optional(),
     emergencyPhone: z.string().regex(/^\d{10}$/, 'Must be 10 digits').optional(),
+    avatarUrl: z.string().max(500).optional(),
 });

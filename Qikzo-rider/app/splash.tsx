@@ -3,13 +3,25 @@ import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { router } from 'expo-router';
 import { Bike } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
-import { useAuth } from '@/lib/authStore';
+import { useAuth, VehicleType } from '@/lib/authStore';
+import { tokenStore } from '@/lib/api/tokenStore';
+import { authApi } from '@/lib/api/endpoints/auth';
+import { ridersApi } from '@/lib/api/endpoints/riders';
+import { connectSocket } from '@/lib/socket';
 
-// Animated splash — routes based on onboarded + phone.
+// Animated splash — routes based on stored session + onboarded flag.
+// If a valid access token is present we restore the profile from the server
+// and jump straight to the tabs, so the rider only sees /login after an
+// explicit logout (or a terminal auth failure).
 export default function SplashAnimated() {
     const onboarded = useAuth((s) => s.onboarded);
     const phone = useAuth((s) => s.phone);
     const profileComplete = useAuth((s) => s.profileComplete);
+    const setPhone = useAuth((s) => s.setPhone);
+    const setName = useAuth((s) => s.setName);
+    const setAvatarUrl = useAuth((s) => s.setAvatarUrl);
+    const setVehicleProfile = useAuth((s) => s.setVehicleProfile);
+    const setOnboarded = useAuth((s) => s.setOnboarded);
 
     const markScale = useRef(new Animated.Value(0.4)).current;
     const markOpacity = useRef(new Animated.Value(0)).current;
@@ -36,14 +48,49 @@ export default function SplashAnimated() {
             ]),
         ]).start();
 
-        const t = setTimeout(() => {
+        let cancelled = false;
+
+        const decide = async () => {
+            const { accessToken } = tokenStore.get();
+            if (accessToken) {
+                try {
+                    const u: any = await authApi.me();
+                    if (cancelled) return;
+                    if (u?.phone) setPhone(u.phone);
+                    if (u?.name) setName(u.name);
+                    if (typeof u?.avatarUrl === 'string') setAvatarUrl(u.avatarUrl);
+                    setOnboarded(true);
+                    let hasVehicle = false;
+                    try {
+                        const r: any = await ridersApi.me();
+                        if (r?.vehicleNo && r.vehicleNo !== 'PENDING') {
+                            const t: VehicleType =
+                                r.vehicle === 'Auto rickshaw' ? 'auto'
+                                : r.vehicle === 'Sedan' ? 'sedan'
+                                : 'bike';
+                            setVehicleProfile(t, r.vehicleNo);
+                            hasVehicle = true;
+                        }
+                    } catch { /* ignore */ }
+                    try { connectSocket(); } catch { /* ignore */ }
+                    router.replace(hasVehicle ? '/(tabs)' : '/vehicle-setup');
+                    return;
+                } catch {
+                    // Token invalid/expired — fall through to normal routing.
+                    try { await tokenStore.clear(); } catch { /* ignore */ }
+                }
+            }
             if (!onboarded) router.replace('/onboarding');
             else if (!phone) router.replace('/login');
             else if (!profileComplete) router.replace('/vehicle-setup');
             else router.replace('/(tabs)');
-        }, 1800);
-        return () => clearTimeout(t);
+        };
+
+        const t = setTimeout(() => { decide(); }, 1400);
+        return () => { cancelled = true; clearTimeout(t); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
 
     return (
         <View style={styles.container}>

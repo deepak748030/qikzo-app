@@ -23,6 +23,9 @@ const UserSchema = new Schema(
         pincode: { type: String, default: '' },
         emergencyName: { type: String, default: '' },
         emergencyPhone: { type: String, default: '' },
+        // Profile photo URL (relative /uploads/... path or absolute). Uploaded
+        // via POST /uploads then patched onto the user via PATCH /users/me.
+        avatarUrl: { type: String, default: '' },
     },
     { timestamps: true }
 );

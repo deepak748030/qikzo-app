@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
 import { router, Href } from 'expo-router';
-import { User, Bike, FileCheck2, Bell, HelpCircle, Info, Shield, FileText, LogOut, Star, Landmark } from 'lucide-react-native';
+import { User, Bike, FileCheck2, Bell, HelpCircle, Info, Shield, FileText, LogOut, Star, Landmark, ShieldCheck, ShieldAlert } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import BottomSheet from '@/components/BottomSheet';
@@ -14,6 +14,7 @@ import { useInitialLoad } from '@/lib/useInitialLoad';
 import { authApi } from '@/lib/api/endpoints/auth';
 import { ridersApi } from '@/lib/api/endpoints/riders';
 import { tokenStore } from '@/lib/api/tokenStore';
+import { API_BASE_URL } from '@/lib/api/config';
 
 type Item = { icon: any; label: string; route: Href };
 
@@ -34,30 +35,33 @@ export default function ProfileScreen() {
     const phone = useAuth((s) => s.phone);
     const vehicle = useAuth((s) => s.vehicle);
     const vehicleNo = useAuth((s) => s.vehicleNo);
+    const avatarUrl = useAuth((s) => s.avatarUrl);
     const signOut = useAuth((s) => s.signOut);
     const setName = useAuth((s) => s.setName);
     const setPhone = useAuth((s) => s.setPhone);
+    const setAvatarUrl = useAuth((s) => s.setAvatarUrl);
     const setOnline = useJobs((s) => s.setOnline);
     const loading = useInitialLoad();
 
-    // Real rating + lifetime trips come from the server rider record — no mock.
+    // Real rating + lifetime trips + KYC come from the server rider record.
     const [rating, setRating] = useState<number>(0);
     const [lifetimeTrips, setLifetimeTrips] = useState<number>(0);
+    const [kycStatus, setKycStatus] = useState<string>('not_started');
 
-    // Refresh identity + rider stats from the server so we never display mock
-    // numbers on a brand-new account.
     useEffect(() => {
         const { accessToken } = tokenStore.get();
         if (!accessToken) return;
-        authApi.me().then((u) => {
+        authApi.me().then((u: any) => {
             if (u.name) setName(u.name);
             if (u.phone) setPhone(u.phone);
+            if (typeof u.avatarUrl === 'string') setAvatarUrl(u.avatarUrl);
         }).catch(() => { /* ignore */ });
         ridersApi.me().then((r) => {
             setRating(typeof r.rating === 'number' ? r.rating : 0);
             setLifetimeTrips(typeof r.trips === 'number' ? r.trips : 0);
+            setKycStatus((r as any).kycStatus || 'not_started');
         }).catch(() => { /* ignore — keep 0 defaults */ });
-    }, [setName, setPhone]);
+    }, [setName, setPhone, setAvatarUrl]);
 
     const confirmLogout = () => {
         sheet.show({
@@ -93,22 +97,44 @@ export default function ProfileScreen() {
         );
     }
 
+    const kycVerified = kycStatus === 'approved';
+    const kycLabel = kycVerified ? 'KYC verified' : kycStatus === 'rejected' ? 'KYC rejected' : kycStatus === 'submitted' || kycStatus === 'in_review' ? 'KYC pending' : 'Not verified';
+    const photoUri = avatarUrl ? (avatarUrl.startsWith('http') ? avatarUrl : `${API_BASE_URL}${avatarUrl}`) : '';
+
     return (
         <View style={styles.container}>
             <ScreenHeader title="Profile" showBack={false} />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* Identity card */}
                 <View style={styles.head}>
-                    <View style={styles.avatar}><Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text></View>
+                    <Pressable onPress={() => router.push('/personal-info')} style={styles.avatarWrap}>
+                        {photoUri ? (
+                            <Image source={{ uri: photoUri }} style={styles.avatarImg} />
+                        ) : (
+                            <View style={styles.avatar}><Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text></View>
+                        )}
+                        <View style={[styles.kycDot, { backgroundColor: kycVerified ? colors.success : colors.danger }]}>
+                            {kycVerified ? <ShieldCheck size={10} color={colors.primaryForeground} /> : <ShieldAlert size={10} color={colors.primaryForeground} />}
+                        </View>
+                    </Pressable>
                     <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={styles.name}>{name}</Text>
                         <Text style={styles.phone}>{phone || 'Not signed in'}</Text>
+                        <Pressable
+                            onPress={() => { if (!kycVerified) router.push('/documents'); }}
+                            style={[styles.kycPill, { borderColor: kycVerified ? colors.success : colors.danger }]}
+                        >
+                            <Text style={[styles.kycPillText, { color: kycVerified ? colors.success : colors.danger }]}>
+                                {kycLabel}{!kycVerified ? ' · Tap to fix' : ''}
+                            </Text>
+                        </Pressable>
                     </View>
                     <View style={styles.rating}>
                         <Star size={12} color={colors.accent} fill={colors.accent} />
                         <Text style={styles.ratingText}>{rating > 0 ? rating.toFixed(1) : '—'}</Text>
                     </View>
                 </View>
+
 
                 {/* Vehicle + lifetime stats strip */}
                 <View style={styles.stripRow}>
@@ -148,8 +174,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.card },
+    avatarWrap: { position: 'relative' },
     avatar: { width: 52, height: 52, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
+    avatarImg: { width: 52, height: 52, borderRadius: radius.md, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
     avatarText: { color: colors.primaryForeground, fontFamily: fonts.displayBold, fontSize: 22 },
+    kycDot: { position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.card },
+    kycPill: { alignSelf: 'flex-start', marginTop: 5, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill },
+    kycPillText: { fontSize: 10, fontFamily: fonts.bodyBold, letterSpacing: 0.3 },
     name: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground },
     phone: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
     rating: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: colors.background },

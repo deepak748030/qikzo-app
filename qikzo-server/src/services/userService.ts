@@ -6,6 +6,7 @@ type UpdatePatch = Partial<{
     dob: string; gender: 'male' | 'female' | 'other';
     address: string; city: string; pincode: string;
     emergencyName: string; emergencyPhone: string;
+    avatarUrl: string;
 }>;
 
 export const userService = {
@@ -22,6 +23,7 @@ export const userService = {
         if (typeof patch.pincode === 'string') clean.pincode = patch.pincode.trim();
         if (typeof patch.emergencyName === 'string') clean.emergencyName = patch.emergencyName.trim();
         if (typeof patch.emergencyPhone === 'string') clean.emergencyPhone = patch.emergencyPhone.trim();
+        if (typeof patch.avatarUrl === 'string') clean.avatarUrl = patch.avatarUrl.trim();
         const user = await User.findByIdAndUpdate(id, clean, { new: true });
         if (!user) throw errors.notFound('User not found', 'USER_NOT_FOUND');
         return user;

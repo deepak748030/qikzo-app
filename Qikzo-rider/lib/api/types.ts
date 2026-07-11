@@ -22,6 +22,16 @@ export type AuthUser = {
     role?: 'customer' | 'rider' | 'admin';
     onboarded?: boolean;
     location?: string | null;
+    // Extended profile fields persisted server-side and rehydrated on login.
+    email?: string;
+    dob?: string;
+    gender?: 'male' | 'female' | 'other' | '';
+    address?: string;
+    city?: string;
+    pincode?: string;
+    emergencyName?: string;
+    emergencyPhone?: string;
+    avatarUrl?: string;
 };
 
 export type AuthTokens = {

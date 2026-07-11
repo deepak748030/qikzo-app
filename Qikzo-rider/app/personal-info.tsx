@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { Camera } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Input from '@/components/Input';
@@ -10,7 +12,9 @@ import { useSheet } from '@/lib/useSheet';
 import { useAuth, Gender } from '@/lib/authStore';
 import { authApi } from '@/lib/api/endpoints/auth';
 import { usersApi } from '@/lib/api/endpoints/users';
+import { uploadFile } from '@/lib/api/endpoints/uploads';
 import { tokenStore } from '@/lib/api/tokenStore';
+import { API_BASE_URL } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -24,16 +28,21 @@ const GENDERS: { key: Gender; label: string }[] = [
   { key: 'other', label: 'Other' },
 ];
 
-// Personal information — captures the rider's identity + contact details needed
-// for verification, payouts, insurance, and emergency contact.
+function absUrl(u: string): string {
+  if (!u) return '';
+  return u.startsWith('http') ? u : `${API_BASE_URL}${u}`;
+}
+
 export default function PersonalInfo() {
   const insets = useSafeAreaInsets();
   const sheet = useSheet();
   const name = useAuth((s) => s.name);
   const phone = useAuth((s) => s.phone);
   const personal = useAuth((s) => s.personal);
+  const avatarUrl = useAuth((s) => s.avatarUrl);
   const setName = useAuth((s) => s.setName);
   const setPersonal = useAuth((s) => s.setPersonal);
+  const setAvatarUrl = useAuth((s) => s.setAvatarUrl);
 
   const [fullName, setFullName] = useState(name === 'Guest' ? '' : name);
   const [email, setEmail] = useState(personal.email);
@@ -44,26 +53,74 @@ export default function PersonalInfo() {
   const [pincode, setPincode] = useState(personal.pincode);
   const [emergencyName, setEmergencyName] = useState(personal.emergencyName);
   const [emergencyPhone, setEmergencyPhone] = useState(personal.emergencyPhone);
+  const [photo, setPhoto] = useState<string>(avatarUrl || '');
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const err = (title: string, message: string) => sheet.show({ variant: 'error', title, message });
 
-  // Hydrate the freshest profile from the server on mount.
+  // Hydrate the freshest profile from the server on mount, and persist into the
+  // global store so returning to this screen doesn't wipe the fields.
   useEffect(() => {
     const { accessToken } = tokenStore.get();
     if (!accessToken) return;
     authApi.me().then((u: any) => {
-      if (u?.name) setFullName(u.name);
-      if (u?.email) setEmail(u.email);
-      if (u?.dob) setDob(u.dob);
-      if (u?.gender) setGender(u.gender);
-      if (u?.address) setAddress(u.address);
-      if (u?.city) setCity(u.city);
-      if (u?.pincode) setPincode(u.pincode);
-      if (u?.emergencyName) setEmergencyName(u.emergencyName);
-      if (u?.emergencyPhone) setEmergencyPhone(u.emergencyPhone);
+      if (u?.name) { setFullName(u.name); setName(u.name); }
+      if (typeof u?.email === 'string') setEmail(u.email);
+      if (typeof u?.dob === 'string') setDob(u.dob);
+      if (u?.gender && u.gender !== '') setGender(u.gender);
+      if (typeof u?.address === 'string') setAddress(u.address);
+      if (typeof u?.city === 'string') setCity(u.city);
+      if (typeof u?.pincode === 'string') setPincode(u.pincode);
+      if (typeof u?.emergencyName === 'string') setEmergencyName(u.emergencyName);
+      if (typeof u?.emergencyPhone === 'string') setEmergencyPhone(u.emergencyPhone);
+      if (typeof u?.avatarUrl === 'string') { setPhoto(u.avatarUrl); setAvatarUrl(u.avatarUrl); }
+      // Mirror into the store so future visits render immediately.
+      setPersonal({
+        email: u?.email || '',
+        dob: u?.dob || '',
+        gender: (u?.gender && u.gender !== '') ? u.gender : null,
+        address: u?.address || '',
+        city: u?.city || '',
+        pincode: u?.pincode || '',
+        emergencyName: u?.emergencyName || '',
+        emergencyPhone: u?.emergencyPhone || '',
+      });
     }).catch(() => { /* ignore */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const pickAvatar = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return err('Permission needed', 'Please allow photo access to change your picture.');
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        allowsEditing: true,
+        aspect: [1, 1],
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const asset = res.assets[0];
+      setUploading(true);
+      const uploaded = await uploadFile({
+        localUri: asset.uri,
+        name: asset.fileName || `avatar_${Date.now()}.jpg`,
+        mimeType: asset.mimeType || 'image/jpeg',
+      });
+      // Persist immediately so the photo survives even if the user backs out.
+      const updated = await usersApi.updateMe({ avatarUrl: uploaded.url });
+      const finalUrl = (updated as any).avatarUrl || uploaded.url;
+      setPhoto(finalUrl);
+      setAvatarUrl(finalUrl);
+      sheet.show({ variant: 'success', title: 'Photo updated', message: 'Your profile picture has been saved.' });
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Could not update photo.';
+      err('Upload failed', msg);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const save = async () => {
     if (fullName.trim().length < 2) return err('Name required', 'Please enter your full name.');
@@ -80,7 +137,6 @@ export default function PersonalInfo() {
     try {
       const { accessToken } = tokenStore.get();
       if (accessToken) {
-        // Persist all extended fields server-side so they survive re-installs.
         const user = await usersApi.updateMe({
           name: fullName.trim(),
           email: email.trim(),
@@ -106,17 +162,36 @@ export default function PersonalInfo() {
     }
   };
 
+  const photoUri = photo ? absUrl(photo) : '';
+  const initial = (fullName || 'R').charAt(0).toUpperCase();
+
   return (
     <View style={styles.container}>
       <ScreenHeader title="Personal information" />
       <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
+        {/* Profile photo */}
+        <View style={styles.photoWrap}>
+          <Pressable onPress={pickAvatar} style={styles.photoBtn} disabled={uploading}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.photo} />
+            ) : (
+              <View style={[styles.photo, styles.photoFallback]}>
+                <Text style={styles.photoInitial}>{initial}</Text>
+              </View>
+            )}
+            <View style={styles.cameraBadge}>
+              {uploading ? <ActivityIndicator size="small" color={colors.primaryForeground} /> : <Camera size={14} color={colors.primaryForeground} />}
+            </View>
+          </Pressable>
+          <Text style={styles.photoHint}>{uploading ? 'Uploading…' : 'Tap to change photo'}</Text>
+        </View>
+
         <Text style={styles.section}>Identity</Text>
         <View style={{ gap: 6 }}>
           <Input label="Full name" placeholder="As per driving licence" value={fullName} onChangeText={setFullName} />
           <Input label="Mobile number" value={phone || ''} editable={false} />
           <Input label="Email" placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
           <Input label="Date of birth" placeholder="DD-MM-YYYY" keyboardType="number-pad" value={dob} onChangeText={(v) => {
-            // Auto-format digits into DD-MM-YYYY as the user types.
             const d = v.replace(/\D/g, '').slice(0, 8);
             let out = d;
             if (d.length > 4) out = `${d.slice(0,2)}-${d.slice(2,4)}-${d.slice(4)}`;
@@ -167,4 +242,11 @@ const styles = StyleSheet.create({
   genderChipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
   genderText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
   genderTextActive: { color: colors.primaryForeground },
+  photoWrap: { alignItems: 'center', paddingVertical: 14 },
+  photoBtn: { position: 'relative' },
+  photo: { width: 88, height: 88, borderRadius: 44, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  photoFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  photoInitial: { color: colors.primaryForeground, fontFamily: fonts.displayBold, fontSize: 32 },
+  cameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.background },
+  photoHint: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 8 },
 });

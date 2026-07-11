@@ -33,6 +33,7 @@ const EMPTY_PERSONAL: PersonalDetails = {
 type AuthState = {
     phone: string | null;
     name: string;
+    avatarUrl: string;
     vehicleType: VehicleType;
     vehicle: string;         // display name e.g. "Honda Activa"
     vehicleNo: string;       // registration number
@@ -43,6 +44,7 @@ type AuthState = {
     personal: PersonalDetails;
     setPhone: (p: string) => void;
     setName: (n: string) => void;
+    setAvatarUrl: (u: string) => void;
     setOnboarded: (v: boolean) => void;
     setVehicleProfile: (t: VehicleType, no: string) => void;
     setLocationGranted: (v: boolean) => void;
@@ -60,6 +62,7 @@ const VEHICLE_LABEL: Record<VehicleType, string> = {
 export const useAuth = create<AuthState>((set) => ({
     phone: null,
     name: myRider.name,
+    avatarUrl: '',
     vehicleType: 'bike',
     vehicle: myRider.vehicle,
     vehicleNo: myRider.vehicleNo,
@@ -70,6 +73,7 @@ export const useAuth = create<AuthState>((set) => ({
     personal: EMPTY_PERSONAL,
     setPhone: (p) => set({ phone: p }),
     setName: (n) => set({ name: n }),
+    setAvatarUrl: (u) => set({ avatarUrl: u }),
     setOnboarded: (v) => set({ onboarded: v }),
     setVehicleProfile: (t, no) => set({
         vehicleType: t,
@@ -100,7 +104,7 @@ export const useAuth = create<AuthState>((set) => ({
             emergencyPhone: p.emergencyPhone.trim(),
         },
     }),
-    signOut: () => set({ phone: null, profileComplete: false, locationGranted: false, payout: null, personal: EMPTY_PERSONAL }),
+    signOut: () => set({ phone: null, avatarUrl: '', profileComplete: false, locationGranted: false, payout: null, personal: EMPTY_PERSONAL }),
 }));
 
 // Format an account number as e.g. "HDFC ••• 4421"
