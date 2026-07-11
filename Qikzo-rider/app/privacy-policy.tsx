@@ -1,13 +1,15 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { colors, fonts } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 
 export default function PrivacyPolicy() {
+    const [refreshing, setRefreshing] = useState(false);
+    const onRefresh = useCallback(() => { setRefreshing(true); setTimeout(() => setRefreshing(false), 600); }, []);
     return (
         <View style={styles.container}>
             <ScreenHeader title="Privacy policy" />
-            <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
                 <Text style={styles.p}>Last updated: July 2026</Text>
                 <Text style={styles.h}>Information we collect</Text>
                 <Text style={styles.p}>We collect your mobile number, KYC documents, vehicle details, live location while online, and earnings history to operate Qikzo Partner.</Text>

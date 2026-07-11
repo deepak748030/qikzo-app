@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, RefreshControl } from 'react-native';
 import { router, Href } from 'expo-router';
 import { User, Bike, FileCheck2, Bell, HelpCircle, Info, Shield, FileText, LogOut, Star, Landmark, ShieldCheck, ShieldAlert } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
@@ -15,6 +15,7 @@ import { authApi } from '@/lib/api/endpoints/auth';
 import { ridersApi } from '@/lib/api/endpoints/riders';
 import { tokenStore } from '@/lib/api/tokenStore';
 import { API_BASE_URL } from '@/lib/api/config';
+import { connectSocket, subscribe as subscribeSocket } from '@/lib/socket';
 
 type Item = { icon: any; label: string; route: Href };
 
@@ -47,21 +48,41 @@ export default function ProfileScreen() {
     const [rating, setRating] = useState<number>(0);
     const [lifetimeTrips, setLifetimeTrips] = useState<number>(0);
     const [kycStatus, setKycStatus] = useState<string>('not_started');
+    const [refreshing, setRefreshing] = useState(false);
 
-    useEffect(() => {
+    const hydrate = useCallback(async () => {
         const { accessToken } = tokenStore.get();
         if (!accessToken) return;
-        authApi.me().then((u: any) => {
+        try {
+            const u: any = await authApi.me();
             if (u.name) setName(u.name);
             if (u.phone) setPhone(u.phone);
             if (typeof u.avatarUrl === 'string') setAvatarUrl(u.avatarUrl);
-        }).catch(() => { /* ignore */ });
-        ridersApi.me().then((r) => {
+        } catch { /* ignore */ }
+        try {
+            const r = await ridersApi.me();
             setRating(typeof r.rating === 'number' ? r.rating : 0);
             setLifetimeTrips(typeof r.trips === 'number' ? r.trips : 0);
             setKycStatus((r as any).kycStatus || 'not_started');
-        }).catch(() => { /* ignore — keep 0 defaults */ });
+        } catch { /* ignore */ }
     }, [setName, setPhone, setAvatarUrl]);
+
+    useEffect(() => { hydrate(); }, [hydrate]);
+
+    // Realtime KYC updates — admin approves/rejects → status flips instantly.
+    useEffect(() => {
+        connectSocket();
+        const off = subscribeSocket('kyc:update', (payload: any) => {
+            if (payload?.kycStatus) setKycStatus(String(payload.kycStatus));
+            hydrate();
+        });
+        return () => { off(); };
+    }, [hydrate]);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try { await hydrate(); } finally { setRefreshing(false); }
+    }, [hydrate]);
 
     const confirmLogout = () => {
         sheet.show({
@@ -104,7 +125,7 @@ export default function ProfileScreen() {
     return (
         <View style={styles.container}>
             <ScreenHeader title="Profile" showBack={false} />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
                 {/* Identity card */}
                 <View style={styles.head}>
                     <Pressable onPress={() => router.push('/personal-info')} style={styles.avatarWrap}>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 
@@ -13,10 +13,15 @@ const FAQS = [
 ];
 
 export default function HelpSupport() {
+    const [refreshing, setRefreshing] = useState(false);
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        setTimeout(() => setRefreshing(false), 600);
+    }, []);
     return (
         <View style={styles.container}>
             <ScreenHeader title="Help & support" />
-            <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
                 <Text style={styles.lead}>Rider support is available 24×7. Reach us at partner@quikzo.in or call +91 1800 456 789.</Text>
                 <Text style={styles.section}>Frequently asked</Text>
                 {FAQS.map((f) => (

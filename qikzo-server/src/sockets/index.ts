@@ -151,6 +151,19 @@ export function emitRiderLocation(params: {
     io.to(`rider:${String(params.riderUserId)}`).emit('location:update', payload);
 }
 
+/**
+ * Fanout a rider's KYC status change so the rider app updates in real time
+ * without a manual refresh. Called from admin approve/reject and any place
+ * that mutates `rider.kycStatus` (e.g. document upload sets it to submitted).
+ */
+export function emitKycUpdate(riderUserId: string, kycStatus: string, extra: Record<string, any> = {}): void {
+    if (!io || !riderUserId) return;
+    const payload = { kycStatus, ...extra, at: new Date().toISOString() };
+    io.to(`rider:${String(riderUserId)}`).emit('kyc:update', payload);
+    io.to(`user:${String(riderUserId)}`).emit('kyc:update', payload);
+}
+
 export const getIO = (): Server | null => io;
+
 
 

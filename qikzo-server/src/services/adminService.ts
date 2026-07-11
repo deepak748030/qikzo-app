@@ -9,6 +9,7 @@ import Coupon from '../models/Coupon';
 import { errors } from '../lib/errors';
 import notificationService from './notificationService';
 import { audit } from './auditService';
+import { emitKycUpdate } from '../sockets';
 
 /**
  * Admin backoffice service. All calls assume `requireAdmin` has already run,
@@ -54,6 +55,7 @@ export const adminService = {
         const rider = await Rider.findByIdAndUpdate(kyc.rider, { kycStatus: 'approved' }, { new: true });
         await Document.updateMany({ owner: kyc.rider, ownerRole: 'rider' }, { status: 'approved' });
         if (rider?.user) {
+            emitKycUpdate(String(rider.user), 'approved');
             void notificationService.emit({
                 user: String(rider.user),
                 audience: 'rider',
@@ -76,6 +78,7 @@ export const adminService = {
         if (!kyc) throw errors.notFound('KYC not found', 'KYC_NOT_FOUND');
         const rider = await Rider.findByIdAndUpdate(kyc.rider, { kycStatus: 'rejected' }, { new: true });
         if (rider?.user) {
+            emitKycUpdate(String(rider.user), 'rejected', { reason: reason || 'Not specified' });
             void notificationService.emit({
                 user: String(rider.user),
                 audience: 'rider',
@@ -190,6 +193,7 @@ export const adminService = {
         );
         if (!rider) throw errors.notFound('Rider not found', 'RIDER_NOT_FOUND');
         if (rider.user) {
+            if (blocked) emitKycUpdate(String(rider.user), 'rejected', { reason: reason || 'Account suspended' });
             void notificationService.emit({
                 user: String(rider.user),
                 audience: 'rider',

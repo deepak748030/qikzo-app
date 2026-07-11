@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShieldCheck, Landmark } from 'lucide-react-native';
@@ -31,28 +31,34 @@ export default function PayoutDetailsScreen() {
     const [bank, setBank] = useState(payout?.bankName ?? '');
     const [upi, setUpi] = useState(payout?.upiId ?? '');
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
-    useEffect(() => {
+    const load = useCallback(async () => {
         if (!phone) return;
-        (async () => {
-            try {
-                const m = await api.payouts.getMethod();
-                if (!m) return;
-                if (m.accountHolder) setHolder(m.accountHolder);
-                if (m.accountNumber) { setAcct(m.accountNumber); setConfirmAcct(m.accountNumber); }
-                if (m.ifsc) setIfsc(m.ifsc);
-                if (m.bankName) setBank(m.bankName);
-                if (m.upiId) setUpi(m.upiId);
-                setPayout({
-                    accountHolder: m.accountHolder || '',
-                    accountNumber: m.accountNumber || '',
-                    ifsc: m.ifsc || '',
-                    bankName: m.bankName || '',
-                    upiId: m.upiId,
-                });
-            } catch { /* keep local state */ }
-        })();
+        try {
+            const m = await api.payouts.getMethod();
+            if (!m) return;
+            if (m.accountHolder) setHolder(m.accountHolder);
+            if (m.accountNumber) { setAcct(m.accountNumber); setConfirmAcct(m.accountNumber); }
+            if (m.ifsc) setIfsc(m.ifsc);
+            if (m.bankName) setBank(m.bankName);
+            if (m.upiId) setUpi(m.upiId);
+            setPayout({
+                accountHolder: m.accountHolder || '',
+                accountNumber: m.accountNumber || '',
+                ifsc: m.ifsc || '',
+                bankName: m.bankName || '',
+                upiId: m.upiId,
+            });
+        } catch { /* keep local state */ }
     }, [phone, setPayout]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try { await load(); } finally { setRefreshing(false); }
+    }, [load]);
 
     const save = async () => {
         if (holder.trim().length < 2) return sheet.show({ variant: 'error', title: 'Name required', message: 'Enter the account holder name as on the bank passbook.' });
@@ -92,7 +98,7 @@ export default function PayoutDetailsScreen() {
     return (
         <View style={styles.container}>
             <ScreenHeader title="Payout details" />
-            <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
+            <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
                 <View style={styles.hero}>
                     <View style={styles.heroIcon}><Landmark size={18} color={colors.primaryForeground} /></View>
                     <View style={{ flex: 1 }}>

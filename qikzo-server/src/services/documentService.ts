@@ -3,6 +3,7 @@ import KYC from '../models/KYC';
 import Rider from '../models/Rider';
 import { errors } from '../lib/errors';
 import { riderService } from './riderService';
+import { emitKycUpdate } from '../sockets';
 
 export const documentService = {
     async listForRider(userId: string) {
@@ -49,6 +50,7 @@ export const documentService = {
         if (rider.kycStatus === 'not_started' || rider.kycStatus === 'rejected') {
             rider.kycStatus = 'submitted';
             await rider.save();
+            if (rider.user) emitKycUpdate(String(rider.user), 'submitted');
         }
         return doc;
     },
@@ -92,6 +94,7 @@ export const documentService = {
         );
         rider.kycStatus = 'submitted';
         await rider.save();
+        if (rider.user) emitKycUpdate(String(rider.user), 'submitted');
         return kyc;
     },
 };

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { Banknote, Smartphone, Package as PackageIcon, Clock, IndianRupee, ArrowRight, Plus } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
@@ -23,18 +23,22 @@ export default function Earnings() {
     const phone = useAuth((s) => s.phone);
     const payoutLabel = formatPayoutLabel(payout);
     const [summary, setSummary] = useState<EarningsSummary | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
-    useEffect(() => {
+    const load = useCallback(async () => {
         if (!phone) { setSummary(null); return; }
-        let cancelled = false;
-        (async () => {
-            try {
-                const s = await api.earnings.summary();
-                if (!cancelled) setSummary(s);
-            } catch { /* keep empty state */ }
-        })();
-        return () => { cancelled = true; };
+        try {
+            const s = await api.earnings.summary();
+            setSummary(s);
+        } catch { /* keep empty state */ }
     }, [phone]);
+
+    useEffect(() => { let cancelled = false; (async () => { if (!cancelled) await load(); })(); return () => { cancelled = true; }; }, [load]);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try { await load(); } finally { setRefreshing(false); }
+    }, [load]);
 
     // Empty defaults — used until the summary request resolves so a brand-new
     // account never shows leftover mock numbers.
@@ -83,7 +87,7 @@ export default function Earnings() {
     return (
         <View style={styles.container}>
             <ScreenHeader title="Earnings" showBack={false} />
-            <ScrollView contentContainerStyle={{ paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 110 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
                 {/* Hero card */}
                 <View style={styles.hero}>
                     <View style={styles.tabs}>

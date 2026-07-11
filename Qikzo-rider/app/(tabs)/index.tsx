@@ -86,6 +86,17 @@ export default function DispatchHome() {
     }, [setOnlineOnServer]);
     useEffect(() => { refreshKyc(); }, [refreshKyc]);
 
+    // Realtime KYC updates via socket so the banner + Go-online gate flip the
+    // instant an admin approves/rejects, no refresh needed.
+    useEffect(() => {
+        connectSocket();
+        const off = subscribeSocket('kyc:update', (payload: any) => {
+            if (payload?.kycStatus) setKycStatus(String(payload.kycStatus));
+            refreshKyc();
+        });
+        return () => { off(); };
+    }, [refreshKyc]);
+
     // If a job is active, jump to the active-job screen.
     useEffect(() => { if (active) router.push('/active-job'); }, [active]);
 

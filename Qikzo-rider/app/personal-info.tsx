@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera } from 'lucide-react-native';
@@ -56,15 +56,15 @@ export default function PersonalInfo() {
   const [photo, setPhoto] = useState<string>(avatarUrl || '');
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const err = (title: string, message: string) => sheet.show({ variant: 'error', title, message });
 
-  // Hydrate the freshest profile from the server on mount, and persist into the
-  // global store so returning to this screen doesn't wipe the fields.
-  useEffect(() => {
+  const hydrate = useCallback(async () => {
     const { accessToken } = tokenStore.get();
     if (!accessToken) return;
-    authApi.me().then((u: any) => {
+    try {
+      const u: any = await authApi.me();
       if (u?.name) { setFullName(u.name); setName(u.name); }
       if (typeof u?.email === 'string') setEmail(u.email);
       if (typeof u?.dob === 'string') setDob(u.dob);
@@ -75,7 +75,6 @@ export default function PersonalInfo() {
       if (typeof u?.emergencyName === 'string') setEmergencyName(u.emergencyName);
       if (typeof u?.emergencyPhone === 'string') setEmergencyPhone(u.emergencyPhone);
       if (typeof u?.avatarUrl === 'string') { setPhoto(u.avatarUrl); setAvatarUrl(u.avatarUrl); }
-      // Mirror into the store so future visits render immediately.
       setPersonal({
         email: u?.email || '',
         dob: u?.dob || '',
@@ -86,9 +85,16 @@ export default function PersonalInfo() {
         emergencyName: u?.emergencyName || '',
         emergencyPhone: u?.emergencyPhone || '',
       });
-    }).catch(() => { /* ignore */ });
+    } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => { hydrate(); }, [hydrate]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await hydrate(); } finally { setRefreshing(false); }
+  }, [hydrate]);
 
   const pickAvatar = async () => {
     try {
@@ -168,7 +174,7 @@ export default function PersonalInfo() {
   return (
     <View style={styles.container}>
       <ScreenHeader title="Personal information" />
-      <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 6, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
         {/* Profile photo */}
         <View style={styles.photoWrap}>
           <Pressable onPress={pickAvatar} style={styles.photoBtn} disabled={uploading}>
