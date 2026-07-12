@@ -73,6 +73,15 @@ export default function ActivityScreen() {
 
     const loading = initialLoading || (storeLoading && bookings.length === 0);
 
+    const renderItem = useCallback(({ item }: { item: Booking }) => (
+        <ActivityRow item={item} />
+    ), []);
+
+    const keyExtractor = useCallback((b: Booking) => b.id, []);
+    const getItemLayout = useCallback((_: any, index: number) => ({
+        length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index,
+    }), []);
+
     if (loading) {
         return (
             <View style={styles.container}>
@@ -101,14 +110,6 @@ export default function ActivityScreen() {
         );
     }
 
-    const renderItem = useCallback(({ item }: { item: Booking }) => (
-        <ActivityRow item={item} />
-    ), []);
-
-    const keyExtractor = useCallback((b: Booking) => b.id, []);
-    const getItemLayout = useCallback((_: any, index: number) => ({
-        length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index,
-    }), []);
 
     return (
         <View style={styles.container}>

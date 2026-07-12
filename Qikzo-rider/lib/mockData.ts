@@ -44,6 +44,18 @@ export type CompletedJob = {
     fare: number;
     payment: 'cash' | 'upi';
     completedAt: number;
+    // History detail — populated when hydrated from the server so we can show
+    // the trip-details screen without re-fetching everything.
+    tripId?: string;
+    bookingId?: string;
+    bookingCode?: string;
+    status?: 'completed' | 'cancelled';
+    cancelReason?: string;
+    customerName?: string;
+    customerPhone?: string;
+    durationMin?: number;
+    startedAt?: number | null;
+    assignedAt?: number | null;
 };
 
 export type RiderStats = {

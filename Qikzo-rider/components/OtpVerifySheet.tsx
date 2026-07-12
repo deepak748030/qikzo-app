@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShieldCheck, X } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
@@ -63,11 +63,20 @@ export default function OtpVerifySheet({
 
     return (
         <View style={styles.overlay}>
-            <Pressable style={styles.backdrop} onPress={onClose} />
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kav}>
+            <Pressable style={styles.backdrop} onPress={() => { Keyboard.dismiss(); onClose(); }} />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.kav}
+                pointerEvents="box-none"
+            >
+            <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+                showsVerticalScrollIndicator={false}
+            >
             <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
                 <View style={styles.handle} />
-                <Pressable style={styles.close} onPress={onClose} hitSlop={8}>
+                <Pressable style={styles.close} onPress={() => { Keyboard.dismiss(); onClose(); }} hitSlop={8}>
                     <X size={18} color={colors.foreground} />
                 </Pressable>
 
@@ -105,6 +114,7 @@ export default function OtpVerifySheet({
                     <Text style={styles.hint}>Only start the trip after the code matches.</Text>
                 )}
             </View>
+            </ScrollView>
             </KeyboardAvoidingView>
         </View>
     );
@@ -112,7 +122,7 @@ export default function OtpVerifySheet({
 
 const styles = StyleSheet.create({
     overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', zIndex: 40 },
-    kav: { justifyContent: 'flex-end' },
+    kav: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end' },
     backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
     sheet: { backgroundColor: colors.card, paddingHorizontal: 20, paddingTop: 10, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
     handle: { alignSelf: 'center', width: 40, height: 4, backgroundColor: colors.border, borderRadius: radius.pill, marginBottom: 10 },

@@ -13,23 +13,42 @@ import { useAuth } from '@/lib/authStore';
 import { api } from '@/lib/api';
 import type { EarningsSummary } from '@/lib/api/endpoints/earnings';
 
-// Renders a single completed job row — separated by 1px hairline.
+// Renders a single completed / cancelled job row. Tapping it opens the
+// full trip-details screen with all lifecycle info, fare breakdown, tip etc.
 function Row({ item }: { item: CompletedJob }) {
     const cat = CATEGORY_META[item.category];
     const time = new Date(item.completedAt).toLocaleString('en-IN', {
         day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
     });
+    const cancelled = item.status === 'cancelled';
+    const onPress = () => {
+        if (item.tripId) router.push({ pathname: '/trip-details', params: { id: item.tripId } });
+    };
     return (
-        <View style={styles.row}>
+        <Pressable style={styles.row} onPress={onPress} disabled={!item.tripId}>
             <View style={styles.thumb}>
                 <Text style={styles.thumbEmoji}>{cat.emoji}</Text>
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={styles.title} numberOfLines={1}>{item.pickup} → {item.drop}</Text>
-                <Text style={styles.meta}>{time} · {item.distanceKm.toFixed(1)} km · {item.payment.toUpperCase()}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.title} numberOfLines={1}>{item.pickup} → {item.drop}</Text>
+                </View>
+                <Text style={styles.meta}>
+                    {time} · {item.distanceKm.toFixed(1)} km · {item.payment.toUpperCase()}
+                </Text>
+                <View style={[styles.badge, cancelled ? styles.badgeCancel : styles.badgeDone]}>
+                    <Text style={[styles.badgeText, cancelled ? styles.badgeTextCancel : styles.badgeTextDone]}>
+                        {cancelled ? 'Cancelled' : 'Completed'}
+                    </Text>
+                </View>
             </View>
-            <Text style={styles.fare}>₹{item.fare}</Text>
-        </View>
+            <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.fare, cancelled && { color: colors.mutedForeground }]}>
+                    {cancelled ? '—' : `₹${item.fare}`}
+                </Text>
+                <ChevronRight size={16} color={colors.mutedForeground} />
+            </View>
+        </Pressable>
     );
 }
 
@@ -155,6 +174,12 @@ const styles = StyleSheet.create({
     title: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
     meta: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 3 },
     fare: { fontSize: 15, fontFamily: fonts.displayBold, color: colors.foreground },
+    badge: { alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, borderWidth: 1 },
+    badgeDone: { backgroundColor: '#E8F7EE', borderColor: '#B7E4C7' },
+    badgeCancel: { backgroundColor: '#FCECEC', borderColor: '#F5C2C7' },
+    badgeText: { fontSize: 10, fontFamily: fonts.bodyBold, letterSpacing: 0.3 },
+    badgeTextDone: { color: '#1B7A3E' },
+    badgeTextCancel: { color: '#9B2226' },
     sep: { height: 0, borderBottomWidth: 1, borderBottomColor: colors.divider },
     empty: { alignItems: 'center', paddingTop: 60, gap: 6 },
     emptyTitle: { fontSize: 14, fontFamily: fonts.displayBold, color: colors.foreground },

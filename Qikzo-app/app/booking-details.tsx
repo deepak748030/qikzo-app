@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar, KeyRound, ShieldCheck, Gift, Send } from 'lucide-react-native';
+import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar, KeyRound, ShieldCheck, Gift, Send, Phone, MapPin, Navigation2, Navigation, ShieldAlert } from 'lucide-react-native';
 import AnimatedIcon from '@/components/AnimatedIcon';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -17,7 +17,8 @@ import { subscribe as subscribeSocket, emit as socketEmit, connectSocket } from 
 import BookingStageOverlay, { Stage, VehicleKind } from '@/components/BookingStageOverlay';
 import LeafletMap from '@/components/LeafletMap';
 import { ratingsApi } from '@/lib/api/endpoints/ratings';
-import { TextInput } from 'react-native';
+import RateRiderModal from '@/components/RateRiderModal';
+import BookingStageStepper from '@/components/BookingStageStepper';
 
 // Map booking category → vehicle rendered on the "accepted" overlay.
 // Ride categories map 1:1; delivery categories default to the delivery bike.
@@ -64,12 +65,11 @@ export default function BookingDetailsScreen() {
     const [acceptedDismissed, setAcceptedDismissed] = useState(false);
     const [riderLoc, setRiderLoc] = useState<{ lat: number; lng: number } | null>(null);
 
-    // Rating + tip state (visible once booking is Delivered).
+    // Rating — modal-driven. We only track the existing rating (if any) and
+    // whether the modal is open. All input state lives inside the modal.
     const [existingRating, setExistingRating] = useState<any | null>(null);
-    const [ratingStars, setRatingStars] = useState(0);
-    const [ratingComment, setRatingComment] = useState('');
-    const [ratingTip, setRatingTip] = useState<number>(0);
-    const [ratingSubmitting, setRatingSubmitting] = useState(false);
+    const [rateModalOpen, setRateModalOpen] = useState(false);
+    const [autoOpenedRate, setAutoOpenedRate] = useState(false);
 
     // Fetch any existing rating once delivered, so we don't let the user
     // rate the same booking twice.
@@ -85,24 +85,16 @@ export default function BookingDetailsScreen() {
         return () => { cancelled = true; };
     }, [serverBookingId, booking?.status]);
 
-    const submitRating = async () => {
-        if (!serverBookingId || !ratingStars) return;
-        setRatingSubmitting(true);
-        try {
-            const res = await ratingsApi.submit({
-                bookingId: serverBookingId,
-                stars: ratingStars,
-                comment: ratingComment.trim() || undefined,
-                tip: ratingTip > 0 ? ratingTip : undefined,
-            });
-            setExistingRating(res?.rating || { stars: ratingStars, comment: ratingComment, tip: ratingTip });
-            sheet.show({ variant: 'success', title: 'Thanks for the feedback!', message: ratingTip > 0 ? `Your ${ratingStars}★ rating and ₹${ratingTip} tip were sent to the rider.` : `Your ${ratingStars}★ rating was sent to the rider.`, confirmText: 'OK', onConfirm: () => sheet.hide() });
-        } catch (e: any) {
-            sheet.show({ variant: 'error', title: 'Could not submit', message: e?.message || 'Please try again.', confirmText: 'OK', onConfirm: () => sheet.hide() });
-        } finally {
-            setRatingSubmitting(false);
-        }
-    };
+    // Auto-open the rate modal once, when the trip flips to Delivered and no
+    // rating exists yet. User can Skip; we don't re-open automatically.
+    useEffect(() => {
+        if (booking?.status !== 'Delivered') return;
+        if (autoOpenedRate) return;
+        if (existingRating) return;
+        if (!booking?.rider) return;
+        setRateModalOpen(true);
+        setAutoOpenedRate(true);
+    }, [booking?.status, booking?.rider, existingRating, autoOpenedRate]);
 
     // Reset the dismissed latch if the booking cycles back to searching
     // (e.g. rider cancelled, we're re-dispatching).
@@ -111,17 +103,49 @@ export default function BookingDetailsScreen() {
     }, [booking?.status]);
 
     // Subscribe to the assigned rider's live location for the map preview.
+    // Two channels: `location:update` is trip-scoped and fires on every rider
+    // location write while a trip is active (authoritative). `rider:location`
+    // is the general nearby-riders broadcast — kept as a fallback so the map
+    // still moves before the trip room join completes.
+    // In addition we SEED the marker from `GET /riders/:id` on mount and poll
+    // every 10s. This ensures a stationary rider (no location:update events
+    // being emitted) still shows up on the map right after the trip is accepted.
     const riderId = booking?.rider?.id;
+    const serverBookingIdForLoc = (booking as any)?.serverId as string | undefined;
     useEffect(() => {
         if (!riderId) { setRiderLoc(null); return; }
         try { connectSocket(); } catch {}
-        const off = subscribeSocket('rider:location', (p: any) => {
+        let cancelled = false;
+
+        const seedFromServer = async () => {
+            try {
+                const { ridersApi } = await import('@/lib/api/endpoints/riders');
+                const rider: any = await ridersApi.getPublic(String(riderId));
+                if (cancelled) return;
+                const coords = rider?.currentLocation?.coordinates;
+                if (Array.isArray(coords) && coords.length === 2) {
+                    const [lng, lat] = coords;
+                    if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+                        setRiderLoc({ lat: Number(lat), lng: Number(lng) });
+                    }
+                }
+            } catch { /* silent — socket updates will still drive the map */ }
+        };
+        seedFromServer();
+        const seedPoll = setInterval(seedFromServer, 10000);
+
+        const offTripLoc = subscribeSocket('location:update', (p: any) => {
+            if (!p || typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+            if (serverBookingIdForLoc && String(p.bookingId) !== String(serverBookingIdForLoc)) return;
+            setRiderLoc({ lat: p.lat, lng: p.lng });
+        });
+        const offNearby = subscribeSocket('rider:location', (p: any) => {
             if (!p || String(p.id) !== String(riderId)) return;
             if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
             setRiderLoc({ lat: p.lat, lng: p.lng });
         });
-        return () => { off(); };
-    }, [riderId]);
+        return () => { cancelled = true; clearInterval(seedPoll); offTripLoc(); offNearby(); };
+    }, [riderId, serverBookingIdForLoc]);
 
     // Real-time booking/trip updates via socket + a 10s poll safety net.
     useEffect(() => {
@@ -277,280 +301,206 @@ export default function BookingDetailsScreen() {
     const pulseScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] });
     const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
 
+    const pickupCoord = booking.pickupCoord || null;
+    const dropCoord = booking.dropCoord || null;
+    const mapCenter = riderLoc || pickupCoord || dropCoord || { lat: 28.6139, lng: 77.2090 };
+    const showMap = !!pickupCoord && booking.status !== 'Cancelled';
+    const catEmoji = category?.emoji || '📦';
+    const catName = category?.name || 'Delivery';
+
     return (
         <View style={styles.container}>
-            <ScreenHeader title={`Booking #${booking.id}`} />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 110 }}>
-                {/* Live map — shown as soon as the trip has pickup coords.
-                    Once a rider accepts, their live location is overlaid too so
-                    the user can see them moving toward pickup. */}
-                {booking.pickupCoord && booking.status !== 'Cancelled' ? (
-                    <View style={styles.mapWrap}>
-                        <LeafletMap
-                            center={riderLoc || booking.pickupCoord}
-                            pickup={booking.pickupCoord}
-                            drop={booking.dropCoord || null}
-                            riderLocation={riderLoc && riderId ? { lat: riderLoc.lat, lng: riderLoc.lng } : null}
-                            showTraffic={false}
-                            style={styles.map}
-                        />
+            {/* Full-screen live map underneath — matches rider active-job */}
+            {showMap ? (
+                <LeafletMap
+                    center={mapCenter}
+                    pickup={pickupCoord}
+                    drop={dropCoord}
+                    riderLocation={riderLoc && riderId ? { lat: riderLoc.lat, lng: riderLoc.lng } : null}
+                    showTraffic={false}
+                    style={StyleSheet.absoluteFill}
+                />
+            ) : (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
+            )}
+
+            {/* Top status bar */}
+            <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
+                <Pressable style={styles.iconBtn} onPress={() => router.replace('/(tabs)')} hitSlop={6}>
+                    <X size={20} color={colors.foreground} />
+                </Pressable>
+                <View style={styles.topLabel}>
+                    <Text style={styles.topEmoji}>{catEmoji}</Text>
+                    <Text style={styles.topText}>{catName} · #{booking.id}</Text>
+                </View>
+                <Pressable
+                    style={styles.sosBtn}
+                    onPress={() => sheet.show({
+                        variant: 'warning',
+                        title: 'Call SOS?',
+                        message: 'This will alert Qikzo safety and share your live trip with local authorities.',
+                        confirmText: 'Call SOS',
+                        cancelText: 'Cancel',
+                        onConfirm: () => sheet.show({ variant: 'success', title: 'Help is on the way', message: 'Our safety team has been notified. Stay where you are.' }),
+                    })}
+                    hitSlop={6}
+                >
+                    <ShieldAlert size={16} color={colors.card} strokeWidth={2.4} />
+                    <Text style={styles.sosText}>SOS</Text>
+                </Pressable>
+            </View>
+
+            {/* Bottom sheet */}
+            <ScrollView
+                style={styles.sheet}
+                contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + 12 }]}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.handle} />
+
+                {booking.status !== 'Cancelled' ? (
+                    <BookingStageStepper status={booking.status} />
+                ) : (
+                    <View style={styles.cancelledBanner}>
+                        <X size={16} color={colors.danger} />
+                        <Text style={styles.cancelledText}>This booking was cancelled.</Text>
+                    </View>
+                )}
+
+                {/* Rider row — mirrors rider app's customer row */}
+                {booking.rider && booking.status !== 'Cancelled' ? (
+                    <View style={styles.riderRow}>
+                        <View style={styles.riderAvatar}>
+                            <Text style={styles.riderInitial}>{booking.rider.name.charAt(0)}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.riderName}>{booking.rider.name}</Text>
+                            <View style={styles.riderMetaRow}>
+                                <Star size={11} color={colors.accent} fill={colors.accent} />
+                                <Text style={styles.riderMeta}>
+                                    {booking.rider.rating} · {booking.rider.vehicle} · {booking.rider.vehicleNo}
+                                </Text>
+                            </View>
+                        </View>
+                        <Pressable style={styles.callBtn} onPress={onCallRider}>
+                            <Phone size={18} color={colors.primaryForeground} />
+                        </Pressable>
+                    </View>
+                ) : booking.status === 'Searching rider' ? (
+                    <View style={styles.searchingRow}>
+                        <View style={styles.searchingIcon}>
+                            <AnimatedIcon Icon={Radar} size={22} color={colors.foreground} variant="spin" strokeWidth={1.8} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.riderName}>Finding your rider…</Text>
+                            <Text style={styles.riderMeta}>Matching the nearest captain to your pickup.</Text>
+                        </View>
                     </View>
                 ) : null}
 
-                {/* Status banner */}
-                <View style={styles.statusBanner}>
-                    <View style={styles.statusIconWrap}>
-                        {booking.status === 'Searching rider' ? (
-                            <View style={styles.searchingWrap}>
-                                <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
-                                <AnimatedIcon Icon={Radar} size={26} color={colors.foreground} variant="spin" strokeWidth={1.8} />
-                            </View>
-                        ) : booking.status === 'Delivered' ? (
-                            <AnimatedIcon Icon={BadgeCheck} size={28} color={colors.success} variant="pulse" />
-                        ) : booking.status === 'Cancelled' ? (
-                            <X size={28} color={colors.danger} />
-                        ) : (
-                            <AnimatedIcon Icon={Bike} size={26} color={colors.foreground} variant="bounce" />
-                        )}
+                {/* Stops — pickup / drop */}
+                <View style={styles.stops}>
+                    <StopRow icon="pickup" label="Pickup" value={booking.pickup} />
+                    <View style={styles.stopDash} />
+                    <StopRow icon="drop" label="Drop" value={booking.drop} />
+                </View>
+
+                {/* Notes */}
+                {booking.notes ? (
+                    <View style={styles.notes}>
+                        <Text style={styles.notesLabel}>Note for rider</Text>
+                        <Text style={styles.notesText}>{booking.notes}</Text>
+                        {booking.recipientPhone ? (
+                            <Text style={styles.recipient}>Recipient: +91 {booking.recipientPhone}</Text>
+                        ) : null}
                     </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.statusTitle}>{booking.status}</Text>
-                        <Text style={styles.statusSub}>
-                            {booking.status === 'Searching rider' && 'Finding the nearest captain for you...'}
-                            {booking.status === 'Rider accepted' && `${booking.rider?.name?.split(' ')[0]} is heading to pickup`}
-                            {booking.status === 'Arriving for pickup' && 'Rider has reached the pickup spot'}
-                            {booking.status === 'Picked up' && 'Items picked up, on the way to drop'}
-                            {booking.status === 'On the way' && `Arriving in ~${booking.etaMin} min`}
-                            {booking.status === 'Delivered' && 'Successfully delivered. Thanks for using Qikzo!'}
-                            {booking.status === 'Cancelled' && 'This booking was cancelled.'}
-                        </Text>
+                ) : null}
+
+                {/* Fare summary */}
+                <View style={styles.fareRow}>
+                    <View>
+                        <Text style={styles.fareLabel}>You pay</Text>
+                        <Text style={styles.fareValue}>₹{booking.price}</Text>
+                    </View>
+                    <View style={styles.fareMeta}>
+                        <Text style={styles.fareMetaText}>{booking.distanceKm.toFixed(1)} km · ~{booking.etaMin} min</Text>
+                        <Text style={styles.fareMetaText}>Payment: {booking.payment.toUpperCase()}</Text>
                     </View>
                 </View>
 
-                {/* Pickup OTP card — generated the moment the rider taps
-                    "I've arrived" in their app (status flips to
-                    "Arriving for pickup"). The 4 digits are derived
-                    deterministically from the booking id so the same code
-                    persists across refreshes. User reads it out; rider
-                    enters it in their app to start the trip. */}
+                {/* Pickup OTP banner — appears when rider arrives */}
                 {booking.status === 'Arriving for pickup' ? (
-                    <View style={styles.otpCard}>
-                        <View style={styles.otpHead}>
-                            <View style={styles.otpIconWrap}>
-                                <ShieldCheck size={16} color={colors.foreground} strokeWidth={2.2} />
+                    <View style={styles.otpBanner}>
+                        <View style={styles.otpBannerHead}>
+                            <View style={styles.otpBannerIcon}>
+                                <ShieldCheck size={16} color={colors.primary} strokeWidth={2.2} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.otpTitle}>Share this pickup OTP</Text>
-                                <Text style={styles.otpSub}>
-                                    Your rider has arrived. Read this code out loud so they can start the trip.
+                                <Text style={styles.otpBannerTitle}>Share this pickup OTP</Text>
+                                <Text style={styles.otpBannerText}>
+                                    Read this code to {booking.rider?.name?.split(' ')[0] || 'your rider'} so they can start the trip.
                                 </Text>
                             </View>
                         </View>
                         <View style={styles.otpDigitsRow}>
-                            {pickupOtpFor(booking.id).split('').map((d, i) => (
+                            {pickupOtpFor(serverBookingId || booking.id).split('').map((d, i) => (
                                 <View key={i} style={styles.otpDigitBox}>
                                     <Text style={styles.otpDigitText}>{d}</Text>
                                 </View>
                             ))}
                         </View>
-                        <View style={styles.otpFootRow}>
-                            <KeyRound size={11} color={colors.mutedForeground} />
-                            <Text style={styles.otpFootText}>Never share this code with anyone else.</Text>
-                        </View>
                     </View>
                 ) : null}
 
-
-                {/* Timeline */}
-                {booking.status !== 'Cancelled' ? (
-                    <View style={styles.timeline}>
-                        {FLOW.map((step, i) => {
-                            const done = i <= currentIdx;
-                            const current = i === currentIdx;
-                            const isLast = i === FLOW.length - 1;
-                            return (
-                                <View key={step} style={[styles.timelineRow, isLast && { minHeight: 0 }]}>
-                                    <View style={styles.timelineLeft}>
-                                        <View style={[styles.timelineDot, done && styles.timelineDotDone, current && styles.timelineDotCurrent]} />
-                                        {!isLast ? (
-                                            <View style={[styles.timelineBar, done && styles.timelineBarDone]} />
-                                        ) : null}
-                                    </View>
-                                    <Text style={[styles.timelineText, done && styles.timelineTextDone, isLast && { paddingBottom: 0 }]}>{step}</Text>
-                                </View>
-                            );
-                        })}
-                    </View>
-                ) : null}
-
-                {/* Rider card */}
-                {booking.rider && booking.status !== 'Cancelled' ? (
-                    <View style={styles.riderCard}>
-                        <View style={styles.riderAvatar}><Text style={styles.riderAvatarText}>{booking.rider.name.charAt(0)}</Text></View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.riderName}>{booking.rider.name}</Text>
-                            <View style={styles.riderMetaRow}>
-                                <Star size={11} color={colors.accent} fill={colors.accent} />
-                                <Text style={styles.riderMeta}>{booking.rider.rating} · {booking.rider.trips} trips</Text>
-                            </View>
-                            <Text style={styles.riderVehicle}>{booking.rider.vehicle} · {booking.rider.vehicleNo}</Text>
-                        </View>
-                        <Pressable style={styles.callBtn} onPress={onCallRider}>
-                            <AnimatedIcon Icon={PhoneCall} size={16} color={colors.foreground} variant="pulse" />
-                        </Pressable>
-                    </View>
-                ) : null}
-
-                {/* Rate your rider — appears after Delivered. Users can rate 1-5,
-                    leave an optional comment, and add a tip. All of this is for
-                    the rider only. */}
+                {/* Rating opener / summary — post-delivery */}
                 {booking.status === 'Delivered' && booking.rider ? (
                     existingRating ? (
-                        <View style={styles.rateCard}>
-                            <View style={styles.rateHead}>
-                                <BadgeCheck size={16} color={colors.success} />
-                                <Text style={styles.rateTitle}>You rated {booking.rider.name.split(' ')[0]}</Text>
-                            </View>
-                            <View style={styles.starRow}>
-                                {[1,2,3,4,5].map((n) => (
-                                    <Star key={n} size={22} color={colors.accent} fill={n <= (existingRating.stars || 0) ? colors.accent : 'transparent'} />
-                                ))}
-                            </View>
-                            {existingRating.comment ? (
-                                <Text style={styles.rateComment}>“{existingRating.comment}”</Text>
-                            ) : null}
-                            {existingRating.tip > 0 ? (
-                                <View style={styles.tipBadge}>
-                                    <Gift size={12} color={colors.foreground} />
-                                    <Text style={styles.tipBadgeText}>Tip sent · ₹{existingRating.tip}</Text>
-                                </View>
-                            ) : null}
+                        <View style={styles.ratedCard}>
+                            <BadgeCheck size={16} color={colors.success} />
+                            <Text style={styles.ratedText}>
+                                You rated {booking.rider.name.split(' ')[0]} {existingRating.stars}★
+                                {existingRating.tip > 0 ? ` · ₹${existingRating.tip} tip sent` : ''}
+                            </Text>
                         </View>
                     ) : (
-                        <View style={styles.rateCard}>
-                            <View style={styles.rateHead}>
-                                <Star size={16} color={colors.accent} fill={colors.accent} />
-                                <Text style={styles.rateTitle}>Rate your rider</Text>
-                            </View>
-                            <Text style={styles.rateSub}>How was your ride with {booking.rider.name.split(' ')[0]}?</Text>
-                            <View style={styles.starRow}>
-                                {[1,2,3,4,5].map((n) => (
-                                    <Pressable key={n} onPress={() => setRatingStars(n)} hitSlop={6}>
-                                        <Star size={30} color={colors.accent} fill={n <= ratingStars ? colors.accent : 'transparent'} strokeWidth={1.6} />
-                                    </Pressable>
-                                ))}
-                            </View>
-                            <TextInput
-                                value={ratingComment}
-                                onChangeText={setRatingComment}
-                                placeholder="Leave a note for the rider (optional)"
-                                placeholderTextColor={colors.mutedForeground}
-                                multiline
-                                maxLength={500}
-                                style={styles.rateInput}
-                            />
-                            <View style={styles.tipHeadRow}>
-                                <Gift size={13} color={colors.foreground} />
-                                <Text style={styles.tipHead}>Add a tip for the rider</Text>
-                            </View>
-                            <View style={styles.tipChipsRow}>
-                                {[0, 20, 50, 100].map((amt) => {
-                                    const on = ratingTip === amt;
-                                    return (
-                                        <Pressable
-                                            key={amt}
-                                            onPress={() => setRatingTip(amt)}
-                                            style={[styles.tipChip, on && styles.tipChipOn]}
-                                        >
-                                            <Text style={[styles.tipChipText, on && styles.tipChipTextOn]}>
-                                                {amt === 0 ? 'No tip' : `₹${amt}`}
-                                            </Text>
-                                        </Pressable>
-                                    );
-                                })}
-                            </View>
-                            <Button
-                                label={ratingTip > 0 ? `Submit · ₹${ratingTip} tip` : 'Submit rating'}
-                                onPress={submitRating}
-                                loading={ratingSubmitting}
-                                disabled={!ratingStars || ratingSubmitting}
-                                style={{ marginTop: 12 }}
-                            />
-                        </View>
+                        <Pressable style={styles.rateOpener} onPress={() => setRateModalOpen(true)}>
+                            <Star size={16} color={colors.accent} fill={colors.accent} />
+                            <Text style={styles.rateOpenerText}>
+                                Rate {booking.rider.name.split(' ')[0]} & add a tip
+                            </Text>
+                        </Pressable>
                     )
                 ) : null}
 
-
-                {/* Trip card — green location card matching the brand */}
-                <View style={styles.tripCard}>
-                    <View style={styles.tripRow}>
-                        <View style={styles.tripIconCol}>
-                            <View style={styles.pinBubble}><MapPinned size={14} color="#FFFFFF" /></View>
-                            <View style={styles.pinLine} />
-                            <View style={styles.pinBubble}><Flag size={14} color="#FFFFFF" /></View>
-                        </View>
-                        <View style={{ flex: 1, gap: 12 }}>
-                            <View>
-                                <Text style={styles.tripLabel}>My Location</Text>
-                                <Text style={styles.tripText} numberOfLines={2}>{booking.pickup}</Text>
-                            </View>
-                            <View>
-                                <Text style={styles.tripLabel}>Drop</Text>
-                                <Text style={styles.tripText} numberOfLines={2}>{booking.drop}</Text>
-                            </View>
-                        </View>
-                    </View>
-                    <View style={styles.tripStats}>
-                        <View style={styles.tripStat}>
-                            <MapPinned size={11} color="rgba(255,255,255,0.9)" />
-                            <Text style={styles.tripStatText}>{booking.distanceKm.toFixed(1)} km</Text>
-                        </View>
-                        <View style={styles.tripStat}>
-                            <Bike size={11} color="rgba(255,255,255,0.9)" />
-                            <Text style={styles.tripStatText}>~{booking.etaMin} min</Text>
-                        </View>
-                        <View style={styles.tripStat}>
-                            <Text style={{ fontSize: 13 }}>{category?.emoji}</Text>
-                            <Text style={styles.tripStatText}>{category?.name}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Items / notes */}
-                <View style={styles.notesCard}>
-                    <View style={styles.notesHead}>
-                        <NotebookPen size={14} color={colors.foreground} />
-                        <Text style={styles.sectionLabel}>Items / notes for rider</Text>
-                    </View>
-                    <Text style={styles.notesText}>{booking.notes}</Text>
-                    {booking.recipientPhone ? (
-                        <Text style={styles.recipient}>Recipient: +91 {booking.recipientPhone}</Text>
-                    ) : null}
-                </View>
-
-                {/* Fare card */}
-                <View style={styles.fareCard}>
-                    <Text style={styles.sectionLabel}>Fare</Text>
-                    <View style={styles.fareRow}><Text style={styles.fareLabel}>Base fare</Text><Text style={styles.fareValue}>₹25</Text></View>
-                    <View style={styles.fareRow}><Text style={styles.fareLabel}>Distance ({booking.distanceKm.toFixed(1)} km)</Text><Text style={styles.fareValue}>₹{booking.price - 25}</Text></View>
-                    <View style={styles.fareDivider} />
-                    <View style={styles.fareRow}><Text style={styles.fareTotalLabel}>Total</Text><Text style={styles.fareTotal}>₹{booking.price}</Text></View>
-                    <Text style={styles.payHint}>{booking.payment === 'cash' ? 'Pay rider in cash on delivery' : 'Paying via UPI'}</Text>
-                </View>
-            </ScrollView>
-
-            {/* Sticky action footer */}
-            <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
+                {/* Primary CTA — cancel while active, book another after finished */}
                 {isActive ? (
-                    <Button label="Cancel booking" variant="outline" loading={cancelling} onPress={onCancel} />
+                    <Button
+                        label="Cancel booking"
+                        variant="outline"
+                        loading={cancelling}
+                        onPress={onCancel}
+                        style={{ marginTop: 14 }}
+                    />
                 ) : (
-                    <Button label="Book another" onPress={() => router.replace('/book-delivery')} />
+                    <Button
+                        label="Book another"
+                        onPress={() => router.replace('/book-delivery')}
+                        style={{ marginTop: 14 }}
+                    />
                 )}
-            </View>
+            </ScrollView>
 
             <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
 
-            {/* Full-screen immersive stage overlays: searching / accepted / delivered */}
+            <RateRiderModal
+                visible={rateModalOpen}
+                onClose={() => setRateModalOpen(false)}
+                riderName={booking.rider?.name || 'your rider'}
+                serverBookingId={serverBookingId}
+                onSubmitted={(r) => setExistingRating(r)}
+            />
+
+            {/* Full-screen immersive stage overlays */}
             <BookingStageOverlay
                 visible={overlayStage === 'searching'}
                 stage="searching"
@@ -576,151 +526,96 @@ export default function BookingDetailsScreen() {
     );
 }
 
+function StopRow({ icon, label, value }: { icon: 'pickup' | 'drop'; label: string; value: string }) {
+    const Icon = icon === 'pickup' ? MapPin : Navigation2;
+    const tint = icon === 'pickup' ? colors.accent : colors.primary;
+    return (
+        <View style={styles.stopRow}>
+            <View style={[styles.stopDot, { borderColor: tint }]}>
+                <Icon size={12} color={tint} strokeWidth={2.4} />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.stopLabel}>{label}</Text>
+                <Text style={styles.stopValue} numberOfLines={2}>{value}</Text>
+            </View>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     missing: { fontSize: 14, color: colors.mutedForeground, fontFamily: fonts.body },
 
-    mapWrap: {
-        marginTop: 0, marginHorizontal: 0, height: 240,
-        borderBottomWidth: 1, borderBottomColor: colors.border,
-        overflow: 'hidden', backgroundColor: colors.card,
+    top: {
+        position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 6, paddingBottom: 10,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        backgroundColor: 'rgba(240,237,229,0.95)', borderBottomWidth: 1, borderBottomColor: colors.border,
+        zIndex: 10,
     },
-    map: { flex: 1 },
+    iconBtn: { width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+    topLabel: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+    topEmoji: { fontSize: 16 },
+    topText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
+    sosBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 36, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.danger },
+    sosText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.card, letterSpacing: 0.5 },
 
-    statusBanner: {
-        marginTop: 8, marginHorizontal: 6, padding: 10, flexDirection: 'row', gap: 10,
-        borderWidth: 1, borderColor: colors.foreground, borderRadius: radius.md, backgroundColor: colors.card,
+    sheet: {
+        position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '72%',
+        backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border,
+        borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
     },
-    statusIconWrap: { width: 46, height: 46, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
-    searchingWrap: { alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' },
-    pulseRing: { position: 'absolute', width: 30, height: 30, borderWidth: 1, borderColor: colors.foreground, borderRadius: radius.md },
-    statusTitle: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground },
-    statusSub: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
+    sheetContent: { paddingHorizontal: 12, paddingTop: 8 },
+    handle: { alignSelf: 'center', width: 40, height: 4, backgroundColor: colors.border, borderRadius: radius.pill, marginBottom: 12 },
 
-    timeline: { marginTop: 8, marginHorizontal: 6, paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
-    timelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, minHeight: 28 },
-    timelineLeft: { alignItems: 'center', width: 10, alignSelf: 'stretch' },
-    timelineDot: { width: 10, height: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radius.md, marginTop: 3 },
-    timelineDotDone: { backgroundColor: colors.foreground, borderColor: colors.foreground },
-    timelineDotCurrent: { backgroundColor: colors.accent, borderColor: colors.accent },
-    timelineBar: { flex: 1, width: 1, backgroundColor: colors.border, marginTop: 2, marginBottom: 0 },
-    timelineBarDone: { backgroundColor: colors.foreground },
-    timelineText: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, paddingBottom: 12, flex: 1, lineHeight: 16 },
-    timelineTextDone: { color: colors.foreground, fontFamily: fonts.bodyBold },
+    cancelledBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 10, borderRadius: radius.sm, backgroundColor: '#FDECEC', borderWidth: 1, borderColor: colors.danger },
+    cancelledText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.danger },
 
-    riderCard: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
-    riderAvatar: { width: 42, height: 42, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
-    riderAvatarText: { color: colors.primaryForeground, fontFamily: fonts.displayBold, fontSize: 18 },
+    riderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.divider },
+    riderAvatar: { width: 40, height: 40, borderRadius: radius.pill, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
+    riderInitial: { fontSize: 15, fontFamily: fonts.displayBold, color: colors.primary },
     riderName: { fontSize: 14, fontFamily: fonts.bodyBold, color: colors.foreground },
     riderMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-    riderMeta: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body },
-    riderVehicle: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
-    callBtn: { width: 36, height: 36, borderWidth: 1, borderColor: colors.foreground, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
+    riderMeta: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground },
+    callBtn: { width: 40, height: 40, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 
-    tripCard: { marginTop: 8, marginHorizontal: 6, padding: 12, borderRadius: radius.lg, backgroundColor: colors.primary },
-    sectionLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.4, textTransform: 'uppercase' },
-    tripRow: { flexDirection: 'row', gap: 12, marginTop: 2 },
-    tripIconCol: { alignItems: 'center', width: 28, paddingTop: 2 },
-    pinBubble: { width: 28, height: 28, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
-    pin: { width: 10, height: 10, borderRadius: radius.pill },
-    pinLine: { flex: 1, width: 2, backgroundColor: 'rgba(255,255,255,0.35)', marginVertical: 4, minHeight: 18 },
-    tripLabel: { fontSize: 10, fontFamily: fonts.bodyBold, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.3 },
-    tripText: { fontSize: 13, fontFamily: fonts.bodyBold, color: '#FFFFFF', marginTop: 2 },
-    tripStats: { flexDirection: 'row', gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' },
-    tripStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    tripStatText: { fontSize: 11, color: '#FFFFFF', fontFamily: fonts.bodyBold },
+    searchingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.divider },
+    searchingIcon: { width: 40, height: 40, borderRadius: radius.pill, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
 
-    notesCard: { marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
-    notesHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-    notesText: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground, lineHeight: 19 },
-    recipient: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.bodyBold, marginTop: 8 },
+    stops: { paddingTop: 12, gap: 6 },
+    stopRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    stopDot: { width: 22, height: 22, borderRadius: radius.pill, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
+    stopLabel: { fontSize: 10, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.5, textTransform: 'uppercase' },
+    stopValue: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground },
+    stopDash: { height: 10, width: 1, backgroundColor: colors.border, marginLeft: 11 },
 
-    fareCard: { marginTop: 8, marginHorizontal: 6, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
-    fareRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, marginTop: 4 },
-    fareLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.body },
-    fareValue: { fontSize: 12, color: colors.foreground, fontFamily: fonts.bodyBold },
-    fareDivider: { height: 1, backgroundColor: colors.divider, marginVertical: 4 },
-    fareTotalLabel: { fontSize: 14, color: colors.foreground, fontFamily: fonts.displayBold },
-    fareTotal: { fontSize: 16, color: colors.foreground, fontFamily: fonts.displayBold },
-    payHint: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 6 },
+    notes: { marginTop: 12, backgroundColor: colors.chipBg, padding: 10, borderRadius: radius.sm },
+    notesLabel: { fontSize: 10, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.5, textTransform: 'uppercase' },
+    notesText: { fontSize: 12, fontFamily: fonts.body, color: colors.foreground, marginTop: 3 },
+    recipient: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.bodyBold, marginTop: 6 },
 
-    otpCard: {
-        marginTop: 8, marginHorizontal: 6, padding: 14,
+    fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 14 },
+    fareLabel: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.5, textTransform: 'uppercase' },
+    fareValue: { fontSize: 26, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 3, letterSpacing: -0.5 },
+    fareMeta: { alignItems: 'flex-end', gap: 3 },
+    fareMetaText: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground },
+
+    otpBanner: { marginTop: 14, padding: 12, borderRadius: radius.md, backgroundColor: colors.chipBg, borderWidth: 1, borderColor: colors.primary },
+    otpBannerHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    otpBannerIcon: { width: 30, height: 30, borderRadius: radius.pill, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+    otpBannerTitle: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground, letterSpacing: 0.2 },
+    otpBannerText: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 2, lineHeight: 15 },
+    otpDigitsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 12 },
+    otpDigitBox: {
+        width: 48, height: 56,
         borderWidth: 1.5, borderColor: colors.foreground, borderRadius: radius.md,
         backgroundColor: colors.card,
-    },
-    otpHead: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-    otpIconWrap: {
-        width: 30, height: 30, borderRadius: radius.pill,
-        backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center',
-    },
-    otpTitle: { fontSize: 13, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: 0.2 },
-    otpSub: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 2, lineHeight: 15 },
-    otpDigitsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 14 },
-    otpDigitBox: {
-        width: 56, height: 64,
-        borderWidth: 1.5, borderColor: colors.foreground, borderRadius: radius.md,
-        backgroundColor: colors.chipBg,
         alignItems: 'center', justifyContent: 'center',
     },
-    otpDigitText: { fontSize: 28, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: 1 },
-    otpFootRow: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-    otpFootText: { fontSize: 10, fontFamily: fonts.body, color: colors.mutedForeground },
+    otpDigitText: { fontSize: 24, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: 1 },
 
-
-    footer: { paddingHorizontal: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
-    rateCard: {
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.md,
-        padding: 14,
-        marginTop: 12,
-        gap: 8,
-    },
-    rateHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    rateTitle: { fontSize: 14, fontFamily: fonts.displayBold, color: colors.foreground },
-    rateSub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground },
-    starRow: { flexDirection: 'row', gap: 10, marginTop: 4, alignSelf: 'center' },
-    rateComment: { fontSize: 12, fontFamily: fonts.body, color: colors.foreground, fontStyle: 'italic', marginTop: 4 },
-    rateInput: {
-        marginTop: 10,
-        minHeight: 60,
-        backgroundColor: colors.inputBg,
-        borderWidth: 1,
-        borderColor: colors.inputBorder,
-        borderRadius: radius.sm,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        fontFamily: fonts.body,
-        fontSize: 13,
-        color: colors.foreground,
-        textAlignVertical: 'top',
-    },
-    tipHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
-    tipHead: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
-    tipChipsRow: { flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' },
-    tipChip: {
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: radius.pill,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.card,
-    },
-    tipChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    tipChipText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
-    tipChipTextOn: { color: colors.primaryForeground },
-    tipBadge: {
-        alignSelf: 'flex-start',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: colors.chipBg,
-        borderRadius: radius.pill,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        marginTop: 4,
-    },
-    tipBadgeText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.foreground },
+    rateOpener: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.card },
+    rateOpenerText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
+    ratedCard: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.chipBg },
+    ratedText: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground },
 });
+

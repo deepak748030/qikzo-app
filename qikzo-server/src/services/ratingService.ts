@@ -52,7 +52,12 @@ export const ratingService = {
     },
 
     async getForBooking(userId: string, bookingId: string) {
-        const booking = await Booking.findOne({ _id: bookingId, user: userId }).select('_id').lean();
+        // Allow both the booking's customer and the assigned rider to fetch
+        // the rating (rider needs it for their trip-details view).
+        const rider = await Rider.findOne({ user: userId }).select('_id').lean();
+        const or: any[] = [{ _id: bookingId, user: userId }];
+        if (rider?._id) or.push({ _id: bookingId, rider: rider._id });
+        const booking = await Booking.findOne({ $or: or }).select('_id').lean();
         if (!booking) throw errors.notFound('Booking not found', 'BOOKING_NOT_FOUND');
         return Rating.findOne({ booking: bookingId }).lean();
     },

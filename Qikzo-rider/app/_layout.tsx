@@ -57,6 +57,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="vehicle-setup" />
         <Stack.Screen name="active-job" />
+        <Stack.Screen name="trip-details" />
         <Stack.Screen name="documents" />
         <Stack.Screen name="payout-details" />
         <Stack.Screen name="notifications" />

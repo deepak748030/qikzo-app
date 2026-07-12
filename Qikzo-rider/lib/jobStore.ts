@@ -107,19 +107,32 @@ function tripToActive(t: Trip): ActiveJob {
 }
 
 function tripToCompleted(t: Trip): CompletedJob | null {
-    if (t.stage !== 'completed') return null;
+    if (t.stage !== 'completed' && t.stage !== 'cancelled') return null;
     const b = typeof t.booking === 'object' ? (t.booking as Booking) : null;
     const catKey = (b?.categorySlug as keyof typeof CATEGORY_META) || 'parcel';
     const cat = CATEGORY_META[catKey] ? catKey : 'parcel';
+    const endedAt = t.stage === 'cancelled'
+        ? (t.cancelledAt ? Date.parse(t.cancelledAt) : Date.now())
+        : (t.completedAt ? Date.parse(t.completedAt) : Date.now());
     return {
         id: t._id,
+        tripId: t._id,
+        bookingId: b ? String((b as any)._id) : undefined,
+        bookingCode: b?.code,
+        status: t.stage === 'cancelled' ? 'cancelled' : 'completed',
+        cancelReason: (t as any).cancelReason || '',
         category: cat as any,
         pickup: b?.pickup?.address || '—',
         drop: b?.drop?.address || '—',
         distanceKm: t.distanceKm || b?.distanceKm || 0,
-        fare: t.fare || b?.price || 0,
+        durationMin: t.durationMin || 0,
+        fare: t.stage === 'cancelled' ? 0 : (t.fare || b?.price || 0),
         payment: (b?.payment as any) || 'cash',
-        completedAt: t.completedAt ? Date.parse(t.completedAt) : Date.now(),
+        completedAt: endedAt,
+        assignedAt: t.assignedAt ? Date.parse(t.assignedAt) : null,
+        startedAt: t.startedAt ? Date.parse(t.startedAt) : null,
+        customerName: customerNameOf(b?.user),
+        customerPhone: (b?.user && typeof b.user === 'object' ? String((b.user as any).phone || '') : '') || b?.recipientPhone || '',
     };
 }
 

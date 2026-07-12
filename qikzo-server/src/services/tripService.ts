@@ -19,19 +19,33 @@ const STAGE_ORDER: TripStage[] = ['assigned', 'arriving', 'arrived', 'started', 
 
 // Mirror trip stage onto the customer-facing Booking.status string so the
 // existing customer polling logic keeps working without new fields.
+// NOTE: `started` (pickup OTP verified) maps to 'On the way' — the trip is
+// physically underway once the OTP handshake succeeds. The intermediate
+// 'Picked up' step is still recorded in booking.history below so the
+// customer timeline shows both milestones as done.
 const BOOKING_STATUS_FOR_STAGE: Record<TripStage, BookingStatus | null> = {
     assigned: 'Rider accepted',
     arriving: 'Arriving for pickup',
     arrived: 'Arriving for pickup',
-    started: 'Picked up',
+    started: 'On the way',
     completed: 'Delivered',
     cancelled: 'Cancelled',
 };
 
 export const tripService = {
-    // ---------- Customer read-side ----------
+    // ---------- Read-side (customer AND rider) ----------
+    // Both apps hit these. Riders own trips via `Trip.rider`; customers own
+    // them via `Trip.user`. We resolve both so a single endpoint works.
+    async _ownershipFilter(userId: string) {
+        const rider = await (await import('../models/Rider')).default.findOne({ user: userId }).select('_id').lean();
+        const or: any[] = [{ user: userId }];
+        if (rider?._id) or.push({ rider: rider._id });
+        return { $or: or };
+    },
+
     async listMine(userId: string, limit = 50) {
-        return Trip.find({ user: userId })
+        const filter = await this._ownershipFilter(userId);
+        return Trip.find(filter)
             .sort({ createdAt: -1 })
             .limit(Math.min(Math.max(limit, 1), 100))
             .populate('rider')
@@ -40,7 +54,8 @@ export const tripService = {
     },
 
     async getMine(userId: string, id: string) {
-        const trip = await Trip.findOne({ _id: id, user: userId })
+        const filter = await this._ownershipFilter(userId);
+        const trip = await Trip.findOne({ _id: id, ...filter })
             .populate('rider')
             .populate({ path: 'booking', populate: { path: 'user', select: 'name phone' } })
             .lean();
@@ -181,6 +196,12 @@ export const tripService = {
         if (bookingStatus) {
             const booking = await Booking.findById(trip.booking);
             if (booking) {
+                // When the pickup OTP is verified we jump straight to
+                // 'On the way'. Record the intermediate 'Picked up' beat in
+                // history so the customer timeline shows both steps as done.
+                if (nextStage === 'started') {
+                    (booking.history as any).push({ status: 'Picked up' });
+                }
                 booking.status = bookingStatus;
                 (booking.history as any).push({ status: bookingStatus });
                 await booking.save();

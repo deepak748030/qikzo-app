@@ -19,6 +19,15 @@ import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
 
 const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 };
 
+// Deterministic 4-digit pickup OTP derived from booking id — MUST match the
+// exact formula used by the customer app (Qikzo-app/app/booking-details.tsx)
+// so the code the rider types matches the one shown to the customer.
+function pickupOtpFor(id: string): string {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return String(1000 + (h % 9000));
+}
+
 // CTAs per stage — one primary action advances the flow.
 const CTA_BY_STAGE: Record<string, string> = {
     'Heading to pickup': "I've arrived",
@@ -110,6 +119,37 @@ export default function ActiveJob() {
         return () => { off(); offJobCancel(); offBookingUpdate(); clearInterval(t); };
     }, [hydrateActiveFromServer]);
 
+    // Delivered → auto-finalize the trip on the server and send the rider
+    // straight back to the home dashboard. Declared BEFORE the early return
+    // below so the hook order stays stable across renders.
+    const activeIsFinal = !!active && active.stage === JOB_STAGES[JOB_STAGES.length - 1];
+    useEffect(() => {
+        if (!activeIsFinal || !active) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                if (active.tripId && !!tokenStore.get().accessToken) {
+                    await advanceOnServer();
+                } else {
+                    advance();
+                }
+            } catch {}
+            if (cancelled) return;
+            sheet.show({
+                variant: 'success',
+                title: 'Delivered',
+                message: `Trip #${active.id} complete. Nice work!`,
+                confirmText: 'OK',
+                onConfirm: () => { sheet.hide(); router.replace('/(tabs)'); },
+            });
+            setTimeout(() => { if (!cancelled) router.replace('/(tabs)'); }, 1800);
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeIsFinal]);
+
+
+
     if (!active) {
         return (
             <View style={[styles.empty, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
@@ -177,58 +217,11 @@ export default function ActiveJob() {
         }
     };
 
-    // Delivered → show a dedicated trip-summary screen. Much richer than a toast:
-    // celebrates the completion and breaks down the earnings.
     if (isFinal) {
-        return (
-            <ScrollView
-                style={styles.container}
-                contentContainerStyle={[styles.summary, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}
-                showsVerticalScrollIndicator={false}
-            >
-                <View style={styles.summaryBadge}>
-                    <CheckCircle2 size={54} color={colors.primary} strokeWidth={2} />
-                </View>
-                <Text style={styles.summaryEyebrow}>Trip #{active.id} complete</Text>
-                <Text style={styles.summaryTitle}>Nice work, ride safe.</Text>
-                <Text style={styles.summarySub}>Parcel handed over to {active.customerName.split(' ')[0]}. Here's the breakdown.</Text>
-
-                <View style={styles.earnCard}>
-                    <Text style={styles.earnLabel}>You earned</Text>
-                    <Text style={styles.earnValue}>₹{active.fare}</Text>
-                    <View style={styles.earnRow}>
-                        <Text style={styles.earnRowKey}>Trip fare</Text>
-                        <Text style={styles.earnRowVal}>₹{active.fare}</Text>
-                    </View>
-                    <View style={styles.earnDivider} />
-                    <View style={styles.earnRow}>
-                        <Text style={styles.earnRowKeyBold}>Payment mode</Text>
-                        <Text style={styles.earnRowValBold}>{active.payment.toUpperCase()}</Text>
-                    </View>
-                </View>
-
-                {active.payment === 'cash' ? (
-                    <View style={styles.cashBanner}>
-                        <Coffee size={14} color={colors.warning} strokeWidth={2.2} />
-                        <Text style={styles.cashBannerText}>Confirm you collected ₹{active.fare} in cash from the customer.</Text>
-                    </View>
-                ) : null}
-
-                <View style={styles.chipsRow}>
-                    <View style={styles.chip}><Text style={styles.chipText}>{active.distanceKm.toFixed(1)} km</Text></View>
-                    <View style={styles.chip}><Text style={styles.chipText}>{active.etaMin} min</Text></View>
-                    <View style={styles.chip}><Text style={styles.chipText}>{cat.emoji} {cat.label}</Text></View>
-                </View>
-
-                <View style={{ height: 24 }} />
-                <Button label="Finish & go home" onPress={onCta} />
-                <Pressable style={styles.summaryGhost} onPress={async () => { await runAdvance(); router.replace('/(tabs)'); }}>
-                    <HomeIcon size={14} color={colors.mutedForeground} strokeWidth={2} />
-                    <Text style={styles.summaryGhostText}>Skip for now</Text>
-                </Pressable>
-            </ScrollView>
-        );
+        return <View style={[styles.container, { backgroundColor: colors.background }]} />;
     }
+
+
 
 
 
@@ -350,7 +343,7 @@ export default function ActiveJob() {
 
             <OtpVerifySheet
                 visible={otpOpen}
-                expected="1234"
+                expected={pickupOtpFor(active.bookingId || active.id)}
                 customerName={active.customerName}
                 onClose={() => setOtpOpen(false)}
                 onVerified={onOtpVerified}

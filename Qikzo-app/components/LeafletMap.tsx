@@ -112,8 +112,12 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   }
   ${pickup ? `L.marker([${pickup.lat},${pickup.lng}], { icon: pinIcon('${colors.accent}') }).addTo(map);` : ''}
   ${drop ? `L.marker([${drop.lat},${drop.lng}], { icon: pinIcon('${colors.foreground}') }).addTo(map);` : ''}
-  ${riderLocation ? `
-    // Rider's live position — distinct pulsing dot (matches rider app).
+  // Rider live marker (created lazily so we can move it in-place from RN
+  // without rebuilding the whole map on every location tick).
+  var riderMarker = null;
+  var riderAnim = null;
+  function ensureRiderMarker(lat, lng){
+    if(riderMarker) return riderMarker;
     var riderIcon = L.divIcon({
       className:'',
       html:'<div style="position:relative;width:22px;height:22px;">\
@@ -122,8 +126,28 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
 </div><style>@keyframes riderPulse{0%{transform:scale(.6);opacity:.5}100%{transform:scale(2.2);opacity:0}}</style>',
       iconSize:[22,22], iconAnchor:[11,11]
     });
-    var riderMarker = L.marker([${riderLocation.lat},${riderLocation.lng}], { icon: riderIcon, interactive:false }).addTo(map);
-  ` : ''}
+    riderMarker = L.marker([lat,lng], { icon: riderIcon, interactive:false }).addTo(map);
+    return riderMarker;
+  }
+  function moveRider(lat, lng){
+    ensureRiderMarker(lat, lng);
+    // Cancel any in-flight tween.
+    if(riderAnim){ cancelAnimationFrame(riderAnim); riderAnim=null; }
+    var from = riderMarker.getLatLng();
+    var start = performance.now();
+    var dur = 900; // ms — smooth glide between fixes
+    function tick(now){
+      var t = Math.min(1, (now-start)/dur);
+      // ease-out
+      var e = 1 - Math.pow(1-t, 2);
+      var la = from.lat + (lat - from.lat) * e;
+      var ln = from.lng + (lng - from.lng) * e;
+      riderMarker.setLatLng([la, ln]);
+      if(t<1) riderAnim = requestAnimationFrame(tick); else riderAnim=null;
+    }
+    riderAnim = requestAnimationFrame(tick);
+  }
+  ${riderLocation ? `moveRider(${riderLocation.lat}, ${riderLocation.lng});` : ''}
 
   ${riderLocation && pickup ? `
     // ---- Real road route: rider → pickup (dashed) ----
@@ -340,6 +364,7 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
       else if(d.type==='setLiveRiders'){ setLiveRiders(d.riders||[]); }
       else if(d.type==='upsertLiveRider'){ upsertLiveRider(d.rider); }
       else if(d.type==='removeLiveRider'){ removeLiveRider(d.id); }
+      else if(d.type==='moveRider'){ moveRider(d.lat, d.lng); }
     }catch(e){}
   }
 </script>
@@ -351,11 +376,15 @@ export default function LeafletMap({
 }: Props) {
   const ref = useRef<WebView>(null);
   const hasLiveRiders = Array.isArray(liveRiders);
+  // Trigger a one-shot HTML rebuild when the rider location FIRST becomes
+  // available so the dashed rider→pickup route is drawn (mirrors the rider
+  // app). Ongoing location updates are pushed imperatively via `moveRider`
+  // and don't rebuild the map.
+  const hasRiderLocation = !!(riderLocation && pickup);
   const html = useMemo(
     () => buildHtml({ center, pickup, drop, riderLocation, pickerMode, pinColor, showTraffic, hasLiveRiders }),
-    // Only rebuild when these change meaningfully
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, riderLocation?.lat, riderLocation?.lng, showTraffic, hasLiveRiders]
+    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, showTraffic, hasLiveRiders, hasRiderLocation]
   );
 
   const onMessage = (e: WebViewMessageEvent) => {
@@ -373,6 +402,14 @@ export default function LeafletMap({
     const js = `(function(){try{window.postMessage(JSON.stringify({type:'setCenter',lat:${center.lat},lng:${center.lng},zoom:16}));}catch(e){}})();true;`;
     ref.current.injectJavaScript(js);
   }, [center.lat, center.lng]);
+
+  // Push rider location updates without rebuilding the WebView — the map JS
+  // tweens the marker between fixes for smooth motion.
+  React.useEffect(() => {
+    if (!ref.current || !riderLocation) return;
+    const js = `(function(){try{window.postMessage(JSON.stringify({type:'moveRider',lat:${riderLocation.lat},lng:${riderLocation.lng}}));}catch(e){}})();true;`;
+    ref.current.injectJavaScript(js);
+  }, [riderLocation?.lat, riderLocation?.lng]);
 
   // Push the current liveRiders list into the WebView whenever it changes.
   const ridersJson = useMemo(() => JSON.stringify(liveRiders || []), [liveRiders]);

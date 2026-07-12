@@ -139,7 +139,10 @@ export default function DispatchHome() {
     // them if a poll response is already in flight when the cancel arrives.
     const cancelledIdsRef = useRef<Set<string>>(new Set());
 
-    // Incoming-jobs poller (fallback) + realtime job:offer push.
+    // Incoming-jobs poller (fallback) + realtime job:offer push. Runs only
+    // while we don't already have an incoming/active job — that's fine
+    // because pulling more offers when one is already on screen would just
+    // be discarded.
     useEffect(() => {
         if (!online || active || incoming) return;
         let cancelled = false;
@@ -155,24 +158,58 @@ export default function DispatchHome() {
                 setIncoming(nextIncoming());
             }
         };
-        // 1) Kick off immediately, then poll every 5s as a safety net if socket is down.
         pull();
         const t = setInterval(pull, INCOMING_POLL_MS);
-        // 2) Realtime: on job:offer instantly try to grab a fresh incoming.
         connectSocket();
         const offOffer = subscribeSocket('job:offer', () => { if (!cancelled) pull(); });
-        // 3) If the customer cancels (or someone else takes it) drop the card
-        //    immediately. Use functional setState so we always compare against
-        //    the latest incoming — even if this handler was registered before
-        //    setIncoming ran. Also remember the id to filter in-flight polls.
-        const offCancel = subscribeSocket('job:cancelled', (p: any) => {
-            if (cancelled || !p?.id) return;
+        return () => { cancelled = true; clearInterval(t); offOffer(); };
+    }, [online, active, incoming, fetchIncoming]);
+
+    // Realtime cancel handler — MUST live in its own effect so it stays
+    // subscribed even while `incoming` is populated. Otherwise the offer card
+    // would sit on screen until its 30s timer expires even if the customer
+    // cancelled instantly. Also handles the case where a cancel event races
+    // ahead of the offer arriving (we remember the id and filter it out).
+    useEffect(() => {
+        if (!online) return;
+        connectSocket();
+        const off = subscribeSocket('job:cancelled', (p: any) => {
+            if (!p?.id) return;
             const cancelledId = String(p.id);
             cancelledIdsRef.current.add(cancelledId);
             setIncoming((cur) => (cur && String((cur as any).id) === cancelledId ? null : cur));
         });
-        return () => { cancelled = true; clearInterval(t); offOffer(); offCancel(); };
-    }, [online, active, incoming, fetchIncoming]);
+        return () => { off(); };
+    }, [online]);
+
+    // Defensive reconciliation: while an offer card is showing, keep polling
+    // the server's incoming list. Server only returns bookings whose status is
+    // still 'Searching rider' and which are unassigned — so if the customer
+    // cancelled (or someone else grabbed it) and we missed the socket event,
+    // this poll will drop the stale card within a couple of seconds.
+    useEffect(() => {
+        if (!online || !incoming || !isSignedIn()) return;
+        let cancelled = false;
+        const currentId = String((incoming as any).id);
+        const verify = async () => {
+            try {
+                const items = await fetchIncoming();
+                if (cancelled) return;
+                const stillOffered = items.some((it: any) => String(it.id) === currentId);
+                if (!stillOffered) {
+                    cancelledIdsRef.current.add(currentId);
+                    setIncoming(null);
+                }
+            } catch { /* ignore transient errors */ }
+        };
+        // First check quickly (~2s) then every 3s afterwards.
+        const first = setTimeout(verify, 2000);
+        const t = setInterval(verify, 3000);
+        return () => { cancelled = true; clearTimeout(first); clearInterval(t); };
+    }, [online, incoming, fetchIncoming]);
+
+
+
 
 
     const goOnline = async () => {
