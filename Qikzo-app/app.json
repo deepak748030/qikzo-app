@@ -69,7 +69,7 @@
       "eas": {
         "projectId": "7f40b796-fdaf-4954-9eb2-76fb8993fe97"
       },
-      "apiUrl": "http://10.0.2.2:4000"
+      "apiUrl": "https://qikzo-app.onrender.com"
     }
   }
 }

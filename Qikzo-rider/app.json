@@ -48,19 +48,32 @@
       "expo-web-browser",
       [
         "expo-build-properties",
-        { "android": { "compileSdkVersion": 35, "targetSdkVersion": 35, "minSdkVersion": 24 } }
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          }
+        }
       ],
       [
         "expo-location",
-        { "locationWhenInUsePermission": "Qikzo Partner uses your location while you are online to match you with nearby jobs." }
+        {
+          "locationWhenInUsePermission": "Qikzo Partner uses your location while you are online to match you with nearby jobs."
+        }
       ]
     ],
-    "experiments": { "typedRoutes": true },
+    "experiments": {
+      "typedRoutes": true
+    },
     "newArchEnabled": true,
     "extra": {
       "router": {},
-      "eas": { "projectId": "7f40b796-fdaf-4954-9eb2-76fb8993fe97" },
-      "apiUrl": "http://10.0.2.2:4000"
-    }
+      "apiUrl": "https://qikzo-app.onrender.com",
+      "eas": {
+        "projectId": "39eb68b3-df99-47da-8bd1-0064aad621aa"
+      }
+    },
+    "owner": "deepak748930"
   }
 }
