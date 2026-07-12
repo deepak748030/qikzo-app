@@ -19,6 +19,16 @@ export function initSockets(httpServer: http.Server, opts: { corsOrigin?: string
     io = new Server(httpServer, {
         cors: { origin: opts.corsOrigin || '*' },
         transports: ['websocket', 'polling'],
+        // --- perf tuning ---
+        // Skip serving the JS client bundle — mobile apps ship socket.io-client
+        // themselves and never hit /socket.io/socket.io.js.
+        serveClient: false,
+        // Only compress frames > 1 KB; small events (location pings, acks)
+        // stay uncompressed and avoid the CPU cost + latency of deflate.
+        perMessageDeflate: { threshold: 1024 },
+        httpCompression: { threshold: 1024 },
+        // Cap payload at 1 MB (default) — makes rogue clients cheap to reject.
+        maxHttpBufferSize: 1e6,
     });
 
     io.use((socket: SocketWithUser, next) => {

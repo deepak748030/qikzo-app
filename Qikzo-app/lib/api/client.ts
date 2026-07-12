@@ -92,12 +92,21 @@ function buildQuery(query?: RequestOptions['query']): string {
     return parts.length ? `?${parts.join('&')}` : '';
 }
 
+// ---------- In-flight GET dedupe ----------
+// Multiple screens/hooks routinely fire the same GET at the same instant
+// (e.g. `/trips/active`, `/riders/me/incoming`, `/settings/public`). We
+// collapse identical concurrent GETs onto a single fetch so the app never
+// pays for the same round-trip twice. The map is keyed by URL + auth token
+// and cleared the moment the response settles.
+const inflightGets = new Map<string, Promise<ApiEnvelope<any>>>();
+
 /**
  * Core request. Returns the parsed envelope on success and throws `ApiError`
  * on any non-2xx or network failure. Automatically:
  *   - attaches Bearer token
  *   - refreshes once on 401 and replays the request
  *   - fires `onUnauthorized` listeners when refresh ultimately fails
+ *   - dedupes concurrent identical GETs
  */
 export async function request<T = any>(path: string, opts: RequestOptions = {}): Promise<ApiEnvelope<T>> {
     const {
@@ -112,6 +121,17 @@ export async function request<T = any>(path: string, opts: RequestOptions = {}):
 
     const url = `${API_URL}${path.startsWith('/') ? path : `/${path}`}${buildQuery(query)}`;
 
+    // Dedupe key includes the access token so a token change doesn't return
+    // a cached response minted for the previous user. Only safe methods (GET)
+    // are ever deduped — mutations always execute in full.
+    const dedupeKey = method === 'GET'
+        ? `${url}|${auth ? (tokenStore.get().accessToken || '') : ''}`
+        : null;
+    if (dedupeKey && !_isRetry) {
+        const existing = inflightGets.get(dedupeKey);
+        if (existing) return existing as Promise<ApiEnvelope<T>>;
+    }
+
     const finalHeaders: Record<string, string> = {
         accept: 'application/json',
         ...headers,
@@ -122,50 +142,61 @@ export async function request<T = any>(path: string, opts: RequestOptions = {}):
         if (accessToken) finalHeaders.authorization = `Bearer ${accessToken}`;
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const exec = async (): Promise<ApiEnvelope<T>> => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-    let res: Response;
-    try {
-        res = await fetch(url, {
-            method,
-            headers: finalHeaders,
-            body: body === undefined ? undefined : JSON.stringify(body),
-            signal: controller.signal,
-        });
-    } catch (e: any) {
-        clearTimeout(timer);
-        throw new ApiError({
-            status: 0,
-            message: e?.name === 'AbortError' ? 'Request timed out' : 'Network error',
-            code: e?.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK',
-        });
-    }
-    clearTimeout(timer);
-
-    const json = await safeJson(res);
-
-    // --- 401 refresh dance (once per request) ---
-    if (res.status === 401 && auth && !_isRetry) {
-        const nextToken = await refreshAccessToken();
-        if (nextToken) {
-            return request<T>(path, { ...opts, _isRetry: true });
+        let res: Response;
+        try {
+            res = await fetch(url, {
+                method,
+                headers: finalHeaders,
+                body: body === undefined ? undefined : JSON.stringify(body),
+                signal: controller.signal,
+            });
+        } catch (e: any) {
+            clearTimeout(timer);
+            throw new ApiError({
+                status: 0,
+                message: e?.name === 'AbortError' ? 'Request timed out' : 'Network error',
+                code: e?.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK',
+            });
         }
-        await tokenStore.clear();
-        fireUnauthorized();
-    }
+        clearTimeout(timer);
 
-    if (!res.ok || (json && json.success === false)) {
-        throw new ApiError({
-            status: res.status,
-            message: json?.message || `Request failed (${res.status})`,
-            code: json?.code,
-            details: json?.details,
-            requestId: json?.requestId,
-        });
-    }
+        const json = await safeJson(res);
 
-    return json as ApiEnvelope<T>;
+        // --- 401 refresh dance (once per request) ---
+        if (res.status === 401 && auth && !_isRetry) {
+            const nextToken = await refreshAccessToken();
+            if (nextToken) {
+                return request<T>(path, { ...opts, _isRetry: true });
+            }
+            await tokenStore.clear();
+            fireUnauthorized();
+        }
+
+        if (!res.ok || (json && json.success === false)) {
+            throw new ApiError({
+                status: res.status,
+                message: json?.message || `Request failed (${res.status})`,
+                code: json?.code,
+                details: json?.details,
+                requestId: json?.requestId,
+            });
+        }
+
+        return json as ApiEnvelope<T>;
+    };
+
+    if (!dedupeKey) return exec();
+
+    const promise = exec().finally(() => {
+        // Always release the slot — even on error — so the next call retries.
+        if (inflightGets.get(dedupeKey) === promise) inflightGets.delete(dedupeKey);
+    });
+    inflightGets.set(dedupeKey, promise);
+    return promise as Promise<ApiEnvelope<T>>;
 }
 
 export const http = {

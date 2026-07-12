@@ -1,6 +1,21 @@
 import type { Response } from 'express';
 
 /**
+ * Attach a short public HTTP micro-cache header. Safe to use on read-heavy
+ * endpoints whose data changes infrequently (catalog categories, banners).
+ * `stale-while-revalidate` lets clients / CDNs serve the stale copy instantly
+ * while the next request refreshes in the background.
+ */
+export function cacheable(res: Response, maxAgeSec = 60, swrSec = 300) {
+    res.setHeader(
+        'Cache-Control',
+        `public, max-age=${maxAgeSec}, stale-while-revalidate=${swrSec}`
+    );
+    return res;
+}
+
+
+/**
  * Response envelope. Kept backwards-compatible with the previous shape:
  *   { success: boolean, message: string, ...data }
  * Adds `requestId` and (for errors) `code` + optional `details`.

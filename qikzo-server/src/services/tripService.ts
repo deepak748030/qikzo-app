@@ -37,7 +37,9 @@ export const tripService = {
     // Both apps hit these. Riders own trips via `Trip.rider`; customers own
     // them via `Trip.user`. We resolve both so a single endpoint works.
     async _ownershipFilter(userId: string) {
-        const rider = await (await import('../models/Rider')).default.findOne({ user: userId }).select('_id').lean();
+        // Static Rider import (top of file) — avoids the dynamic import cost
+        // on every request. This runs on nearly every trip read.
+        const rider = await Rider.findOne({ user: userId }).select('_id').lean();
         const or: any[] = [{ user: userId }];
         if (rider?._id) or.push({ rider: rider._id });
         return { $or: or };
@@ -67,7 +69,7 @@ export const tripService = {
         // Resolve rider-side lookup: a rider's active trip is keyed by their
         // Rider._id, not their auth user id. Fall back to the customer path
         // (Trip.user) so the same endpoint serves both apps.
-        const rider = await (await import('../models/Rider')).default.findOne({ user: userId }).select('_id').lean();
+        const rider = await Rider.findOne({ user: userId }).select('_id').lean();
         const or: any[] = [{ user: userId }];
         if (rider?._id) or.push({ rider: rider._id });
         return Trip.findOne({
@@ -217,24 +219,27 @@ export const tripService = {
 
         emitTripUpdate(trip);
 
-        // Push customer-facing update on meaningful transitions.
-        const bookingDoc = await Booking.findById(trip.booking).lean();
-        const customerId = bookingDoc ? String(bookingDoc.user) : null;
+        // Push customer-facing update on meaningful transitions only.
         const NOTIF_FOR_STAGE: Partial<Record<TripStage, { title: string; body: string }>> = {
             arrived: { title: 'Rider arrived', body: 'Your rider is at the pickup location.' },
             started: { title: 'Order picked up', body: 'Your order is on the way.' },
             completed: { title: 'Delivered', body: 'Your order has been delivered. Enjoy!' },
         };
         const notif = NOTIF_FOR_STAGE[nextStage];
-        if (customerId && notif) {
-            void notificationService.emit({
-                user: customerId,
-                audience: 'customer',
-                topic: nextStage === 'completed' ? 'trip' : 'booking',
-                title: notif.title,
-                body: notif.body,
-                data: { bookingId: String(trip.booking), tripId: String(trip._id), stage: nextStage },
-            }).catch(() => {});
+        if (notif) {
+            // Only load the booking (and only the user field) when we actually
+            // need to notify — cuts one round-trip on 'assigned' + 'arriving'.
+            const b = await Booking.findById(trip.booking).select('user').lean();
+            if (b) {
+                void notificationService.emit({
+                    user: String(b.user),
+                    audience: 'customer',
+                    topic: nextStage === 'completed' ? 'trip' : 'booking',
+                    title: notif.title,
+                    body: notif.body,
+                    data: { bookingId: String(trip.booking), tripId: String(trip._id), stage: nextStage },
+                }).catch(() => {});
+            }
         }
         return trip.populate([{ path: 'rider' }, { path: 'booking', populate: { path: 'user', select: 'name phone' } }]);
     },

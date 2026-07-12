@@ -25,11 +25,28 @@ interface SettingsStatics {
 }
 export type SettingsDoc = InferSchemaType<typeof SettingsSchema> & { _id: any };
 
+// In-process cache for the singleton. The maintenance-mode gate hits this
+// on EVERY request; without a cache that's a Mongo round-trip per request.
+// 30 s TTL keeps flag flips snappy while eliminating the hot-path query.
+let __cache: { doc: SettingsDoc; at: number } | null = null;
+const TTL_MS = 30_000;
+
 SettingsSchema.statics.getSingleton = async function () {
-    let s = await this.findOne({ singleton: 'app' });
-    if (!s) s = await this.create({ singleton: 'app' });
-    return s;
+    const now = Date.now();
+    if (__cache && (now - __cache.at) < TTL_MS) return __cache.doc;
+    let s = (await this.findOne({ singleton: 'app' }).lean()) as unknown as SettingsDoc | null;
+    if (!s) {
+        const created = await this.create({ singleton: 'app' });
+        s = created.toObject() as SettingsDoc;
+    }
+    __cache = { doc: s as SettingsDoc, at: now };
+    return s as SettingsDoc;
 };
+
+// Invalidator — call from any admin write that mutates the singleton so the
+// next request sees the change immediately instead of waiting for TTL.
+export function invalidateSettingsCache() { __cache = null; }
+
 
 export const Settings = model<SettingsDoc, Model<SettingsDoc> & SettingsStatics>('Settings', SettingsSchema);
 export default Settings;

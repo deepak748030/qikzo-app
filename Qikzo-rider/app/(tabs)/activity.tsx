@@ -15,7 +15,9 @@ import type { EarningsSummary } from '@/lib/api/endpoints/earnings';
 
 // Renders a single completed / cancelled job row. Tapping it opens the
 // full trip-details screen with all lifecycle info, fare breakdown, tip etc.
-function Row({ item }: { item: CompletedJob }) {
+// Memoized — FlatList re-invokes renderItem often; skipping re-renders when
+// the row data hasn't changed keeps large histories buttery smooth.
+const Row = React.memo(function Row({ item }: { item: CompletedJob }) {
     const cat = CATEGORY_META[item.category];
     const time = new Date(item.completedAt).toLocaleString('en-IN', {
         day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -50,7 +52,7 @@ function Row({ item }: { item: CompletedJob }) {
             </View>
         </Pressable>
     );
-}
+});
 
 export default function Activity() {
     const completed = useJobs((s) => s.completed);

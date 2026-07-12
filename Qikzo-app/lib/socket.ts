@@ -33,7 +33,12 @@ export function connectSocket() {
         transports: ['websocket'],
         auth: { token: accessToken },
         reconnection: true,
-        reconnectionDelay: 1500,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        randomizationFactor: 0.3,
+        timeout: 10000,
+        // Skip long-polling upgrade dance — mobile is websocket-only.
+        upgrade: false,
     });
     attachListeners();
     return socket;

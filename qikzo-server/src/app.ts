@@ -21,16 +21,43 @@ import { globalLimiter } from './middleware/rateLimiters';
 const app: Express = express();
 
 app.set('trust proxy', 1);
+// Skip the tiny "x-powered-by" fingerprinting header on every response.
+app.disable('x-powered-by');
+// Weak ETags — cheaper to compute than the default strong hash and still
+// enable 304 Not Modified round-trips for repeat GETs.
+app.set('etag', 'weak');
 
 app.use(requestId);
-app.use(pinoHttp({ logger, customProps: (req) => ({ requestId: (req as any).id }) }));
+app.use(pinoHttp({
+    logger,
+    customProps: (req) => ({ requestId: (req as any).id }),
+    // Skip logging on hot no-op paths (health probes + static uploads).
+    // This removes hundreds of log allocations/sec under load-balancer probes.
+    autoLogging: {
+        ignore: (req: any) => {
+            const u = req.url as string;
+            return u === '/health' || u === '/' || u === '/ready' || u.startsWith('/uploads');
+        },
+    },
+}));
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(compression());
+// Compression: only compress > 1 KB responses; let clients opt out with
+// the `x-no-compression` header (used by our upload endpoints).
+app.use(compression({
+    threshold: 1024,
+    filter: (req, res) => {
+        if (req.headers['x-no-compression']) return false;
+        return compression.filter(req, res);
+    },
+}));
 
 // Static uploads (kept for asset compat with previous deployment).
+// Content-hashed / write-once URLs — mark them immutable so mobile clients
+// and CDNs don't re-fetch already-cached avatars, KYC docs and banners.
 const staticOpts = {
-    maxAge: '7d',
+    maxAge: '30d',
+    immutable: true,
     fallthrough: true,
     setHeaders: (res: express.Response) => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
 } as const;
