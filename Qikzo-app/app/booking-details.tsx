@@ -58,6 +58,9 @@ export default function BookingDetailsScreen() {
     const assignRider = useBooking((s) => s.assignRider);
     const refreshOne = useBooking((s) => s.refreshOne);
     const cancelOnServer = useBooking((s) => s.cancelOnServer);
+    const confirmPaymentOnServer = useBooking((s) => s.confirmPaymentOnServer);
+    const disputePaymentOnServer = useBooking((s) => s.disputePaymentOnServer);
+    const [payBusy, setPayBusy] = useState(false);
     const sheet = useSheet();
     const [cancelling, setCancelling] = useState(false);
     const userName = useAuth((s) => s.name);
@@ -317,6 +320,7 @@ export default function BookingDetailsScreen() {
                     pickup={pickupCoord}
                     drop={dropCoord}
                     riderLocation={riderLoc && riderId ? { lat: riderLoc.lat, lng: riderLoc.lng } : null}
+                    vehicleKind={riderId ? vehicleFor(booking.categoryId) : null}
                     showTraffic={false}
                     style={StyleSheet.absoluteFill}
                 />
@@ -449,6 +453,63 @@ export default function BookingDetailsScreen() {
                                 </View>
                             ))}
                         </View>
+                    </View>
+                ) : null}
+
+                {/* Payment confirmation — cash bookings sit pending until the
+                    customer taps "I paid". UPI settles automatically on the
+                    server side. Disputed opens support flow. */}
+                {booking.status === 'Delivered' && booking.paymentStatus !== 'paid' ? (
+                    <View style={styles.payCard}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.payTitle}>
+                                {booking.paymentStatus === 'disputed'
+                                    ? 'Payment disputed'
+                                    : `Pay ₹${booking.price} to ${booking.rider?.name?.split(' ')[0] || 'rider'}`}
+                            </Text>
+                            <Text style={styles.paySub}>
+                                {booking.paymentStatus === 'disputed'
+                                    ? 'Our team will reach out shortly.'
+                                    : `${booking.payment === 'cash' ? 'Cash on delivery' : 'UPI'} · Tap once handed over`}
+                            </Text>
+                        </View>
+                        {booking.paymentStatus !== 'disputed' ? (
+                            <>
+                                <Pressable
+                                    style={[styles.payBtn, payBusy && { opacity: 0.6 }]}
+                                    disabled={payBusy}
+                                    onPress={async () => {
+                                        setPayBusy(true);
+                                        try { await confirmPaymentOnServer(booking.id); }
+                                        catch (e: any) {
+                                            sheet.show({ variant: 'warning', title: 'Could not confirm', message: e?.message || 'Try again.', confirmText: 'OK' });
+                                        } finally { setPayBusy(false); }
+                                    }}
+                                >
+                                    <Text style={styles.payBtnText}>I paid</Text>
+                                </Pressable>
+                                <Pressable
+                                    onPress={() => sheet.show({
+                                        variant: 'warning',
+                                        title: 'Report payment issue?',
+                                        message: 'This will flag the booking for our support team to review.',
+                                        confirmText: 'Report',
+                                        cancelText: 'Cancel',
+                                        onConfirm: async () => {
+                                            try { await disputePaymentOnServer(booking.id); } catch {}
+                                        },
+                                    })}
+                                >
+                                    <Text style={styles.payDispute}>Issue?</Text>
+                                </Pressable>
+                            </>
+                        ) : null}
+                    </View>
+                ) : null}
+                {booking.status === 'Delivered' && booking.paymentStatus === 'paid' ? (
+                    <View style={styles.ratedCard}>
+                        <BadgeCheck size={16} color={colors.success} />
+                        <Text style={styles.ratedText}>Payment received · ₹{booking.price} {booking.payment.toUpperCase()}</Text>
                     </View>
                 ) : null}
 
@@ -616,6 +677,12 @@ const styles = StyleSheet.create({
     rateOpener: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.card },
     rateOpenerText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
     ratedCard: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.chipBg },
+    payCard: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.card },
+    payTitle: { fontFamily: fonts.displayBold, fontSize: 13, color: colors.foreground },
+    paySub: { fontFamily: fonts.body, fontSize: 11, color: colors.mutedForeground, marginTop: 2 },
+    payBtn: { backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.sm },
+    payBtnText: { color: colors.primaryForeground, fontFamily: fonts.displayBold, fontSize: 12 },
+    payDispute: { color: colors.danger, fontFamily: fonts.bodyBold, fontSize: 11, marginLeft: 6 },
     ratedText: { fontSize: 13, fontFamily: fonts.body, color: colors.foreground },
 });
 

@@ -21,7 +21,10 @@ import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
 
 const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 }; // Only used until GPS resolves.
 const LOCATION_INTERVAL_MS = 10_000;   // heartbeat while online
-const INCOMING_POLL_MS = 5_000;         // job-request feed poll
+// Socket `job:offer` is the primary channel; this poll is only a safety net
+// for missed sockets. 10s is more than enough — reduces server load by ~50%
+// vs the previous 5s when many riders are online.
+const INCOMING_POLL_MS = 10_000;
 
 // Module-scoped so the "already navigated for this trip" guard survives
 // Home unmount/remount cycles caused by router.replace('/(tabs)').

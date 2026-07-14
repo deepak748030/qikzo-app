@@ -34,8 +34,9 @@ const EnvSchema = z.object({
     PRICE_PER_KM: num(8),
     PRICE_MIN: num(40),
 
-    // Logging
-    LOG_LEVEL: str('info'),
+    // Logging — quieter default in prod so pino-http doesn't dominate CPU
+    // and disk under load. Override with LOG_LEVEL=info when debugging.
+    LOG_LEVEL: str(process.env.NODE_ENV === 'production' ? 'warn' : 'info'),
 });
 
 const parsed = EnvSchema.parse(process.env);

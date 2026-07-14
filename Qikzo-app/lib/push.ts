@@ -78,3 +78,28 @@ export async function unregisterPushAsync(): Promise<void> {
         lastToken = null;
     }
 }
+
+/**
+ * Deep-link routing on notification tap. Server pushes carry `data.bookingId`
+ * for booking events; we route the user straight into `/booking-details` so
+ * they don't have to hunt for the trip in Activity.
+ *
+ * Returns an unsubscribe fn. Call once in the root layout.
+ */
+export function installPushDeepLinks(navigate: (path: string, params?: any) => void): () => void {
+    // Cold-start: app launched by tapping a notification.
+    Notifications.getLastNotificationResponseAsync().then((resp) => {
+        const data = resp?.notification?.request?.content?.data as any;
+        if (data?.bookingId) {
+            setTimeout(() => navigate('/booking-details', { id: String(data.bookingCode || data.bookingId) }), 200);
+        }
+    }).catch(() => {});
+    // Warm: user tapped notification while app is running / backgrounded.
+    const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
+        const data = resp?.notification?.request?.content?.data as any;
+        if (data?.bookingId) {
+            navigate('/booking-details', { id: String(data.bookingCode || data.bookingId) });
+        }
+    });
+    return () => { try { sub.remove(); } catch {} };
+}

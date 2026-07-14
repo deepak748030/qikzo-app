@@ -49,6 +49,23 @@ export function disconnectSocket() {
     currentToken = null;
 }
 
+// Auto-reconnect socket when the access token rotates (e.g. silent refresh
+// after a 401). Otherwise the socket keeps its stale token and eventually
+// gets kicked mid-ride.
+let tokenPoll: any = null;
+export function installSocketTokenWatcher() {
+    if (tokenPoll) return;
+    tokenPoll = setInterval(() => {
+        const { accessToken } = tokenStore.get();
+        if (!accessToken) return;
+        if (currentToken && accessToken !== currentToken) {
+            try { connectSocket(); } catch {}
+        } else if (!socket && accessToken) {
+            try { connectSocket(); } catch {}
+        }
+    }, 3000);
+}
+
 export function subscribe(event: string, cb: Listener): () => void {
     let set = listeners.get(event);
     if (!set) { set = new Set(); listeners.set(event, set); }

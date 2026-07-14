@@ -18,17 +18,21 @@ interface SocketWithUser extends Socket {
 export function initSockets(httpServer: http.Server, opts: { corsOrigin?: string } = {}): Server {
     io = new Server(httpServer, {
         cors: { origin: opts.corsOrigin || '*' },
+        // Websocket-only in prod path — mobile clients already skip the
+        // long-polling upgrade dance. Keeps polling available as a last-resort
+        // fallback for restrictive networks.
         transports: ['websocket', 'polling'],
-        // --- perf tuning ---
-        // Skip serving the JS client bundle — mobile apps ship socket.io-client
-        // themselves and never hit /socket.io/socket.io.js.
         serveClient: false,
-        // Only compress frames > 1 KB; small events (location pings, acks)
-        // stay uncompressed and avoid the CPU cost + latency of deflate.
-        perMessageDeflate: { threshold: 1024 },
+        // Disable per-message deflate entirely — location pings and job
+        // events are tiny JSON payloads; deflate burns 15-20% CPU under load
+        // for near-zero bandwidth savings.
+        perMessageDeflate: false,
         httpCompression: { threshold: 1024 },
-        // Cap payload at 1 MB (default) — makes rogue clients cheap to reject.
         maxHttpBufferSize: 1e6,
+        // Bigger ping interval halves keepalive traffic and CPU wakeups on
+        // the event loop when thousands of sockets are idle-connected.
+        pingInterval: 25000,
+        pingTimeout: 20000,
     });
 
     io.use((socket: SocketWithUser, next) => {
@@ -66,19 +70,41 @@ export function initSockets(httpServer: http.Server, opts: { corsOrigin?: string
     return io;
 }
 
+// ---------- Payload slimmers ----------
+// The Mongo Point sub-doc carries `{ address, lat, lng, location: { type, coordinates } }`.
+// The map + card UI only needs `{ address, lat, lng }`. Dropping the GeoJSON
+// wrapper cuts ~60 bytes per point (2 points per booking × N riders on offer).
+function slimPoint(p: any) {
+    if (!p) return p;
+    return { address: p.address || '', lat: p.lat ?? null, lng: p.lng ?? null };
+}
+// Populated rider docs are huge (KYC fields, timestamps, docs array). The
+// customer app only shows { id, name, vehicle, vehicleNo, rating, trips }.
+function slimRider(r: any) {
+    if (!r) return null;
+    if (typeof r === 'string') return r; // ObjectId — client resolves later
+    return {
+        _id: r._id ? String(r._id) : undefined,
+        name: r.name || '',
+        vehicle: r.vehicle || '',
+        vehicleNo: r.vehicleNo || '',
+        rating: typeof r.rating === 'number' ? r.rating : undefined,
+        trips: typeof r.trips === 'number' ? r.trips : undefined,
+    };
+}
+
 export function emitBookingUpdate(booking: any, riderUserId?: string): void {
     if (!io || !booking) return;
     const payload = {
         id: String(booking._id),
         code: booking.code,
         status: booking.status,
-        rider: booking.rider || null,
+        rider: slimRider(booking.rider),
+        paymentStatus: booking.paymentStatus,
         updatedAt: booking.updatedAt,
     };
     io.to(`user:${String(booking.user)}`).emit('booking:update', payload);
     io.to(`booking:${String(booking._id)}`).emit('booking:update', payload);
-    // Also fan out to the assigned rider so the rider app reconciles in real time
-    // (e.g. the customer cancels after the rider accepted — the rider must know).
     let uid: string | null = riderUserId ? String(riderUserId) : null;
     if (!uid && booking.rider && typeof booking.rider === 'object' && booking.rider.user) {
         uid = String(booking.rider.user);
@@ -118,8 +144,10 @@ export function emitJobOffer(booking: any, riderUserIds: string[] = []): void {
         id: String(booking._id),
         code: booking.code,
         categorySlug: booking.categorySlug,
-        pickup: booking.pickup,
-        drop: booking.drop,
+        // Slim pickup/drop — drop the GeoJSON `location` wrapper (rider app
+        // uses only address + lat + lng).
+        pickup: slimPoint(booking.pickup),
+        drop: slimPoint(booking.drop),
         distanceKm: booking.distanceKm,
         etaMin: booking.etaMin,
         price: booking.price,

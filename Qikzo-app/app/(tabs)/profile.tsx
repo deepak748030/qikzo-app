@@ -7,6 +7,7 @@ import ScreenHeader from '@/components/ScreenHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useAuth } from '@/lib/authStore';
+import { useBooking } from '@/lib/bookingStore';
 import Skeleton from '@/components/Skeleton';
 import { useInitialLoad } from '@/lib/useInitialLoad';
 import { authApi } from '@/lib/api/endpoints/auth';
@@ -51,6 +52,21 @@ export default function ProfileScreen() {
 
 
   const confirmLogout = () => {
+    // Block logout while a booking is still in progress — otherwise the
+    // rider keeps riding to a customer who has no way to see the trip.
+    const ACTIVE = ['Searching rider', 'Rider accepted', 'Arriving for pickup', 'Picked up', 'On the way'];
+    const active = useBooking.getState().bookings.find((b) => ACTIVE.includes(b.status));
+    if (active) {
+      sheet.show({
+        variant: 'warning',
+        title: 'Active ride in progress',
+        message: `Booking ${active.id} is still ${active.status.toLowerCase()}. Cancel or complete it before logging out.`,
+        confirmText: 'View booking',
+        cancelText: 'Stay signed in',
+        onConfirm: () => { try { router.push({ pathname: '/booking-details', params: { id: active.id } }); } catch {} },
+      });
+      return;
+    }
     sheet.show({
       variant: 'warning',
       title: 'Log out?',

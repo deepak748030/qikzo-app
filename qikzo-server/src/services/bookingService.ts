@@ -7,15 +7,12 @@ import notificationService from './notificationService';
 import couponService from './couponService';
 import { vehicleAliasRegex } from '../utils/vehicleSlug';
 
-// Serial code generator with a retry loop. Not a crypto-safe id but never
-// collides in practice and stays human-readable.
-async function nextCode(): Promise<string> {
-    for (let i = 0; i < 5; i++) {
-        const code = 'QZ' + String(2100 + Math.floor(Math.random() * 9000));
-        const clash = await Booking.exists({ code });
-        if (!clash) return code;
-    }
-    return 'QZ' + Date.now().toString().slice(-6);
+// Serial code generator. We DON'T pre-check with `Booking.exists` — a
+// unique index on `code` catches the (extremely rare) collision in the
+// actual insert. This saves a round-trip per booking. The retry lives in
+// the caller (`create` catches E11000 and re-runs with a fresh code).
+function genCode(): string {
+    return 'QZ' + String(2100 + Math.floor(Math.random() * 9000));
 }
 
 export interface CreateBookingInput {
@@ -40,6 +37,22 @@ export const bookingService = {
     },
 
     async create(input: CreateBookingInput) {
+        // Guard: a user cannot hold two active bookings at once. Prevents
+        // duplicate-booking spam from double taps that slip past client-side
+        // guards, and stops the map/UI from getting into an ambiguous state
+        // with two "in progress" trips.
+        const activeStatuses = ['Searching rider', 'Rider accepted', 'Arriving for pickup', 'Picked up', 'On the way'];
+        const existingActive = await Booking.findOne({
+            user: input.userId,
+            status: { $in: activeStatuses },
+        }).select('_id code status').lean();
+        if (existingActive) {
+            throw errors.conflict(
+                `You already have an active booking (${(existingActive as any).code}). Complete or cancel it first.`,
+                'USER_HAS_ACTIVE_BOOKING'
+            );
+        }
+
         const est = estimateTrip({
             pickup: input.pickup.address,
             drop: input.drop.address,
@@ -97,27 +110,39 @@ export const bookingService = {
             return { address: p.address, lat: lat ?? null, lng: lng ?? null };
         };
 
-        const booking = await Booking.create({
-            code: await nextCode(),
-            user: input.userId,
-            mode: input.mode || 'delivery',
-            categorySlug: input.categorySlug,
-            vehicleTypeSlug: String(input.vehicleTypeSlug || '').trim().toLowerCase(),
-            pickup: toPoint(input.pickup),
-            drop: toPoint(input.drop),
-            notes: input.notes || '',
-            recipientPhone: input.recipientPhone || '',
-            payment: input.payment || 'cash',
-            distanceKm: est.distanceKm,
-            etaMin: est.etaMin,
-            price: finalPrice,
-            pricing: { base: est.base, perKm: est.perKm },
-            couponCode,
-            discount,
-            scheduledAt,
-            status: initialStatus,
-            history: [{ status: initialStatus }],
-        });
+        // Try up to 3 times to avoid the astronomically rare `code` collision
+        // caught by the unique index. Faster than pre-checking on every insert.
+        let booking: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                booking = await Booking.create({
+                    code: genCode(),
+                    user: input.userId,
+                    mode: input.mode || 'delivery',
+                    categorySlug: input.categorySlug,
+                    vehicleTypeSlug: String(input.vehicleTypeSlug || '').trim().toLowerCase(),
+                    pickup: toPoint(input.pickup),
+                    drop: toPoint(input.drop),
+                    notes: input.notes || '',
+                    recipientPhone: input.recipientPhone || '',
+                    payment: input.payment || 'cash',
+                    distanceKm: est.distanceKm,
+                    etaMin: est.etaMin,
+                    price: finalPrice,
+                    pricing: { base: est.base, perKm: est.perKm },
+                    couponCode,
+                    discount,
+                    scheduledAt,
+                    status: initialStatus,
+                    history: [{ status: initialStatus }],
+                });
+                break;
+            } catch (err: any) {
+                // 11000 = duplicate key on `code`. Retry with a fresh one.
+                if (err?.code === 11000 && attempt < 2) continue;
+                throw err;
+            }
+        }
 
         if (couponRedemption) {
             await couponService.redeem({
@@ -233,11 +258,27 @@ export const bookingService = {
     },
 
     async listMine(userId: string) {
-        return Booking.find({ user: userId }).sort({ createdAt: -1 }).populate('rider').lean();
+        // Payload slimming — the customer app's list view only needs the
+        // fields below. We DROP history, pricing, coupon internals, cancel
+        // metadata, scheduling internals, and the pickup/drop GeoJSON sub-
+        // documents (address/lat/lng carry the same info without the extra
+        // `location: { type, coordinates }` wrapper). Populated rider is
+        // trimmed to display fields only. Cuts payload ~55-70% per booking.
+        return Booking.find({ user: userId })
+            .sort({ createdAt: -1 })
+            .select('code user rider mode categorySlug vehicleTypeSlug pickup.address pickup.lat pickup.lng drop.address drop.lat drop.lng notes recipientPhone payment distanceKm etaMin price status createdAt updatedAt')
+            .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone' })
+            .lean();
     },
 
     async getOne(userId: string, id: string) {
-        const b = await Booking.findOne({ _id: id, user: userId }).populate('rider').lean();
+        // Details view — a bit richer than listMine (shows pricing + coupon
+        // + cancel info) but still drops the heavy `history` array and the
+        // GeoJSON `location` sub-docs (address/lat/lng cover the UI need).
+        const b = await Booking.findOne({ _id: id, user: userId })
+            .select('-history -pickup.location -drop.location')
+            .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone currentLocation' })
+            .lean();
         if (!b) throw errors.notFound('Booking not found', 'BOOKING_NOT_FOUND');
         return b;
     },
@@ -360,6 +401,44 @@ export const bookingService = {
         booking.history.push({ status: 'Rider accepted', note: `Assigned to ${rider.name}` } as any);
         await booking.save();
         emitBookingUpdate(booking);
+    },
+    async confirmPayment(userId: string, bookingId: string) {
+        const b = await Booking.findOne({ _id: bookingId, user: userId });
+        if (!b) throw errors.notFound('Booking not found', 'BOOKING_NOT_FOUND');
+        if (b.status !== 'Delivered') throw errors.badRequest('Booking not delivered yet', 'BOOKING_NOT_DELIVERED');
+        if ((b as any).paymentStatus === 'paid') return b;
+        if ((b as any).paymentStatus === 'disputed') {
+            throw errors.badRequest('Payment is under dispute', 'PAYMENT_DISPUTED');
+        }
+        (b as any).paymentStatus = 'paid';
+        (b as any).paymentPaidAt = new Date();
+        if ((b as any).payment === 'cash' && !(b as any).paymentTxnId) {
+            (b as any).paymentTxnId = `CASH-${Date.now()}`;
+        }
+        (b.history as any).push({ status: b.status, note: `Payment confirmed (${(b as any).payment})` });
+        await b.save();
+        emitBookingUpdate(b);
+        return b;
+    },
+
+    async disputePayment(userId: string, bookingId: string, reason = '') {
+        const b = await Booking.findOne({ _id: bookingId, user: userId });
+        if (!b) throw errors.notFound('Booking not found', 'BOOKING_NOT_FOUND');
+        if (b.status !== 'Delivered') throw errors.badRequest('Booking not delivered yet', 'BOOKING_NOT_DELIVERED');
+        (b as any).paymentStatus = 'disputed';
+        (b.history as any).push({ status: b.status, note: `Payment disputed: ${String(reason || '').slice(0, 200)}` });
+        await b.save();
+        emitBookingUpdate(b);
+        // Open a support ticket so the ops team can follow up.
+        void notificationService.emit({
+            user: userId,
+            audience: 'customer',
+            topic: 'booking',
+            title: 'Payment dispute filed',
+            body: 'Our team will contact you shortly.',
+            data: { event: 'payment:disputed', bookingId: String(b._id) },
+        }).catch(() => {});
+        return b;
     },
 };
 

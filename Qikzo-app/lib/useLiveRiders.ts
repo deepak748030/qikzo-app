@@ -17,29 +17,34 @@ export function useLiveRiders(center: { lat: number; lng: number } | null, radiu
   const centerRef = useRef(center);
   centerRef.current = center;
 
-  // Seed from REST when center changes meaningfully.
+  // Seed from REST when center changes meaningfully. Debounced so a
+  // dragged map (which fires center updates every frame) doesn't hammer
+  // the server — only the final resting position triggers a fetch.
   useEffect(() => {
     if (!center) return;
     if (!tokenStore.get().accessToken) return;
     let cancelled = false;
-    ridersApi.nearby(center, { radiusM: radiusKm * 1000, limit: 30 })
-      .then((items) => {
-        if (cancelled) return;
-        const next: Record<string, LiveRider> = {};
-        for (const r of items as any[]) {
-          const coords = r?.currentLocation?.coordinates;
-          if (!Array.isArray(coords) || coords.length < 2) continue;
-          next[String(r._id)] = {
-            id: String(r._id),
-            lng: coords[0],
-            lat: coords[1],
-            vehicle: r.vehicle || '',
-          };
-        }
-        setRiders((prev) => ({ ...prev, ...next }));
-      })
-      .catch(() => { /* silent — socket will still stream updates */ });
-    return () => { cancelled = true; };
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      ridersApi.nearby(center, { radiusM: radiusKm * 1000, limit: 30 })
+        .then((items) => {
+          if (cancelled) return;
+          const next: Record<string, LiveRider> = {};
+          for (const r of items as any[]) {
+            const coords = r?.currentLocation?.coordinates;
+            if (!Array.isArray(coords) || coords.length < 2) continue;
+            next[String(r._id)] = {
+              id: String(r._id),
+              lng: coords[0],
+              lat: coords[1],
+              vehicle: r.vehicle || '',
+            };
+          }
+          setRiders((prev) => ({ ...prev, ...next }));
+        })
+        .catch(() => { /* silent — socket will still stream updates */ });
+    }, 500);
+    return () => { cancelled = true; clearTimeout(t); };
   }, [center?.lat, center?.lng, radiusKm]);
 
   // Live socket updates.

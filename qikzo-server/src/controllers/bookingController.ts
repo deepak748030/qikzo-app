@@ -53,6 +53,16 @@ export const bookingController = {
         const booking = await bookingService.riderCancel(req.user!.id, req.params.id, req.body?.reason);
         return ok(res, { booking }, 'Booking cancelled by rider');
     }),
+
+    confirmPayment: asyncHandler(async (req, res) => {
+        const booking = await bookingService.confirmPayment(req.user!.id, req.params.id);
+        return ok(res, { booking }, 'Payment confirmed');
+    }),
+
+    disputePayment: asyncHandler(async (req, res) => {
+        const booking = await bookingService.disputePayment(req.user!.id, req.params.id, req.body?.reason);
+        return ok(res, { booking }, 'Payment disputed');
+    }),
 };
 
 export default bookingController;

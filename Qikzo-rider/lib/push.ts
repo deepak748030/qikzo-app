@@ -78,3 +78,23 @@ export async function unregisterPushAsync(): Promise<void> {
         lastToken = null;
     }
 }
+
+/**
+ * Deep-link routing on notification tap. Job-offer / trip-update pushes carry
+ * `data.bookingId`; if there's an active trip we route to `/active-job`,
+ * otherwise land the rider on their home dispatch feed.
+ */
+export function installPushDeepLinks(navigate: (path: string) => void): () => void {
+    Notifications.getLastNotificationResponseAsync().then((resp) => {
+        const data = resp?.notification?.request?.content?.data as any;
+        if (data?.event === 'booking:cancelled') return;
+        if (data?.bookingId || data?.tripId) {
+            setTimeout(() => navigate('/active-job'), 200);
+        }
+    }).catch(() => {});
+    const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
+        const data = resp?.notification?.request?.content?.data as any;
+        if (data?.bookingId || data?.tripId) navigate('/active-job');
+    });
+    return () => { try { sub.remove(); } catch {} };
+}

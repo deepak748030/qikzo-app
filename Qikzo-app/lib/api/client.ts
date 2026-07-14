@@ -156,6 +156,8 @@ export async function request<T = any>(path: string, opts: RequestOptions = {}):
             });
         } catch (e: any) {
             clearTimeout(timer);
+            // Report network drop so the global offline banner surfaces.
+            try { require('../netStatus').reportNetworkError(); } catch {}
             throw new ApiError({
                 status: 0,
                 message: e?.name === 'AbortError' ? 'Request timed out' : 'Network error',
@@ -163,6 +165,7 @@ export async function request<T = any>(path: string, opts: RequestOptions = {}):
             });
         }
         clearTimeout(timer);
+        try { require('../netStatus').reportRequest(true); } catch {}
 
         const json = await safeJson(res);
 

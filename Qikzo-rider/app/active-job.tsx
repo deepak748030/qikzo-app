@@ -16,6 +16,7 @@ import { CATEGORY_META, JOB_STAGES } from '@/lib/mockData';
 import { tokenStore } from '@/lib/api/tokenStore';
 import { ApiError } from '@/lib/api/errors';
 import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
+import { useAuth } from '@/lib/authStore';
 
 const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 };
 
@@ -232,6 +233,13 @@ export default function ActiveJob() {
     const dropCoord = active.dropCoord ?? null;
     const mapCenter = riderLoc ?? pickupCoord ?? dropCoord ?? FALLBACK_CENTER;
 
+    // Rider's own vehicle drives the marker shown in both apps. Map the
+    // rider-profile vehicle type onto the LeafletMap's VehicleKind
+    // ('sedan' → 'car'); default to bike when unknown.
+    const vt = useAuth.getState().rider?.vehicleType;
+    const vehicleKind: 'bike' | 'auto' | 'car' =
+        vt === 'auto' ? 'auto' : vt === 'sedan' ? 'car' : 'bike';
+
     return (
         <View style={styles.container}>
             <LeafletMap
@@ -239,6 +247,7 @@ export default function ActiveJob() {
                 pickup={pickupCoord}
                 drop={dropCoord}
                 riderLocation={riderLoc}
+                vehicleKind={vehicleKind}
                 showTraffic={false}
                 style={StyleSheet.absoluteFill}
             />

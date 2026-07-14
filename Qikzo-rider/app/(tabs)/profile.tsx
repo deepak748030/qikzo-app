@@ -85,6 +85,19 @@ export default function ProfileScreen() {
     }, [hydrate]);
 
     const confirmLogout = () => {
+        // Block logout mid-job — the customer is depending on this rider.
+        const active = useJobs.getState().active;
+        if (active) {
+            sheet.show({
+                variant: 'warning',
+                title: 'Active job in progress',
+                message: `Complete or cancel the current ${active.category || 'trip'} before logging out.`,
+                confirmText: 'View job',
+                cancelText: 'Stay signed in',
+                onConfirm: () => { try { router.push('/active-job'); } catch {} },
+            });
+            return;
+        }
         sheet.show({
             variant: 'warning',
             title: 'Log out?',

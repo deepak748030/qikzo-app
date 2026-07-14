@@ -13,11 +13,31 @@ import { inferVehicleSlug } from '../utils/vehicleSlug';
  * Includes the public read-side (`listAvailable`, `nearby`, `getPublic`) used
  * by the customer app + the self-service surface consumed by the rider app.
  */
+// Location-write throttle. Rider apps ping every 10s while online — under
+// 1k riders that's 100 writes/sec into Mongo. We swallow writes that arrive
+// within 4s of the previous one for the same rider and only fanout the
+// socket event (the map still animates smoothly). The Map is process-local
+// so a rider bouncing to another Node instance will simply get one extra
+// write on their first ping — safe.
+const LOCATION_WRITE_MIN_INTERVAL_MS = 4000;
+const _lastLocationWriteAt = new Map<string, number>();
 export const riderService = {
     // ---------- Public (customer app) ----------
+    /**
+     * Homepage / activity strip — only surfaced fields are needed.
+     * Payload slim: skip currentLocation.updatedAt, __v, kyc internals, etc.
+     */
     listAvailable: () =>
-        Rider.find({ online: true, available: true }).sort({ rating: -1 }).limit(50).lean(),
+        Rider.find({ online: true, available: true })
+            .select('name vehicle vehicleNo rating trips')
+            .sort({ rating: -1 })
+            .limit(50)
+            .lean(),
 
+    /**
+     * Map-marker feed for the customer app. UI needs only id, coordinates,
+     * and vehicle label — cuts payload from ~800B/rider to ~120B.
+     */
     async nearby(lng: number, lat: number, radiusM = 5000, limit = 20) {
         if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
             throw errors.badRequest('Invalid coordinates', 'INVALID_COORDS');
@@ -33,13 +53,14 @@ export const riderService = {
                 },
             },
         })
+            .select('currentLocation.coordinates vehicle')
             .limit(Math.min(Math.max(limit, 1), 50))
             .lean();
     },
 
     async getPublic(id: string) {
         const r = await Rider.findById(id)
-            .select('name vehicle vehicleNo rating trips online currentLocation')
+            .select('name vehicle vehicleNo rating trips online currentLocation.coordinates')
             .lean();
         if (!r) throw errors.notFound('Rider not found', 'RIDER_NOT_FOUND');
         return r;
@@ -95,12 +116,33 @@ export const riderService = {
 
     async updateLocation(userId: string, coord: { lat: number; lng: number; heading?: number; speed?: number }) {
         const rider = await this.getOrCreateForUser(userId);
-        (rider as any).currentLocation = {
-            type: 'Point',
-            coordinates: [coord.lng, coord.lat],
-            updatedAt: new Date(),
-        };
-        await rider.save();
+        const now = Date.now();
+        const last = _lastLocationWriteAt.get(userId) || 0;
+        const skipWrite = now - last < LOCATION_WRITE_MIN_INTERVAL_MS;
+
+        if (!skipWrite) {
+            (rider as any).currentLocation = {
+                type: 'Point',
+                coordinates: [coord.lng, coord.lat],
+                updatedAt: new Date(),
+            };
+            await rider.save();
+            _lastLocationWriteAt.set(userId, now);
+            // Keep the throttle map from growing forever — trim opportunistically.
+            if (_lastLocationWriteAt.size > 5000) {
+                const cutoff = now - 60_000;
+                for (const [k, v] of _lastLocationWriteAt) if (v < cutoff) _lastLocationWriteAt.delete(k);
+            }
+        } else {
+            // Reflect the freshest coord in-memory so downstream socket fanout
+            // and the active-trip lookup see the current position without a DB
+            // write. Persistence catches up on the next accepted tick.
+            (rider as any).currentLocation = {
+                type: 'Point',
+                coordinates: [coord.lng, coord.lat],
+                updatedAt: new Date(),
+            };
+        }
 
         // Fanout to all customers so their maps update the marker in real time,
         // regardless of whether this rider owns an active trip.
@@ -205,6 +247,13 @@ export const riderService = {
             ];
         }
 
+        // Rider job feed — the JobRequestCard UI shows: pickup/drop address,
+        // distance, ETA, price, category, notes, customer name. Everything
+        // else (history, pricing internals, coupon fields, cancel metadata,
+        // GeoJSON sub-docs) is not rendered and is stripped from the payload
+        // to keep the offer card fetch tiny.
+        const BOOKING_FIELDS = 'code user mode categorySlug vehicleTypeSlug pickup.address pickup.lat pickup.lng drop.address drop.lat drop.lng notes recipientPhone payment distanceKm etaMin price status createdAt';
+
         if (hasLocation) {
             return Booking.find({
                 ...baseFilter,
@@ -214,10 +263,10 @@ export const riderService = {
                         $maxDistance: maxDistance,
                     },
                 },
-            }).populate('user', 'name phone').limit(limit).lean();
+            }).select(BOOKING_FIELDS).populate('user', 'name phone').limit(limit).lean();
         }
 
-        return Booking.find(baseFilter).sort({ createdAt: -1 }).populate('user', 'name phone').limit(limit).lean();
+        return Booking.find(baseFilter).sort({ createdAt: -1 }).select(BOOKING_FIELDS).populate('user', 'name phone').limit(limit).lean();
     },
 
     async recordDecline(userId: string, bookingId: string, reason = '') {

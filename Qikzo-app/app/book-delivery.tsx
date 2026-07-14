@@ -58,6 +58,9 @@ export default function BookDeliveryScreen() {
     };
 
     const confirm = async () => {
+        // Double-tap guard — the button already shows a spinner, but on
+        // Android a fast second tap can fire before the disabled state paints.
+        if (loading) return;
         if (!draft.pickup.trim() || !draft.drop.trim()) {
             sheet.show({ variant: 'error', title: 'Locations required', message: 'Please set both pickup and drop locations.' });
             return;

@@ -17,9 +17,15 @@ export async function connectDB(): Promise<typeof mongoose> {
         cached.promise = mongoose
             .connect(env.MONGO_URI, {
                 serverSelectionTimeoutMS: 8000,
-                socketTimeoutMS: 30000,
-                maxPoolSize: 20,
-                minPoolSize: 2,
+                socketTimeoutMS: 45000,
+                // Pool sized for a single-node self-hosted Mongo on the same
+                // VPS. 100 gives ~2-3k concurrent users comfortably; raise to
+                // 200+ only after moving Mongo to its own box.
+                maxPoolSize: 100,
+                minPoolSize: 10,
+                // Fail fast when the pool is saturated instead of hanging the
+                // request forever — surfaces the bottleneck as a 500 in logs.
+                waitQueueTimeoutMS: 5000,
                 // Cheaper wire protocol + faster monitoring.
                 compressors: ['zlib'] as any,
                 heartbeatFrequencyMS: 30000,

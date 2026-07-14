@@ -11,8 +11,10 @@ export const bookingsApi = {
         return (await http.post<BookingEstimate>('/bookings/estimate', input)) as unknown as BookingEstimate;
     },
 
-    async create(input: CreateBookingInput): Promise<Booking> {
-        const res = await http.post<{ booking: Booking }>('/bookings', input);
+    async create(input: CreateBookingInput, opts: { idempotencyKey?: string } = {}): Promise<Booking> {
+        const headers: Record<string, string> = {};
+        if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
+        const res = await http.post<{ booking: Booking }>('/bookings', input, { headers });
         return res.booking;
     },
 
@@ -37,6 +39,15 @@ export const bookingsApi = {
 
     async cancel(id: string, reason?: string): Promise<Booking> {
         const res = await http.post<{ booking: Booking }>(`/bookings/${id}/cancel`, { reason });
+        return res.booking;
+    },
+    async confirmPayment(id: string): Promise<Booking> {
+        const res = await http.post<{ booking: Booking }>(`/bookings/${id}/confirm-payment`);
+        return res.booking;
+    },
+
+    async disputePayment(id: string, reason?: string): Promise<Booking> {
+        const res = await http.post<{ booking: Booking }>(`/bookings/${id}/dispute-payment`, { reason });
         return res.booking;
     },
 };

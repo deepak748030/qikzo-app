@@ -2,9 +2,11 @@ import React, { useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { colors } from '@/lib/theme';
+import { VEHICLE_ICON_DATA_URIS } from '@/lib/vehicleIcons';
 
 export type LatLng = { lat: number; lng: number };
 export type RouteInfo = { distanceKm: number; durationMin: number };
+export type VehicleKind = 'bike' | 'auto' | 'car';
 
 type Props = {
   center: LatLng;
@@ -13,6 +15,10 @@ type Props = {
   // Rider's own live location — when provided, a distinct marker is drawn and
   // a real-road route from rider → pickup is fetched.
   riderLocation?: LatLng | null;
+  // Vehicle the rider is driving for the active job. When set with
+  // `riderLocation`, the rider marker becomes that vehicle's emoji and
+  // rotates in the direction of travel.
+  vehicleKind?: VehicleKind | null;
   // when true, a fixed centered pin appears and `onCenterChange` fires while panning
   pickerMode?: boolean;
   pinColor?: string;
@@ -33,6 +39,7 @@ function buildHtml({
   pickup,
   drop,
   riderLocation,
+  vehicleKind,
   pickerMode,
   pinColor,
   showTraffic,
@@ -98,9 +105,40 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   }
   ${pickup ? `L.marker([${pickup.lat},${pickup.lng}], { icon: pinIcon('${colors.accent}') }).addTo(map);` : ''}
   ${drop ? `L.marker([${drop.lat},${drop.lng}], { icon: pinIcon('${colors.foreground}') }).addTo(map);` : ''}
-  ${riderLocation ? `
-    // Rider's live position — distinct blue dot with a pulse ring.
-    var riderIcon = L.divIcon({
+  // Rider's live position — vehicle emoji marker that rotates in the
+  // direction of travel. Created lazily and moved in-place from RN so we
+  // don't rebuild the map on every location tick.
+  var riderMarker = null;
+  var riderAnim = null;
+  var riderHeading = 0;
+  var riderVehicle = ${vehicleKind ? `'${vehicleKind}'` : 'null'};
+  // Top-down photographic vehicle silhouettes (user-supplied), inlined as
+  // base64 data URIs. Head-of-vehicle in source: bike→top, auto/car→bottom.
+  var VEHICLE_IMGS = ${JSON.stringify(VEHICLE_ICON_DATA_URIS)};
+  function vehGlyph(kind){
+    if(kind==='bike') return { src: VEHICLE_IMGS.bike, baseRot:0   };
+    if(kind==='auto') return { src: VEHICLE_IMGS.auto, baseRot:180 };
+    if(kind==='car')  return { src: VEHICLE_IMGS.car,  baseRot:180 };
+    return null;
+  }
+  function bearing(a, b){
+    var toRad=Math.PI/180, toDeg=180/Math.PI;
+    var lat1=a.lat*toRad, lat2=b.lat*toRad, dLon=(b.lng-a.lng)*toRad;
+    var y=Math.sin(dLon)*Math.cos(lat2);
+    var x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+    return (Math.atan2(y,x)*toDeg+360)%360;
+  }
+  function buildRiderIcon(vehicle, headingDeg){
+    var g = vehGlyph(vehicle);
+    if(g){
+      var rot = (g.baseRot + (headingDeg||0)) % 360;
+      return L.divIcon({
+        className:'',
+        html:'<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;transform:rotate('+rot+'deg);transition:transform .6s linear;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));"><img src="'+g.src+'" style="width:100%;height:100%;object-fit:contain;pointer-events:none;" alt="" /></div>',
+        iconSize:[44,44], iconAnchor:[22,22]
+      });
+    }
+    return L.divIcon({
       className:'',
       html:'<div style="position:relative;width:22px;height:22px;">\
 <div style="position:absolute;inset:-8px;border-radius:50%;background:${colors.primary};opacity:.18;animation:riderPulse 1.6s ease-out infinite;"></div>\
@@ -108,8 +146,37 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
 </div><style>@keyframes riderPulse{0%{transform:scale(.6);opacity:.5}100%{transform:scale(2.2);opacity:0}}</style>',
       iconSize:[22,22], iconAnchor:[11,11]
     });
-    L.marker([${riderLocation.lat},${riderLocation.lng}], { icon: riderIcon, interactive:false }).addTo(map);
-  ` : ''}
+  }
+  function ensureRiderMarker(lat, lng){
+    if(riderMarker) return riderMarker;
+    riderMarker = L.marker([lat,lng], { icon: buildRiderIcon(riderVehicle, riderHeading), interactive:false }).addTo(map);
+    return riderMarker;
+  }
+  function setRiderVehicle(kind){
+    riderVehicle = kind || null;
+    if(riderMarker) riderMarker.setIcon(buildRiderIcon(riderVehicle, riderHeading));
+  }
+  function moveRider(lat, lng){
+    ensureRiderMarker(lat, lng);
+    if(riderAnim){ cancelAnimationFrame(riderAnim); riderAnim=null; }
+    var from = riderMarker.getLatLng();
+    if(map.distance([from.lat,from.lng],[lat,lng]) > 1.5){
+      riderHeading = bearing({lat:from.lat,lng:from.lng},{lat:lat,lng:lng});
+      if(riderVehicle) riderMarker.setIcon(buildRiderIcon(riderVehicle, riderHeading));
+    }
+    var start = performance.now();
+    var dur = 900;
+    function tick(now){
+      var t = Math.min(1, (now-start)/dur);
+      var e = 1 - Math.pow(1-t, 2);
+      var la = from.lat + (lat - from.lat) * e;
+      var ln = from.lng + (lng - from.lng) * e;
+      riderMarker.setLatLng([la, ln]);
+      if(t<1) riderAnim = requestAnimationFrame(tick); else riderAnim=null;
+    }
+    riderAnim = requestAnimationFrame(tick);
+  }
+  ${riderLocation ? `moveRider(${riderLocation.lat}, ${riderLocation.lng});` : ''}
 
   ${riderLocation && pickup ? `
     // ---- Real road route: rider → pickup (dashed, secondary emphasis) ----
@@ -280,6 +347,8 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
     try{
       var d = JSON.parse(ev.data);
       if(d.type==='setCenter'){ map.setView([d.lat, d.lng], d.zoom || 16); }
+      else if(d.type==='moveRider'){ moveRider(d.lat, d.lng); }
+      else if(d.type==='setRiderVehicle'){ setRiderVehicle(d.vehicle); }
     }catch(e){}
   }
 </script>
@@ -287,14 +356,17 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
 }
 
 export default function LeafletMap({
-  center, pickup, drop, riderLocation, pickerMode, pinColor, showTraffic, onCenterChange, onReady, onRoute, style,
+  center, pickup, drop, riderLocation, vehicleKind, pickerMode, pinColor, showTraffic, onCenterChange, onReady, onRoute, style,
 }: Props) {
   const ref = useRef<WebView>(null);
+  // Rebuild the HTML only when the rider location FIRST becomes available
+  // (so the rider→pickup route is drawn once). Ongoing location updates are
+  // pushed imperatively via `moveRider` to avoid resetting the map.
+  const hasRiderLocation = !!(riderLocation && pickup);
   const html = useMemo(
-    () => buildHtml({ center, pickup, drop, riderLocation, pickerMode, pinColor, showTraffic }),
-    // Only rebuild when these change meaningfully
+    () => buildHtml({ center, pickup, drop, riderLocation, vehicleKind, pickerMode, pinColor, showTraffic }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, riderLocation?.lat, riderLocation?.lng, showTraffic]
+    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, showTraffic, hasRiderLocation]
   );
 
   const onMessage = (e: WebViewMessageEvent) => {
@@ -312,6 +384,21 @@ export default function LeafletMap({
     const js = `(function(){try{window.postMessage(JSON.stringify({type:'setCenter',lat:${center.lat},lng:${center.lng},zoom:16}));}catch(e){}})();true;`;
     ref.current.injectJavaScript(js);
   }, [center.lat, center.lng]);
+
+  // Push rider location updates imperatively for smooth tweening.
+  React.useEffect(() => {
+    if (!ref.current || !riderLocation) return;
+    const js = `(function(){try{window.postMessage(JSON.stringify({type:'moveRider',lat:${riderLocation.lat},lng:${riderLocation.lng}}));}catch(e){}})();true;`;
+    ref.current.injectJavaScript(js);
+  }, [riderLocation?.lat, riderLocation?.lng]);
+
+  // Swap the rider marker's vehicle emoji without rebuilding the map.
+  React.useEffect(() => {
+    if (!ref.current) return;
+    const v = vehicleKind ? `'${vehicleKind}'` : 'null';
+    const js = `(function(){try{window.postMessage(JSON.stringify({type:'setRiderVehicle',vehicle:${v}}));}catch(e){}})();true;`;
+    ref.current.injectJavaScript(js);
+  }, [vehicleKind]);
 
   return (
     <View style={[styles.wrap, style]}>

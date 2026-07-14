@@ -49,6 +49,20 @@ export function disconnectSocket() {
     currentToken = null;
 }
 
+let tokenPoll: any = null;
+export function installSocketTokenWatcher() {
+    if (tokenPoll) return;
+    tokenPoll = setInterval(() => {
+        const { accessToken } = tokenStore.get();
+        if (!accessToken) return;
+        if (currentToken && accessToken !== currentToken) {
+            try { connectSocket(); } catch {}
+        } else if (!socket && accessToken) {
+            try { connectSocket(); } catch {}
+        }
+    }, 3000);
+}
+
 export function subscribe(event: string, cb: Listener): () => void {
     let set = listeners.get(event);
     if (!set) { set = new Set(); listeners.set(event, set); }

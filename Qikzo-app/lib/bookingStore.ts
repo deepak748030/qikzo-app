@@ -57,6 +57,8 @@ type State = {
         vehicleTypeSlug?: string;
     }) => Promise<Booking>;
     cancelOnServer: (id: string, reason?: string) => Promise<void>;
+    confirmPaymentOnServer: (id: string) => Promise<void>;
+    disputePaymentOnServer: (id: string, reason?: string) => Promise<void>;
 };
 
 // ---------- Server → UI mappers ----------
@@ -114,6 +116,7 @@ function mapBooking(b: ServerBooking): Booking & { serverId: string } {
         notes: b.notes || '',
         recipientPhone: b.recipientPhone || undefined,
         payment: (b.payment as 'cash' | 'upi') || 'cash',
+        paymentStatus: (b as any).paymentStatus || 'pending',
         distanceKm: Number(b.distanceKm) || 0,
         etaMin: Number(b.etaMin) || 0,
         price: Number(b.price) || 0,
@@ -176,9 +179,6 @@ export const useBooking = create<State>((set, get) => ({
     createOnServer: async (input) => {
         set({ loading: true, lastError: null });
         try {
-            // Ride category ids used in the UI don't always match the rider's
-            // vehicleTypeSlug (e.g. UI 'cab' vs rider registration 'sedan').
-            // Normalize here so dispatch matches the right vehicle class.
             const RIDE_SLUG_MAP: Record<string, string> = {
                 bike: 'bike',
                 auto: 'auto',
@@ -189,6 +189,9 @@ export const useBooking = create<State>((set, get) => ({
             const rideSlug = input.mode === 'ride'
                 ? (RIDE_SLUG_MAP[input.categoryId] || input.categoryId)
                 : undefined;
+            // Idempotency key — server dedupes for 5 min so a network retry
+            // or double-tap doesn't create two bookings.
+            const idempotencyKey = `bk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
             const created = await bookingsApi.create({
                 mode: input.mode,
                 categorySlug: input.categoryId,
@@ -198,7 +201,7 @@ export const useBooking = create<State>((set, get) => ({
                 notes: input.notes,
                 recipientPhone: input.recipientPhone,
                 payment: input.payment,
-            } as any);
+            } as any, { idempotencyKey });
             const mapped = mapBooking(created);
             set((s) => ({ bookings: [mapped, ...s.bookings], loading: false }));
             return mapped;
@@ -223,6 +226,22 @@ export const useBooking = create<State>((set, get) => ({
             // Optimistic local fallback so the user isn't stuck.
             get().updateStatus(id, 'Cancelled');
         }
+    },
+
+    confirmPaymentOnServer: async (id) => {
+        const existing = get().bookings.find((b) => b.id === id) as (Booking & { serverId?: string }) | undefined;
+        if (!existing?.serverId || !tokenStore.get().accessToken) return;
+        const b = await bookingsApi.confirmPayment(existing.serverId);
+        const mapped = mapBooking(b);
+        set((s) => ({ bookings: s.bookings.map((x) => (x.id === id ? mapped : x)) }));
+    },
+
+    disputePaymentOnServer: async (id, reason) => {
+        const existing = get().bookings.find((b) => b.id === id) as (Booking & { serverId?: string }) | undefined;
+        if (!existing?.serverId || !tokenStore.get().accessToken) return;
+        const b = await bookingsApi.disputePayment(existing.serverId, reason);
+        const mapped = mapBooking(b);
+        set((s) => ({ bookings: s.bookings.map((x) => (x.id === id ? mapped : x)) }));
     },
 }));
 

@@ -72,6 +72,9 @@ export type Booking = {
     notes?: string;
     recipientPhone?: string;
     payment: PaymentMode;
+    paymentStatus?: 'pending' | 'paid' | 'disputed';
+    paymentPaidAt?: string | null;
+    paymentTxnId?: string;
     distanceKm: number;
     etaMin: number;
     price: number;

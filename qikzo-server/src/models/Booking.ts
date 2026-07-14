@@ -56,6 +56,13 @@ const BookingSchema = new Schema(
         notes: { type: String, default: '' },
         recipientPhone: { type: String, default: '' },
         payment: { type: String, enum: ['cash', 'upi'], default: 'cash' },
+        // Mock payment lifecycle. UPI auto-settles on delivery; cash sits in
+        // `pending` until the customer confirms in-app. `disputed` opens a
+        // support flow. Real gateway integration replaces the auto-settle
+        // branch later without touching this schema.
+        paymentStatus: { type: String, enum: ['pending', 'paid', 'disputed'], default: 'pending', index: true },
+        paymentPaidAt: { type: Date, default: null },
+        paymentTxnId: { type: String, default: '' }, // mock UPI id — placeholder for real gateway ref
 
         distanceKm: { type: Number, required: true },
         etaMin: { type: Number, required: true },
@@ -83,7 +90,16 @@ const BookingSchema = new Schema(
     { timestamps: true }
 );
 
+// Query patterns:
+//  - user history feed  → (user, createdAt desc)
+//  - rider job history  → (rider, createdAt desc)
+//  - admin dispatch/ops → (status, createdAt desc), (status, rider)
+//  - geo dispatch       → 2dsphere on pickup/drop locations
 BookingSchema.index({ user: 1, status: 1, createdAt: -1 });
+BookingSchema.index({ user: 1, createdAt: -1 });
+BookingSchema.index({ rider: 1, createdAt: -1 });
+BookingSchema.index({ status: 1, createdAt: -1 });
+BookingSchema.index({ status: 1, rider: 1 });
 BookingSchema.index({ 'pickup.location': '2dsphere' });
 BookingSchema.index({ 'drop.location': '2dsphere' });
 

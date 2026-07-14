@@ -64,8 +64,10 @@ const staticOpts = {
 app.use('/uploads', express.static(path.join(__dirname, '../uploads'), staticOpts));
 app.use('/uploads', express.static(path.join('/tmp', 'uploads'), staticOpts));
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+// Body limits — tight on JSON APIs (512 KB is more than enough for any
+// non-upload payload). Upload routes use multer with their own caps.
+app.use(express.json({ limit: '512kb' }));
+app.use(express.urlencoded({ extended: true, limit: '512kb' }));
 
 // Sanitisation — order matters: parse body first, then strip NoSQL operators
 // and duplicated query params.

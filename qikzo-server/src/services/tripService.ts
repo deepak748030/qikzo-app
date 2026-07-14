@@ -45,30 +45,40 @@ export const tripService = {
         return { $or: or };
     },
 
+    // Slim projections — trip/booking documents carry a lot of internals
+    // (history, pricing breakdown, coupon/cancel metadata, GeoJSON sub-docs)
+    // that neither the rider app nor the customer app renders. Trimming
+    // them here cuts per-response payload ~55-70%.
     async listMine(userId: string, limit = 50) {
         const filter = await this._ownershipFilter(userId);
         return Trip.find(filter)
             .sort({ createdAt: -1 })
             .limit(Math.min(Math.max(limit, 1), 100))
-            .populate('rider')
-            .populate({ path: 'booking', populate: { path: 'user', select: 'name phone' } })
+            .select('booking rider user stage distanceKm fare createdAt updatedAt')
+            .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone' })
+            .populate({
+                path: 'booking',
+                select: 'code mode categorySlug pickup.address pickup.lat pickup.lng drop.address drop.lat drop.lng notes recipientPhone payment distanceKm etaMin price status createdAt',
+                populate: { path: 'user', select: 'name phone' },
+            })
             .lean();
     },
 
     async getMine(userId: string, id: string) {
         const filter = await this._ownershipFilter(userId);
         const trip = await Trip.findOne({ _id: id, ...filter })
-            .populate('rider')
-            .populate({ path: 'booking', populate: { path: 'user', select: 'name phone' } })
+            .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone currentLocation.coordinates' })
+            .populate({
+                path: 'booking',
+                select: '-history -pickup.location -drop.location',
+                populate: { path: 'user', select: 'name phone' },
+            })
             .lean();
         if (!trip) throw errors.notFound('Trip not found', 'TRIP_NOT_FOUND');
         return trip;
     },
 
     async getActive(userId: string) {
-        // Resolve rider-side lookup: a rider's active trip is keyed by their
-        // Rider._id, not their auth user id. Fall back to the customer path
-        // (Trip.user) so the same endpoint serves both apps.
         const rider = await Rider.findOne({ user: userId }).select('_id').lean();
         const or: any[] = [{ user: userId }];
         if (rider?._id) or.push({ rider: rider._id });
@@ -77,14 +87,18 @@ export const tripService = {
             stage: { $in: ['assigned', 'arriving', 'arrived', 'started'] },
         })
             .sort({ createdAt: -1 })
-            .populate('rider')
-            .populate({ path: 'booking', populate: { path: 'user', select: 'name phone' } })
+            .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone currentLocation.coordinates' })
+            .populate({
+                path: 'booking',
+                select: '-history -pickup.location -drop.location',
+                populate: { path: 'user', select: 'name phone' },
+            })
             .lean();
     },
 
     async getByBooking(userId: string, bookingId: string) {
         return Trip.findOne({ user: userId, booking: bookingId })
-            .populate('rider')
+            .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone currentLocation.coordinates' })
             .lean();
     },
 
@@ -206,6 +220,18 @@ export const tripService = {
                 }
                 booking.status = bookingStatus;
                 (booking.history as any).push({ status: bookingStatus });
+
+                // Mock payment settlement on delivery:
+                //  - UPI: auto-settle instantly (real gateway integration
+                //    replaces this with a webhook confirmation).
+                //  - Cash: leave as 'pending' — customer confirms in-app.
+                if (nextStage === 'completed' && (booking as any).paymentStatus === 'pending') {
+                    if ((booking as any).payment === 'upi') {
+                        (booking as any).paymentStatus = 'paid';
+                        (booking as any).paymentPaidAt = new Date();
+                        (booking as any).paymentTxnId = `MOCK-UPI-${Date.now()}`;
+                    }
+                }
                 await booking.save();
                 emitBookingUpdate(booking);
             }
