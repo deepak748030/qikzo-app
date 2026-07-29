@@ -4,10 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Banknote, Wallet, Bike, ChevronRight, MapPin, Home, UserPlus, Camera, ImagePlus, X, Plus, Mic, MicOff } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import {
-    ExpoSpeechRecognitionModule,
-    useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Input from '@/components/Input';
@@ -23,6 +19,15 @@ import { ApiError } from '@/lib/api/errors';
 import { tokenStore } from '@/lib/api/tokenStore';
 import { uploadFile } from '@/lib/api/endpoints/uploads';
 
+declare const require: (moduleName: string) => unknown;
+
+type SpeechModuleLike = {
+    requestPermissionsAsync: () => Promise<{ granted: boolean }>;
+    start: (options: Record<string, unknown>) => void;
+    stop: () => void;
+    addListener?: (eventName: string, listener: (event: any) => void) => { remove: () => void };
+};
+
 export default function BookDeliveryScreen() {
     const insets = useSafeAreaInsets();
     const draft = useBooking((s) => s.draft);
@@ -35,6 +40,9 @@ export default function BookDeliveryScreen() {
     const [uploading, setUploading] = useState(false);
     const [recording, setRecording] = useState(false);
     const notesBaseRef = useRef<string>('');
+    const speechRef = useRef<SpeechModuleLike | null>(null);
+    const speechInstalledRef = useRef(false);
+    const speechSubscriptionsRef = useRef<Array<{ remove: () => void }>>([]);
 
     const isRide = draft.mode === 'ride';
 
@@ -87,43 +95,70 @@ export default function BookDeliveryScreen() {
         setDraft({ noteImages: (draft.noteImages || []).filter((u) => u !== url) });
     };
 
-    // Voice → text using the device's built-in speech recognizer
-    // (iOS Speech framework / Android SpeechRecognizer). 100% on-device,
-    // no server, no API key. Interim results stream into the notes field
-    // and remain fully editable before submit.
-    useSpeechRecognitionEvent('result', (e) => {
-        const transcript = e.results?.[0]?.transcript ?? '';
-        if (!transcript) return;
-        const base = notesBaseRef.current;
-        const combined = base ? `${base} ${transcript}` : transcript;
-        setDraft({ notes: combined });
-    });
-    useSpeechRecognitionEvent('end', () => setRecording(false));
-    useSpeechRecognitionEvent('error', (e) => {
-        setRecording(false);
-        const code = (e as any)?.error;
-        if (code === 'no-speech' || code === 'aborted') return;
-        sheet.show({
-            variant: 'error',
-            title: 'Voice input error',
-            message: (e as any)?.message || 'Could not capture speech. Please try again.',
-        });
-    });
+    // Voice → text uses the device recognizer, but we lazy-load the native
+    // module so Expo Router can still register this route in Expo Go / before
+    // a native dev-client rebuild. Static importing it can make the route vanish.
+    const installSpeechRecognition = () => {
+        if (speechInstalledRef.current) return speechRef.current;
+        speechInstalledRef.current = true;
+        try {
+            const speechPackage = require('expo-speech-recognition') as { ExpoSpeechRecognitionModule?: SpeechModuleLike };
+            const mod = speechPackage.ExpoSpeechRecognitionModule;
+            if (!mod) return null;
+            speechRef.current = mod;
+            const resultSub = mod.addListener?.('result', (e) => {
+                const transcript = e?.results?.[0]?.transcript ?? '';
+                if (!transcript) return;
+                const base = notesBaseRef.current;
+                const combined = base ? `${base} ${transcript}` : transcript;
+                useBooking.getState().setDraft({ notes: combined });
+            });
+            const endSub = mod.addListener?.('end', () => setRecording(false));
+            const errorSub = mod.addListener?.('error', (e) => {
+                setRecording(false);
+                const code = e?.error;
+                if (code === 'no-speech' || code === 'aborted') return;
+                sheet.show({
+                    variant: 'error',
+                    title: 'Voice input error',
+                    message: e?.message || 'Could not capture speech. Please try again.',
+                });
+            });
+            speechSubscriptionsRef.current = [resultSub, endSub, errorSub].filter(Boolean) as Array<{ remove: () => void }>;
+            return mod;
+        } catch {
+            return null;
+        }
+    };
 
     useEffect(() => {
+        installSpeechRecognition();
         return () => {
-            try { ExpoSpeechRecognitionModule.stop(); } catch {}
+            try { speechRef.current?.stop(); } catch {}
+            speechSubscriptionsRef.current.forEach((sub) => {
+                try { sub.remove(); } catch {}
+            });
+            speechSubscriptionsRef.current = [];
         };
     }, []);
 
     const toggleRecording = async () => {
         try {
             if (recording) {
-                ExpoSpeechRecognitionModule.stop();
+                speechRef.current?.stop();
                 setRecording(false);
                 return;
             }
-            const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+            const speech = installSpeechRecognition();
+            if (!speech) {
+                sheet.show({
+                    variant: 'error',
+                    title: 'Voice unavailable',
+                    message: 'Please rebuild/open the native app to enable on-device voice input.',
+                });
+                return;
+            }
+            const perm = await speech.requestPermissionsAsync();
             if (!perm.granted) {
                 sheet.show({
                     variant: 'error',
@@ -135,7 +170,7 @@ export default function BookDeliveryScreen() {
             // Snapshot current notes so streamed interim/final transcripts
             // append to what the user already typed instead of overwriting it.
             notesBaseRef.current = (draft.notes || '').trim();
-            ExpoSpeechRecognitionModule.start({
+            speech.start({
                 lang: 'en-US',
                 interimResults: true,
                 continuous: true,
