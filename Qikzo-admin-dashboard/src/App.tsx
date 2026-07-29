@@ -20,6 +20,7 @@ const BannersPage = lazy(() => import('@/pages/BannersPage'));
 const SupportPage = lazy(() => import('@/pages/SupportPage'));
 const SupportDetailPage = lazy(() => import('@/pages/SupportDetailPage'));
 const AuditPage = lazy(() => import('@/pages/AuditPage'));
+const CategoriesPage = lazy(() => import('@/pages/CategoriesPage'));
 
 function FullscreenSpinner() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="bookings" element={<BookingsPage />} />
           <Route path="payouts" element={<PayoutsPage />} />
           <Route path="coupons" element={<CouponsPage />} />
+          <Route path="categories" element={<CategoriesPage />} />
           <Route path="banners" element={<BannersPage />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="support/:id" element={<SupportDetailPage />} />

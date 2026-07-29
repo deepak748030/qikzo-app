@@ -3,6 +3,7 @@ import requireAuth from '../middleware/requireAuth';
 import requireAdmin from '../middleware/requireAdmin';
 import validate from '../middleware/validate';
 import adminController from '../controllers/adminController';
+import categoryAdminController from '../controllers/categoryAdminController';
 import {
     listQuerySchema,
     rejectSchema,
@@ -52,6 +53,20 @@ router.get('/coupons', validate(listQuerySchema, 'query'), adminController.listC
 router.post('/coupons', adminController.createCoupon);
 router.patch('/coupons/:id', adminController.updateCoupon);
 router.delete('/coupons/:id', adminController.deleteCoupon);
+
+// Categories (with States & Areas / polygons)
+router.get('/categories', validate(listQuerySchema, 'query'), categoryAdminController.list);
+router.post('/categories', categoryAdminController.create);
+router.get('/categories/:id', categoryAdminController.get);
+router.patch('/categories/:id', categoryAdminController.update);
+router.delete('/categories/:id', categoryAdminController.remove);
+router.post('/categories/:id/toggle', categoryAdminController.toggle);
+router.post('/categories/:id/states', categoryAdminController.addState);
+router.patch('/categories/:id/states/:stateId', categoryAdminController.updateState);
+router.delete('/categories/:id/states/:stateId', categoryAdminController.removeState);
+router.post('/categories/:id/states/:stateId/areas', categoryAdminController.addArea);
+router.patch('/categories/:id/states/:stateId/areas/:areaId', categoryAdminController.updateArea);
+router.delete('/categories/:id/states/:stateId/areas/:areaId', categoryAdminController.removeArea);
 
 // Promo banners
 router.get('/banners', validate(listQuerySchema, 'query'), adminController.listBanners);
