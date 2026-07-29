@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
@@ -57,6 +57,22 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
   ),
 );
 Textarea.displayName = 'Textarea';
+
+export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
+  ({ className, children, ...rest }, ref) => (
+    <select
+      ref={ref}
+      className={cn(
+        'h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none transition focus:ring-2 focus:ring-primary/30 focus:border-primary/40 disabled:opacity-50',
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </select>
+  ),
+);
+Select.displayName = 'Select';
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cn('rounded-lg border border-border bg-card p-5', className)}>{children}</div>;

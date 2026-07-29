@@ -66,7 +66,7 @@ export const categoryAdminService = {
         if (exists) throw errors.conflict('Slug already exists', 'SLUG_TAKEN');
         const doc = await Category.create({
             slug, name: input.name.trim(),
-            emoji: input.emoji || '', hint: input.hint || '',
+            emoji: input.emoji || '', imageUrl: input.imageUrl || '', hint: input.hint || '',
             order: Number(input.order) || 0,
             active: input.active !== false,
             states: [],
@@ -77,7 +77,7 @@ export const categoryAdminService = {
 
     async update(adminId: string, id: string, input: any) {
         const doc = await getOr404(id);
-        for (const k of ['name', 'emoji', 'hint'] as const) if (typeof input[k] === 'string') (doc as any)[k] = input[k];
+        for (const k of ['name', 'emoji', 'hint', 'imageUrl'] as const) if (typeof input[k] === 'string') (doc as any)[k] = input[k];
         if (input.order !== undefined) doc.order = Number(input.order) || 0;
         if (typeof input.active === 'boolean') doc.active = input.active;
         await doc.save();

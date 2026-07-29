@@ -7,8 +7,24 @@ const PromoBannerSchema = new Schema(
         subtitle: { type: String, default: '' },
         address: { type: String, default: '' },
         imageUrl: { type: String, default: '' },
+        // Geo targeting: banner is linked to a Category → State → Area.
+        // The area polygon is copied here so the customer app can match a
+        // pickup point without re-reading the category tree.
+        categoryId: { type: Schema.Types.ObjectId, ref: 'Category', default: null, index: true },
+        categorySlug: { type: String, default: '' },
+        stateId: { type: String, default: '' },
+        stateName: { type: String, default: '' },
+        areaId: { type: String, default: '' },
+        areaName: { type: String, default: '' },
+        polygon: {
+            type: {
+                type: String,
+                enum: ['Polygon'],
+            },
+            coordinates: { type: [[[Number]]] },
+        },
         coord: {
-            lat: { type: Number, required: true },
+            lat: { type: Number, required: true }, // derived from the area polygon centroid
             lng: { type: Number, required: true },
         },
         active: { type: Boolean, default: true },

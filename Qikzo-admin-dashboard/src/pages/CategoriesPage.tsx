@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import { Plus, Trash2, MapPin, Layers, Power, PowerOff, Pencil, ChevronDown, ChevronRight, Eraser, Save, X, Package } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Badge, Button, Card, EmptyState, Input, Modal, TableSkeleton, Textarea } from '@/components/ui';
+import { ImageField } from '@/components/ImageField';
+import { ImageOff } from 'lucide-react';
 import { PolygonEditor, polygonAreaKm2, type Point } from '@/components/PolygonEditor';
 
 /**
@@ -23,13 +25,14 @@ type Category = {
     slug: string;
     name: string;
     emoji?: string;
+    imageUrl?: string;
     hint?: string;
     order?: number;
     active: boolean;
     states: State[];
 };
 
-const emptyCat = { name: '', slug: '', emoji: '', hint: '', order: '0', active: true };
+const emptyCat = { name: '', slug: '', emoji: '', imageUrl: '', hint: '', order: '0', active: true };
 
 export default function CategoriesPage() {
     const [items, setItems] = useState<Category[]>([]);
@@ -64,7 +67,7 @@ export default function CategoriesPage() {
     const openCreateCat = () => { setEditingCat(null); setCatForm({ ...emptyCat }); setShowCatForm(true); };
     const openEditCat = (c: Category) => {
         setEditingCat(c);
-        setCatForm({ name: c.name, slug: c.slug, emoji: c.emoji || '', hint: c.hint || '', order: String(c.order ?? 0), active: c.active });
+        setCatForm({ name: c.name, slug: c.slug, emoji: c.emoji || '', imageUrl: c.imageUrl || '', hint: c.hint || '', order: String(c.order ?? 0), active: c.active });
         setShowCatForm(true);
     };
 
@@ -75,6 +78,7 @@ export default function CategoriesPage() {
             const payload: any = {
                 name: catForm.name.trim(),
                 emoji: catForm.emoji.trim(),
+                imageUrl: catForm.imageUrl.trim(),
                 hint: catForm.hint.trim(),
                 order: Number(catForm.order) || 0,
                 active: catForm.active,
@@ -173,11 +177,11 @@ export default function CategoriesPage() {
             ) : items.length === 0 ? (
                 <Card><EmptyState icon={<Package className="h-8 w-8" />} title="No categories yet" hint="Create your first category to get started." /></Card>
             ) : (
-                <div className="space-y-3">
+                <Card className="!p-0 overflow-hidden divide-y divide-border">
                     {items.map(c => {
                         const isOpen = expanded[c._id];
                         return (
-                            <Card key={c._id} className="!p-0 overflow-hidden">
+                            <div key={c._id}>
                                 <div className="flex items-center gap-3 p-4">
                                     <button
                                         onClick={() => setExpanded(prev => ({ ...prev, [c._id]: !prev[c._id] }))}
@@ -186,7 +190,15 @@ export default function CategoriesPage() {
                                     >
                                         {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                     </button>
-                                    <div className="text-2xl leading-none w-8 text-center">{c.emoji || '📁'}</div>
+                                    <div className="h-11 w-20 rounded-md bg-muted border border-border overflow-hidden flex-shrink-0 grid place-items-center">
+                                        {c.imageUrl ? (
+                                            <img src={c.imageUrl} alt="" className="h-full w-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                        ) : c.emoji ? (
+                                            <span className="text-2xl leading-none">{c.emoji}</span>
+                                        ) : (
+                                            <ImageOff className="h-4 w-4 text-muted-foreground" />
+                                        )}
+                                    </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <div className="font-medium truncate">{c.name}</div>
@@ -262,10 +274,10 @@ export default function CategoriesPage() {
                                         </div>
                                     </div>
                                 )}
-                            </Card>
+                            </div>
                         );
                     })}
-                </div>
+                </Card>
             )}
 
             {/* Category create/edit modal */}
@@ -303,6 +315,12 @@ export default function CategoriesPage() {
                         <label className="text-sm font-medium block mb-1">Hint</label>
                         <Textarea value={catForm.hint} onChange={e => setCatForm({ ...catForm, hint: e.target.value })} placeholder="Short description shown to customers" />
                     </div>
+                    <ImageField
+                        value={catForm.imageUrl}
+                        onChange={url => setCatForm(f => ({ ...f, imageUrl: url }))}
+                        label="Category image / icon"
+                        hint="Upload a file or paste a URL"
+                    />
                     <label className="inline-flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={catForm.active} onChange={e => setCatForm({ ...catForm, active: e.target.checked })} />
                         Active

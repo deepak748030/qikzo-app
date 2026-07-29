@@ -2,9 +2,10 @@ import { z } from 'zod';
 
 export const listQuerySchema = z.object({
     status: z.string().optional(),
-    limit: z.coerce.number().int().min(1).max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
     cursor: z.string().optional(),
     q: z.string().optional(),
+    active: z.enum(['true', 'false']).optional(),
     online: z.enum(['true', 'false']).optional(),
     kycStatus: z.string().optional(),
     role: z.enum(['customer', 'rider', 'admin']).optional(),

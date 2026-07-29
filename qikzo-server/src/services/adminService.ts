@@ -13,6 +13,49 @@ import { audit } from './auditService';
 import { emitKycUpdate } from '../sockets';
 
 /**
+ * Banners are geo-targeted by picking a Category → State → Area. The area's
+ * polygon is copied onto the banner and its centroid becomes the map pin, so
+ * admins never type latitude/longitude by hand.
+ */
+function resolveBannerGeo(input: any) {
+    const ring: [number, number][] | undefined =
+        input?.polygon?.coordinates?.[0] ?? (Array.isArray(input?.polygon?.coordinates?.[0]?.[0]) ? undefined : input?.polygon?.coordinates);
+    const out: any = {
+        categoryId: input.categoryId || null,
+        categorySlug: String(input.categorySlug || ''),
+        stateId: String(input.stateId || ''),
+        stateName: String(input.stateName || ''),
+        areaId: String(input.areaId || ''),
+        areaName: String(input.areaName || ''),
+    };
+
+    if (Array.isArray(ring) && ring.length >= 3) {
+        const pts = ring.map((p) => [Number(p[0]), Number(p[1])] as [number, number]);
+        if (pts.some(([lng, lat]) => !Number.isFinite(lng) || !Number.isFinite(lat))) {
+            throw errors.badRequest('Invalid polygon point', 'POINT_INVALID');
+        }
+        const [fx, fy] = pts[0];
+        const [lx, ly] = pts[pts.length - 1];
+        if (fx !== lx || fy !== ly) pts.push([fx, fy]);
+        const uniq = pts.slice(0, -1);
+        out.polygon = { type: 'Polygon', coordinates: [pts] };
+        out.coord = {
+            lat: uniq.reduce((s, p) => s + p[1], 0) / uniq.length,
+            lng: uniq.reduce((s, p) => s + p[0], 0) / uniq.length,
+        };
+        return out;
+    }
+
+    const lat = Number(input?.coord?.lat);
+    const lng = Number(input?.coord?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        throw errors.badRequest('Select a service area on the map', 'AREA_REQUIRED');
+    }
+    out.coord = { lat, lng };
+    return out;
+}
+
+/**
  * Admin backoffice service. All calls assume `requireAdmin` has already run,
  * so we never re-check the caller's role here — but we do mirror decisions
  * back onto the Rider doc + notify the affected user.
@@ -272,11 +315,7 @@ export const adminService = {
         const title = String(input.title || '').trim();
         if (!slug) throw errors.badRequest('Slug required', 'SLUG_REQUIRED');
         if (!title) throw errors.badRequest('Title required', 'TITLE_REQUIRED');
-        const lat = Number(input?.coord?.lat);
-        const lng = Number(input?.coord?.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-            throw errors.badRequest('Coordinates required', 'COORD_REQUIRED');
-        }
+        const geo = resolveBannerGeo(input);
         const existing = await PromoBanner.findOne({ slug });
         if (existing) throw errors.badRequest('Banner slug already exists', 'SLUG_EXISTS');
         return PromoBanner.create({
@@ -285,7 +324,7 @@ export const adminService = {
             subtitle: String(input.subtitle || '').trim(),
             address: String(input.address || '').trim(),
             imageUrl: String(input.imageUrl || '').trim(),
-            coord: { lat, lng },
+            ...geo,
             active: input.active !== false,
             order: Number.isFinite(Number(input.order)) ? Number(input.order) : 0,
         });
@@ -298,9 +337,7 @@ export const adminService = {
         if (typeof patch.imageUrl === 'string') clean.imageUrl = patch.imageUrl.trim();
         if (typeof patch.active === 'boolean') clean.active = patch.active;
         if (patch.order !== undefined && Number.isFinite(Number(patch.order))) clean.order = Number(patch.order);
-        if (patch.coord && Number.isFinite(Number(patch.coord.lat)) && Number.isFinite(Number(patch.coord.lng))) {
-            clean.coord = { lat: Number(patch.coord.lat), lng: Number(patch.coord.lng) };
-        }
+        if (patch.polygon || patch.categoryId || patch.coord) Object.assign(clean, resolveBannerGeo(patch));
         const doc = await PromoBanner.findByIdAndUpdate(id, clean, { new: true });
         if (!doc) throw errors.notFound('Banner not found', 'BANNER_NOT_FOUND');
         return doc;

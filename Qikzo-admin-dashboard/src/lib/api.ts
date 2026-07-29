@@ -94,3 +94,26 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
   }
   return data as T;
 }
+
+/** Upload a file to POST /uploads (multipart) and return its public URL. */
+export async function uploadFile(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+
+  const send = () => fetch(`${BASE}/uploads`, {
+    method: 'POST',
+    headers: tokens.access ? { authorization: `Bearer ${tokens.access}` } : undefined,
+    body: form,
+  });
+
+  let res = await send();
+  if (res.status === 401 && tokens.refresh) {
+    refreshInflight ??= doRefresh().finally(() => { refreshInflight = null; });
+    if (await refreshInflight) res = await send();
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new ApiError(res.status, data?.message || 'Upload failed', data?.code);
+  }
+  return data.url as string;
+}
