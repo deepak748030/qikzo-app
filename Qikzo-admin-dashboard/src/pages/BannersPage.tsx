@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { usePaginated } from '@/lib/usePaginated';
@@ -10,14 +10,10 @@ import { PolygonEditor, polygonAreaKm2, useCenterFromPoints, type Point } from '
 import { Images, Plus, Trash2, MapPin, ImageOff, Layers } from 'lucide-react';
 
 /**
- * Promo banners CRUD for the customer app home screen carousel.
- * A banner is geo-targeted by picking Category → State → Area; the area's
- * polygon is drawn on the map and its centroid is stored server-side, so no
- * manual latitude/longitude entry is needed.
+ * Promo banners CRUD. A banner picks a category, then the admin manually
+ * types the location name and draws the service polygon on the map.
  */
-type Area = { _id: string; name: string; active: boolean; polygon: { coordinates: Point[][] } };
-type CatState = { _id: string; name: string; active: boolean; areas: Area[] };
-type Category = { _id: string; slug: string; name: string; emoji?: string; imageUrl?: string; states: CatState[] };
+type Category = { _id: string; slug: string; name: string; emoji?: string };
 
 type Banner = {
   _id: string;
@@ -29,9 +25,7 @@ type Banner = {
   coord: { lat: number; lng: number };
   categoryId?: string | null;
   categorySlug?: string;
-  stateId?: string;
   stateName?: string;
-  areaId?: string;
   areaName?: string;
   polygon?: { coordinates: Point[][] } | null;
   active?: boolean;
@@ -45,8 +39,7 @@ type Form = {
   address: string;
   imageUrl: string;
   categoryId: string;
-  stateId: string;
-  areaId: string;
+  locationName: string;
   points: Point[];
   order: string;
   active: boolean;
@@ -59,8 +52,7 @@ const emptyForm: Form = {
   address: '',
   imageUrl: '',
   categoryId: '',
-  stateId: '',
-  areaId: '',
+  locationName: '',
   points: [],
   order: '0',
   active: true,
@@ -76,7 +68,6 @@ export default function BannersPage() {
   const { items, loading, hasMore, loadMore, refresh } = usePaginated<Banner>('/admin/banners');
   const sentinelRef = useInfiniteScroll(hasMore, loading, loadMore);
 
-  // Categories power the Category → State → Area pickers in the form.
   useEffect(() => {
     void (async () => {
       try {
@@ -86,9 +77,7 @@ export default function BannersPage() {
     })();
   }, []);
 
-  const category = useMemo(() => categories.find(c => c._id === form.categoryId), [categories, form.categoryId]);
-  const state = useMemo(() => category?.states.find(s => s._id === form.stateId), [category, form.stateId]);
-  const area = useMemo(() => state?.areas.find(a => a._id === form.areaId), [state, form.areaId]);
+  const category = categories.find(c => c._id === form.categoryId);
   const mapCenter = useCenterFromPoints(form.points);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setShowForm(true); };
@@ -102,8 +91,7 @@ export default function BannersPage() {
       address: b.address || '',
       imageUrl: b.imageUrl || '',
       categoryId: b.categoryId ? String(b.categoryId) : '',
-      stateId: b.stateId || '',
-      areaId: b.areaId || '',
+      locationName: b.areaName || b.stateName || '',
       points: ring.length > 3 ? (ring.slice(0, -1) as Point[]) : (ring as Point[]),
       order: String(b.order ?? 0),
       active: b.active !== false,
@@ -111,38 +99,30 @@ export default function BannersPage() {
     setShowForm(true);
   };
 
-  const pickCategory = (categoryId: string) =>
-    setForm(f => ({ ...f, categoryId, stateId: '', areaId: '', points: [] }));
-  const pickState = (stateId: string) =>
-    setForm(f => ({ ...f, stateId, areaId: '', points: [] }));
-  const pickArea = (areaId: string) => {
-    const a = state?.areas.find(x => x._id === areaId);
-    const ring = a?.polygon?.coordinates?.[0] || [];
-    setForm(f => ({ ...f, areaId, points: ring.length > 3 ? (ring.slice(0, -1) as Point[]) : (ring as Point[]) }));
-  };
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      if (form.points.length < 3) throw new Error('Pick a service area (or draw at least 3 points on the map)');
+      if (!form.categoryId) throw new Error('Select a category');
+      if (!form.locationName.trim()) throw new Error('Enter a location name');
+      if (form.points.length < 3) throw new Error('Draw at least 3 points on the map');
+
+      // Close the polygon ring (GeoJSON requires first == last).
+      const ring = [...form.points, form.points[0]];
 
       const payload: any = {
         title: form.title.trim(),
         subtitle: form.subtitle.trim(),
         address: form.address.trim(),
         imageUrl: form.imageUrl.trim(),
-        categoryId: form.categoryId || null,
+        categoryId: form.categoryId,
         categorySlug: category?.slug || '',
-        stateId: form.stateId,
-        stateName: state?.name || '',
-        areaId: form.areaId,
-        areaName: area?.name || '',
-        polygon: { type: 'Polygon', coordinates: [form.points] },
+        stateName: form.locationName.trim(),
+        areaName: form.locationName.trim(),
+        polygon: { type: 'Polygon', coordinates: [ring] },
         active: form.active,
         order: Number(form.order) || 0,
       };
-      // slug is immutable after creation to keep any linked references stable.
       if (!editing) payload.slug = form.slug.trim().toLowerCase();
 
       if (editing) await api(`/admin/banners/${editing._id}`, { method: 'PATCH', body: payload });
@@ -190,13 +170,13 @@ export default function BannersPage() {
     { key: 'subtitle', header: 'Subtitle', render: b => <span className="text-sm text-muted-foreground line-clamp-1">{b.subtitle || '—'}</span> },
     {
       key: 'target',
-      header: 'Category / Area',
+      header: 'Category / Location',
       render: b => (
         <div className="min-w-0">
           <div className="text-sm truncate">{b.categorySlug || '—'}</div>
           <div className="text-xs text-muted-foreground truncate inline-flex items-center gap-1">
             <MapPin className="h-3 w-3" />
-            {[b.stateName, b.areaName].filter(Boolean).join(' · ') || 'No area'}
+            {b.areaName || b.stateName || 'No location'}
           </div>
         </div>
       ),
@@ -237,13 +217,14 @@ export default function BannersPage() {
         open={showForm}
         onClose={() => setShowForm(false)}
         title={editing ? 'Edit banner' : 'New banner'}
+        size="lg"
         footer={<>
           <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
           <Button onClick={submit as any} loading={busy}>{editing ? 'Save' : 'Create'}</Button>
         </>}
       >
         <form className="space-y-3" onSubmit={submit}>
-          {/* Live preview so the admin can see how the card will look on device */}
+          {/* Live preview */}
           <div className="relative h-28 rounded-md overflow-hidden bg-muted border border-border">
             {form.imageUrl ? (
               <img
@@ -262,7 +243,7 @@ export default function BannersPage() {
               <div className="text-sm font-semibold truncate">{form.title || 'Banner title'}</div>
               <div className="text-[11px] opacity-90 truncate flex items-center gap-1">
                 <MapPin className="h-3 w-3" />
-                {form.subtitle || 'Subtitle'} · {area?.name || 'No area selected'}
+                {form.subtitle || 'Subtitle'} · {form.locationName || 'No location'}
               </div>
             </div>
           </div>
@@ -306,38 +287,26 @@ export default function BannersPage() {
           <div className="rounded-md border border-border p-3 space-y-3">
             <div className="text-sm font-medium flex items-center gap-1.5"><Layers className="h-4 w-4" /> Service location</div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Category</label>
-                <Select value={form.categoryId} onChange={e => pickCategory(e.target.value)}>
+                <Select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}>
                   <option value="">Select category</option>
                   {categories.map(c => <option key={c._id} value={c._id}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Location</label>
-                <Select value={form.stateId} disabled={!category} onChange={e => pickState(e.target.value)}>
-                  <option value="">{category ? 'Select location' : 'Pick a category first'}</option>
-                  {category?.states.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Area</label>
-                <Select value={form.areaId} disabled={!state} onChange={e => pickArea(e.target.value)}>
-                  <option value="">{state ? 'Select area' : 'Pick a location first'}</option>
-                  {state?.areas.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
-                </Select>
+                <label className="text-xs text-muted-foreground block mb-1">Location name</label>
+                <Input
+                  value={form.locationName}
+                  disabled={!form.categoryId}
+                  onChange={e => setForm(f => ({ ...f, locationName: e.target.value }))}
+                  placeholder={form.categoryId ? 'e.g. South Delhi, Sector 62' : 'Pick a category first'}
+                />
               </div>
             </div>
 
-            {category && state && state.areas.length === 0 && (
-              <div className="text-xs text-muted-foreground">
-                This location has no areas yet — add one from the Categories page, or draw the polygon below.
-              </div>
-            )}
-
             <PolygonEditor
-              key={`${form.areaId}|${form.stateId}|${form.categoryId}`}
               value={form.points}
               center={mapCenter}
               height={300}

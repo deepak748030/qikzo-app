@@ -14,11 +14,13 @@ import { categories as mockCategories, savedPlaces as mockSavedPlaces, DeliveryC
 import { useBooking } from '@/lib/bookingStore';
 import { useServiceMode, rideOptions } from '@/lib/serviceMode';
 import PromoBanners from '@/components/PromoBanners';
+import ExploreBanners from '@/components/ExploreBanners';
 import Skeleton, { SkeletonCard } from '@/components/Skeleton';
 import { useInitialLoad } from '@/lib/useInitialLoad';
 import { catalogApi } from '@/lib/api/endpoints/catalog';
 import { placesApi } from '@/lib/api/endpoints/places';
 import { tokenStore } from '@/lib/api/tokenStore';
+import * as Location from 'expo-location';
 
 const PLACE_ICON: Record<string, LucideIcon> = {
   home: HomeIcon,
@@ -48,6 +50,24 @@ export default function HomeScreen() {
   // or if the request fails so the UI never goes blank.
   const [categories, setCategories] = useState<DeliveryCategory[]>(mockCategories);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>(mockSavedPlaces);
+
+  // Best-effort device coord — used to filter promo/explore banners by
+  // polygon proximity. Silent failure keeps the home screen usable when
+  // permission is denied.
+  const [userCoord, setUserCoord] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Lowest });
+        if (!cancelled) setUserCoord({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,7 +249,8 @@ export default function HomeScreen() {
               </Text>
             </Pressable>
 
-            <PromoBanners />
+            <PromoBanners userCoord={userCoord} />
+            <ExploreBanners userCoord={userCoord} />
           </>
         ) : (
           <>
@@ -253,7 +274,8 @@ export default function HomeScreen() {
               ))}
             </View>
 
-            <PromoBanners />
+            <PromoBanners userCoord={userCoord} />
+            <ExploreBanners userCoord={userCoord} />
           </>
         )}
         </>

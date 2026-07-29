@@ -14,7 +14,7 @@ const COPIES = 3;
 
 type Banner = ServerBanner;
 
-export default function PromoBanners() {
+export default function PromoBanners({ userCoord }: { userCoord?: { lat: number; lng: number } | null } = {}) {
     const { width } = useWindowDimensions();
     const setDraft = useBooking((s) => s.setDraft);
     const listRef = useRef<FlatList<Banner>>(null);
@@ -27,7 +27,7 @@ export default function PromoBanners() {
     useEffect(() => {
         let alive = true;
         catalogApi
-            .listBanners()
+            .listBanners(userCoord ? { lat: userCoord.lat, lng: userCoord.lng } : undefined)
             .then((items) => {
                 if (!alive) return;
                 const active = items.filter((b) => b.active !== false && !!b.imageUrl);
@@ -37,7 +37,7 @@ export default function PromoBanners() {
             .catch(() => { /* silently no-op — carousel just stays hidden */ })
             .finally(() => alive && setLoading(false));
         return () => { alive = false; };
-    }, []);
+    }, [userCoord?.lat, userCoord?.lng]);
 
     // Tripled data set enables seamless left+right looping.
     const data = React.useMemo(

@@ -124,16 +124,22 @@ export function StatCardSkeleton() {
   );
 }
 
-export function Modal({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode }) {
+export function Modal({ open, onClose, title, children, footer, size = 'md' }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; size?: 'md' | 'lg' }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-lg border border-border bg-card p-5 shadow-lg" onClick={e => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/40 overflow-y-auto" onClick={onClose}>
+      <div
+        className={cn(
+          'w-full rounded-lg border border-border bg-card shadow-lg my-auto flex flex-col max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-2rem)]',
+          size === 'lg' ? 'max-w-3xl' : 'max-w-lg',
+        )}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 pt-5 pb-3 flex items-center justify-between border-b border-border shrink-0">
           <h3 className="font-display font-semibold text-lg">{title}</h3>
         </div>
-        <div>{children}</div>
-        {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
+        <div className="px-5 py-4 overflow-y-auto flex-1">{children}</div>
+        {footer && <div className="px-5 py-3 border-t border-border flex justify-end gap-2 shrink-0">{footer}</div>}
       </div>
     </div>
   );
