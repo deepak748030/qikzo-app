@@ -12,10 +12,11 @@ export const catalogController = {
     listBanners: asyncHandler(async (req, res) => {
         const lat = req.query.lat != null ? Number(req.query.lat) : undefined;
         const lng = req.query.lng != null ? Number(req.query.lng) : undefined;
-        // When personalized (lat/lng present) skip the shared cache so each
-        // user gets banners scored against their own location.
-        if (lat == null || lng == null) cacheable(res, 60, 300);
-        return ok(res, { items: await catalogService.listBanners({ lat, lng }) });
+        const categorySlug = typeof req.query.categorySlug === 'string' ? req.query.categorySlug : undefined;
+        // When personalized (lat/lng or category present) skip the shared
+        // cache so each user gets banners scored against their own context.
+        if (lat == null && lng == null && !categorySlug) cacheable(res, 60, 300);
+        return ok(res, { items: await catalogService.listBanners({ lat, lng, categorySlug }) });
     }),
 };
 

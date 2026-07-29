@@ -14,6 +14,7 @@ import couponRoutes from './couponRoutes';
 import uploadRoutes from './uploadRoutes';
 import supportRoutes from './supportRoutes';
 import bootstrapRoutes from './bootstrapRoutes';
+import walletRoutes from './walletRoutes';
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use('/coupons', couponRoutes);
 router.use('/uploads', uploadRoutes);
 router.use('/support', supportRoutes);
 router.use('/admin-bootstrap', bootstrapRoutes);
+router.use('/wallet', walletRoutes);
 
 export default router;

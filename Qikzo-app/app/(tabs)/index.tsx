@@ -133,7 +133,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 92 }}>
 
         {loading ? (
           <View style={{ padding: 6, gap: 8, marginTop: 12 }}>

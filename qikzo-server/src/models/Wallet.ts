@@ -9,7 +9,10 @@ import { Schema, model, type InferSchemaType } from 'mongoose';
 const WalletSchema = new Schema(
     {
         owner: { type: Schema.Types.ObjectId, required: true, index: true }, // User or Rider _id
-        kind: { type: String, enum: ['customer', 'rider'], required: true, index: true },
+        // `customer` = real money wallet (topups, refunds, trip debits).
+        // `loyalty`  = bonus wallet, usable up to a % cap on trips.
+        // `rider`    = rider earnings wallet.
+        kind: { type: String, enum: ['customer', 'loyalty', 'rider'], required: true, index: true },
         currency: { type: String, default: 'INR' },
         balance: { type: Number, default: 0, min: 0 },
         pending: { type: Number, default: 0 }, // holds (e.g., unsettled trips)

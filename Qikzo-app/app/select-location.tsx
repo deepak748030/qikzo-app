@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Keyboard, Platform } from 'react-native';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
@@ -17,27 +18,47 @@ const DEFAULT_CENTER: LatLng = { lat: 28.6139, lng: 77.209 };
 
 export default function SelectLocationScreen() {
     const insets = useSafeAreaInsets();
-    const { field } = useLocalSearchParams<{ field?: 'pickup' | 'drop' }>();
-    const which = field === 'drop' ? 'drop' : 'pickup';
+    const { field, slot } = useLocalSearchParams<{ field?: 'pickup' | 'drop'; slot?: string }>();
+    // `slot` extends `field` to allow extra-pickup targets: pickup2 / pickup3 / pickup4.
+    const targetSlot = (slot || field || 'pickup') as string;
+    const which: 'pickup' | 'drop' = targetSlot === 'drop' ? 'drop' : 'pickup';
+    const extraIndex = /^pickup(\d+)$/.exec(targetSlot)?.[1];
+    const extraIdx = extraIndex ? Math.max(0, parseInt(extraIndex, 10) - 2) : -1; // pickup2 -> 0
     const sheet = useSheet();
     const setDraft = useBooking((s) => s.setDraft);
     const draft = useBooking((s) => s.draft);
 
-    const hasSavedCoord =
-        which === 'pickup' ? !!draft.pickupCoord : !!(draft.dropCoord || draft.pickupCoord);
+    const extra = extraIdx >= 0 ? draft.extraPickups[extraIdx] : null;
 
-    const initial =
-        which === 'pickup'
+    const hasSavedCoord = extraIdx >= 0
+        ? !!extra?.coord
+        : (which === 'pickup' ? !!draft.pickupCoord : !!(draft.dropCoord || draft.pickupCoord));
+
+    const initial = extraIdx >= 0
+        ? (extra?.coord || draft.pickupCoord || DEFAULT_CENTER)
+        : which === 'pickup'
             ? draft.pickupCoord || DEFAULT_CENTER
             : draft.dropCoord || draft.pickupCoord || DEFAULT_CENTER;
 
     const [center, setCenter] = useState<LatLng>(initial);
     const [address, setAddress] = useState<string>(
-        which === 'pickup' ? draft.pickup : draft.drop
+        extraIdx >= 0 ? (extra?.address || '') : (which === 'pickup' ? draft.pickup : draft.drop)
     );
     const [resolving, setResolving] = useState(false);
     const [locating, setLocating] = useState(!hasSavedCoord);
     const [confirming, setConfirming] = useState(false);
+    const [kbHeight, setKbHeight] = useState(0);
+
+    // Track keyboard height so the bottom address card lifts above the keyboard
+    // and the search input never gets hidden behind it.
+    useEffect(() => {
+        const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+        const s = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates?.height ?? 0));
+        const h = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+        return () => { s.remove(); h.remove(); };
+    }, []);
+
 
     // Auto-detect user's current location on first open when no saved coord exists.
     useEffect(() => {
@@ -121,7 +142,11 @@ export default function SelectLocationScreen() {
             return;
         }
         setConfirming(true);
-        if (which === 'pickup') {
+        if (extraIdx >= 0) {
+            const next = [...draft.extraPickups];
+            next[extraIdx] = { address: address.trim(), coord: center };
+            setDraft({ extraPickups: next });
+        } else if (which === 'pickup') {
             setDraft({ pickup: address.trim(), pickupCoord: center });
         } else {
             setDraft({ drop: address.trim(), dropCoord: center });
@@ -167,7 +192,7 @@ export default function SelectLocationScreen() {
             {/* My-location button (floats above bottom card) */}
             <Pressable
                 onPress={useMyLocation}
-                style={[styles.myLocBtn, { bottom: insets.bottom + 220 }]}
+                style={[styles.myLocBtn, { bottom: insets.bottom + 220 + kbHeight }]}
                 hitSlop={6}
             >
                 {locating
@@ -176,7 +201,8 @@ export default function SelectLocationScreen() {
             </Pressable>
 
             {/* Bottom address card */}
-            <View style={[styles.bottomCard, { paddingBottom: insets.bottom + 10 }]}>
+            <View style={[styles.bottomCard, { paddingBottom: insets.bottom + 10, bottom: kbHeight }]}>
+
                 <View style={styles.handle} />
                 <Text style={styles.label}>
                     {which === 'pickup' ? 'PICKUP ADDRESS' : 'DROP ADDRESS'}

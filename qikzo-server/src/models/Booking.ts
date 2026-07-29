@@ -51,10 +51,17 @@ const BookingSchema = new Schema(
         vehicleTypeSlug: { type: String, default: '', index: true },
 
         pickup: { type: PointSchema, required: true },
+        // Optional intermediate pickups (Pickup 2, Pickup 3, …). Max 3 enforced
+        // in the validator. Route order is pickup → extraPickups[0..n] → drop.
+        extraPickups: { type: [PointSchema], default: [] },
         drop: { type: PointSchema, required: true },
 
         notes: { type: String, default: '' },
+        // Optional attached photos of the items to be picked up. Stored as
+        // absolute or /uploads-relative URLs returned by POST /uploads.
+        noteImages: { type: [String], default: [] },
         recipientPhone: { type: String, default: '' },
+        recipientName: { type: String, default: '' },
         payment: { type: String, enum: ['cash', 'upi'], default: 'cash' },
         // Mock payment lifecycle. UPI auto-settles on delivery; cash sits in
         // `pending` until the customer confirms in-app. `disputed` opens a

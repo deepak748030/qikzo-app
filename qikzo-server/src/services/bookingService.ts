@@ -21,9 +21,12 @@ export interface CreateBookingInput {
     categorySlug: string;
     vehicleTypeSlug?: string;
     pickup: { address: string; lat?: number | null; lng?: number | null };
+    extraPickups?: { address: string; lat?: number | null; lng?: number | null }[];
     drop: { address: string; lat?: number | null; lng?: number | null };
     notes?: string;
+    noteImages?: string[];
     recipientPhone?: string;
+    recipientName?: string;
     payment?: 'cash' | 'upi';
     couponCode?: string;
     scheduledAt?: string;
@@ -53,11 +56,13 @@ export const bookingService = {
             );
         }
 
+        const stopsIn = Array.isArray(input.extraPickups) ? input.extraPickups.slice(0, 3) : [];
         const est = estimateTrip({
             pickup: input.pickup.address,
             drop: input.drop.address,
             pickupCoord: input.pickup.lat != null ? { lat: input.pickup.lat, lng: input.pickup.lng! } : null,
             dropCoord: input.drop.lat != null ? { lat: input.drop.lat, lng: input.drop.lng! } : null,
+            stops: stopsIn,
         });
 
         // Coupon (optional). Server re-quotes to prevent price tampering; if
@@ -122,9 +127,14 @@ export const bookingService = {
                     categorySlug: input.categorySlug,
                     vehicleTypeSlug: String(input.vehicleTypeSlug || '').trim().toLowerCase(),
                     pickup: toPoint(input.pickup),
+                    extraPickups: stopsIn.map(toPoint),
                     drop: toPoint(input.drop),
                     notes: input.notes || '',
+                    noteImages: Array.isArray(input.noteImages)
+                        ? input.noteImages.filter((s) => typeof s === 'string' && s.trim()).slice(0, 4)
+                        : [],
                     recipientPhone: input.recipientPhone || '',
+                    recipientName: input.recipientName || '',
                     payment: input.payment || 'cash',
                     distanceKm: est.distanceKm,
                     etaMin: est.etaMin,
@@ -266,7 +276,7 @@ export const bookingService = {
         // trimmed to display fields only. Cuts payload ~55-70% per booking.
         return Booking.find({ user: userId })
             .sort({ createdAt: -1 })
-            .select('code user rider mode categorySlug vehicleTypeSlug pickup.address pickup.lat pickup.lng drop.address drop.lat drop.lng notes recipientPhone payment distanceKm etaMin price status createdAt updatedAt')
+            .select('code user rider mode categorySlug vehicleTypeSlug pickup.address pickup.lat pickup.lng extraPickups.address extraPickups.lat extraPickups.lng drop.address drop.lat drop.lng notes noteImages recipientPhone recipientName payment distanceKm etaMin price status createdAt updatedAt')
             .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone' })
             .lean();
     },
@@ -276,7 +286,7 @@ export const bookingService = {
         // + cancel info) but still drops the heavy `history` array and the
         // GeoJSON `location` sub-docs (address/lat/lng cover the UI need).
         const b = await Booking.findOne({ _id: id, user: userId })
-            .select('-history -pickup.location -drop.location')
+            .select('-history -pickup.location -drop.location -extraPickups.location')
             .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone currentLocation' })
             .lean();
         if (!b) throw errors.notFound('Booking not found', 'BOOKING_NOT_FOUND');

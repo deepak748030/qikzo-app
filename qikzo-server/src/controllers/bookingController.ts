@@ -5,12 +5,13 @@ import type { BookingStatus } from '../models/Booking';
 
 export const bookingController = {
     estimate: asyncHandler(async (req, res) => {
-        const { pickup, drop, pickupCoord, dropCoord } = req.body;
+        const { pickup, drop, pickupCoord, dropCoord, extraPickups } = req.body;
         const est = bookingService.estimate({
             pickup: typeof pickup === 'string' ? pickup : pickup.address,
             drop: typeof drop === 'string' ? drop : drop.address,
             pickupCoord: pickupCoord || (typeof pickup === 'object' && pickup?.lat != null ? { lat: pickup.lat, lng: pickup.lng } : null),
             dropCoord: dropCoord || (typeof drop === 'object' && drop?.lat != null ? { lat: drop.lat, lng: drop.lng } : null),
+            stops: Array.isArray(extraPickups) ? extraPickups : undefined,
         });
         return ok(res, est);
     }),

@@ -41,8 +41,8 @@ export default function ExploreBanners({ userCoord }: { userCoord?: { lat: numbe
 
     if (loading) {
         return (
-            <View style={{ marginTop: 18 }}>
-                <Text style={styles.section}>Explore near you</Text>
+            <View style={{ marginTop: 18, marginBottom: 20 }}>
+                <Text style={styles.section}>Explore</Text>
                 <ActivityIndicator style={{ marginTop: 16 }} color={colors.primary} />
             </View>
         );
@@ -50,8 +50,8 @@ export default function ExploreBanners({ userCoord }: { userCoord?: { lat: numbe
     if (banners.length === 0) return null;
 
     return (
-        <View style={{ marginTop: 18 }}>
-            <Text style={styles.section}>Explore near you</Text>
+        <View style={{ marginTop: 18, marginBottom: 20 }}>
+            <Text style={styles.section}>Explore</Text>
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}

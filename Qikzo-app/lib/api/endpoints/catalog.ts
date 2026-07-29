@@ -30,12 +30,13 @@ export const catalogApi = {
         return res.items;
     },
 
-    async listBanners(opts?: { lat?: number; lng?: number }): Promise<ServerBanner[]> {
-        const query: Record<string, number> = {};
+    async listBanners(opts?: { lat?: number; lng?: number; categorySlug?: string }): Promise<ServerBanner[]> {
+        const query: Record<string, number | string> = {};
         if (typeof opts?.lat === 'number' && typeof opts?.lng === 'number') {
             query.lat = opts.lat;
             query.lng = opts.lng;
         }
+        if (opts?.categorySlug) query.categorySlug = opts.categorySlug;
         const res = await http.get<{ items: ServerBanner[] }>('/banners', { query });
         return res.items;
     },

@@ -68,9 +68,12 @@ export type Booking = {
     categorySlug: string;
     vehicleTypeSlug?: string;
     pickup: Point;
+    extraPickups?: Point[];
     drop: Point;
     notes?: string;
+    noteImages?: string[];
     recipientPhone?: string;
+    recipientName?: string;
     payment: PaymentMode;
     paymentStatus?: 'pending' | 'paid' | 'disputed';
     paymentPaidAt?: string | null;
@@ -101,9 +104,12 @@ export type CreateBookingInput = {
     mode?: BookingMode;
     categorySlug: string;
     pickup: Point;
+    extraPickups?: Point[];
     drop: Point;
     notes?: string;
+    noteImages?: string[];
     recipientPhone?: string;
+    recipientName?: string;
     payment?: PaymentMode;
     couponCode?: string;
     scheduledAt?: string;

@@ -5,6 +5,8 @@ import { bookingsApi } from './api/endpoints/bookings';
 import type { Booking as ServerBooking, BookingStatus as ServerBookingStatus, Rider as ServerRider } from './api/types';
 import { tokenStore } from './api/tokenStore';
 
+type Stop = { address: string; coord: LatLng | null };
+
 type Draft = {
     mode: 'ride' | 'delivery';
     categoryId: string;     // delivery category OR ride option id
@@ -12,8 +14,13 @@ type Draft = {
     drop: string;
     pickupCoord: LatLng | null;
     dropCoord: LatLng | null;
+    /** Ordered intermediate pickups (Pickup 2, 3, 4). Max 3. */
+    extraPickups: Stop[];
     notes: string;
+    noteImages: string[]; // absolute upload URLs already returned by POST /uploads
     recipientPhone: string;
+    recipientName: string;
+    bookingForOther: boolean;
     payment: 'cash' | 'upi';
 };
 
@@ -24,8 +31,12 @@ const initialDraft: Draft = {
     drop: '',
     pickupCoord: null,
     dropCoord: null,
+    extraPickups: [],
     notes: '',
+    noteImages: [],
     recipientPhone: '',
+    recipientName: '',
+    bookingForOther: false,
     payment: 'cash',
 };
 
@@ -50,9 +61,12 @@ type State = {
         mode: 'ride' | 'delivery';
         categoryId: string;
         pickup: { address: string; lat?: number | null; lng?: number | null };
+        extraPickups?: { address: string; lat?: number | null; lng?: number | null }[];
         drop: { address: string; lat?: number | null; lng?: number | null };
         notes?: string;
+        noteImages?: string[];
         recipientPhone?: string;
+        recipientName?: string;
         payment: 'cash' | 'upi';
         vehicleTypeSlug?: string;
     }) => Promise<Booking>;
@@ -197,9 +211,12 @@ export const useBooking = create<State>((set, get) => ({
                 categorySlug: input.categoryId,
                 vehicleTypeSlug: input.vehicleTypeSlug ?? rideSlug,
                 pickup: input.pickup,
+                extraPickups: input.extraPickups,
                 drop: input.drop,
                 notes: input.notes,
+                noteImages: input.noteImages,
                 recipientPhone: input.recipientPhone,
+                recipientName: input.recipientName,
                 payment: input.payment,
             } as any, { idempotencyKey });
             const mapped = mapBooking(created);

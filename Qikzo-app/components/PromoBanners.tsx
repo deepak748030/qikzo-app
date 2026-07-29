@@ -14,7 +14,12 @@ const COPIES = 3;
 
 type Banner = ServerBanner;
 
-export default function PromoBanners({ userCoord }: { userCoord?: { lat: number; lng: number } | null } = {}) {
+export default function PromoBanners({
+    userCoord,
+    categorySlug,
+    topGap = 14,
+}: { userCoord?: { lat: number; lng: number } | null; categorySlug?: string; topGap?: number } = {}) {
+
     const { width } = useWindowDimensions();
     const setDraft = useBooking((s) => s.setDraft);
     const listRef = useRef<FlatList<Banner>>(null);
@@ -27,7 +32,10 @@ export default function PromoBanners({ userCoord }: { userCoord?: { lat: number;
     useEffect(() => {
         let alive = true;
         catalogApi
-            .listBanners(userCoord ? { lat: userCoord.lat, lng: userCoord.lng } : undefined)
+            .listBanners({
+                ...(userCoord ? { lat: userCoord.lat, lng: userCoord.lng } : {}),
+                ...(categorySlug ? { categorySlug } : {}),
+            })
             .then((items) => {
                 if (!alive) return;
                 const active = items.filter((b) => b.active !== false && !!b.imageUrl);
@@ -37,7 +45,7 @@ export default function PromoBanners({ userCoord }: { userCoord?: { lat: number;
             .catch(() => { /* silently no-op — carousel just stays hidden */ })
             .finally(() => alive && setLoading(false));
         return () => { alive = false; };
-    }, [userCoord?.lat, userCoord?.lng]);
+    }, [userCoord?.lat, userCoord?.lng, categorySlug]);
 
     // Tripled data set enables seamless left+right looping.
     const data = React.useMemo(
@@ -87,7 +95,7 @@ export default function PromoBanners({ userCoord }: { userCoord?: { lat: number;
 
     if (loading) {
         return (
-            <View style={[styles.card, { width, marginTop: 14, backgroundColor: 'rgba(0,0,0,0.05)' }]}>
+            <View style={[styles.card, { width, marginTop: topGap, backgroundColor: 'rgba(0,0,0,0.05)' }]}>
                 <ActivityIndicator style={{ marginTop: 60 }} color={colors.primary} />
             </View>
         );
@@ -102,7 +110,7 @@ export default function PromoBanners({ userCoord }: { userCoord?: { lat: number;
             showsHorizontalScrollIndicator={false}
             data={data}
             keyExtractor={(_, i) => `promo-${i}`}
-            style={{ marginTop: 14 }}
+            style={{ marginTop: topGap }}
             onScrollBeginDrag={() => { pausedUntilRef.current = Date.now() + AUTO_MS * 2; }}
             onMomentumScrollEnd={onMomentumEnd}
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}

@@ -6,14 +6,25 @@ export const catalogService = {
     listCategories: () => Category.find({ active: true }).sort({ order: 1 }).lean(),
 
     /**
-     * Location-aware banner list.
+     * Location + category aware banner list.
      * When lat/lng provided we prefer banners whose polygon *contains* the
-     * point (via $geoIntersects). Then we append the rest sorted by distance
-     * from each banner's centroid so the user always sees the closest promos
-     * first, never the far-away ones on top.
+     * point (via $geoIntersects), then append the rest sorted by distance
+     * from each banner's centroid. When categorySlug is provided we only
+     * return banners for that category (or with no category set, so a
+     * generic banner still shows).
      */
-    listBanners: async (opts?: { lat?: number; lng?: number }) => {
-        const all = await PromoBanner.find({ active: true }).sort({ order: 1 }).lean();
+    listBanners: async (opts?: { lat?: number; lng?: number; categorySlug?: string }) => {
+        const baseFilter: any = { active: true };
+        const slug = opts?.categorySlug?.trim().toLowerCase();
+        if (slug) {
+            baseFilter.$or = [
+                { categorySlug: slug },
+                { categorySlug: '' },
+                { categorySlug: { $exists: false } },
+            ];
+        }
+
+        const all = await PromoBanner.find(baseFilter).sort({ order: 1 }).lean();
         const lat = opts?.lat, lng = opts?.lng;
         if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
             return all;
@@ -22,7 +33,7 @@ export const catalogService = {
         let insideIds = new Set<string>();
         try {
             const inside = await PromoBanner.find({
-                active: true,
+                ...baseFilter,
                 polygon: {
                     $geoIntersects: { $geometry: { type: 'Point', coordinates: [lng, lat] } },
                 },

@@ -12,6 +12,7 @@ export const estimateSchema = z.object({
     drop: z.union([z.string(), PointSchema]),
     pickupCoord: z.object({ lat: z.number(), lng: z.number() }).nullable().optional(),
     dropCoord: z.object({ lat: z.number(), lng: z.number() }).nullable().optional(),
+    extraPickups: z.array(PointSchema).max(3).optional(),
 });
 
 export const createBookingSchema = z.object({
@@ -19,9 +20,12 @@ export const createBookingSchema = z.object({
     categorySlug: z.string().min(1),
     vehicleTypeSlug: z.string().min(1).max(40).optional(),
     pickup: PointSchema,
+    extraPickups: z.array(PointSchema).max(3).optional(),
     drop: PointSchema,
     notes: z.string().max(500).optional(),
+    noteImages: z.array(z.string().min(1).max(500)).max(4).optional(),
     recipientPhone: z.string().max(20).optional(),
+    recipientName: z.string().max(80).optional(),
     payment: z.enum(['cash', 'upi']).optional(),
     couponCode: z.string().min(2).max(40).optional(),
     // ISO string; must be in the future when scheduling.
