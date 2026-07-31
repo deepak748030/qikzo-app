@@ -120,6 +120,7 @@ export const adminController = {
     listReferrals: asyncHandler(async (req, res) => ok(res, await rewardService.listReferrals({
         page: req.query.page ? Number(req.query.page) : undefined,
         limit: req.query.limit ? Number(req.query.limit) : undefined,
+        q: req.query.q ? String(req.query.q) : undefined,
     }))),
 
     // Support tickets

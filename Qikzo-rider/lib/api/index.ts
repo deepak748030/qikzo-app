@@ -23,6 +23,7 @@ import notificationsApi from './endpoints/notifications';
 import riderDocumentsApi from './endpoints/documents';
 import payoutsApi from './endpoints/payouts';
 import earningsApi from './endpoints/earnings';
+import referralApi from './endpoints/referrals';
 
 export const api = {
     auth: authApi,
@@ -36,6 +37,7 @@ export const api = {
     documents: riderDocumentsApi,
     payouts: payoutsApi,
     earnings: earningsApi,
+    referrals: referralApi,
 };
 
 export default api;

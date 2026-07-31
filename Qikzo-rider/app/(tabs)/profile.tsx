@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Image, RefreshControl } from 'react-native';
 import { router, Href } from 'expo-router';
-import { User, Bike, FileCheck2, Bell, HelpCircle, Info, Shield, FileText, LogOut, Star, Landmark, ShieldCheck, ShieldAlert } from 'lucide-react-native';
+import { User, Bike, FileCheck2, Bell, HelpCircle, Info, Shield, FileText, LogOut, Star, Landmark, ShieldCheck, ShieldAlert, Users } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import BottomSheet from '@/components/BottomSheet';
@@ -21,6 +21,7 @@ type Item = { icon: any; label: string; route: Href };
 
 const ITEMS: Item[] = [
     { icon: User, label: 'Personal information', route: '/personal-info' },
+    { icon: Users, label: 'Refer & earn', route: '/refer-earn' },
     { icon: Landmark, label: 'Bank account & payouts', route: '/payout-details' },
     { icon: FileCheck2, label: 'Documents', route: '/documents' },
     { icon: Bell, label: 'Notifications', route: '/notifications' },

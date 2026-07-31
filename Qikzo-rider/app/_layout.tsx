@@ -86,6 +86,7 @@ export default function RootLayout() {
             <Stack.Screen name="trip-details" />
             <Stack.Screen name="documents" />
             <Stack.Screen name="payout-details" />
+            <Stack.Screen name="refer-earn" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="personal-info" />
             <Stack.Screen name="help-support" />

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCog, ShieldCheck, PackageCheck, Wallet, TicketPercent, Images, LifeBuoy, ScrollText, LogOut, Menu, X, Package } from 'lucide-react';
+import { LayoutDashboard, Users, UserCog, ShieldCheck, PackageCheck, Wallet, TicketPercent, Images, LifeBuoy, ScrollText, LogOut, Menu, X, Package, Gift, Share2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { cn, fmtPhone } from '@/lib/utils';
@@ -12,6 +12,8 @@ const nav = [
   { to: '/bookings', label: 'Bookings', icon: PackageCheck },
   { to: '/payouts', label: 'Payouts', icon: Wallet },
   { to: '/coupons', label: 'Coupons', icon: TicketPercent },
+  { to: '/rewards', label: 'Rewards', icon: Gift },
+  { to: '/referrals', label: 'Referrals', icon: Share2 },
   { to: '/categories', label: 'Categories', icon: Package },
   { to: '/banners', label: 'Banners', icon: Images },
   { to: '/support', label: 'Support', icon: LifeBuoy },

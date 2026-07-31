@@ -4,6 +4,7 @@ import Referral from '../models/Referral';
 import User from '../models/User';
 import Booking from '../models/Booking';
 import { errors } from '../lib/errors';
+import { bonusForTopup as calcBonusForTopup, milestonesDue, pendingReward } from './rewardMath';
 
 /**
  * Reward service — the single source of truth for wallet bonus rules and the
@@ -171,13 +172,14 @@ export const rewardService = {
      * Returns 0 when bonuses are disabled or no tier matches.
      */
     bonusForTopup(cfg: PublicRewardConfig, amount: number): number {
-        if (!cfg.bonus.enabled) return 0;
-        const matching = cfg.bonus.tiers.filter((t) => amount >= t.minAmount);
-        if (!matching.length) return 0;
-        const tier = matching[matching.length - 1];
-        let bonus = tier.type === 'flat' ? tier.value : (amount * tier.value) / 100;
-        if (tier.maxBonus > 0) bonus = Math.min(bonus, tier.maxBonus);
-        return Math.floor(Math.max(0, bonus));
+        return calcBonusForTopup(cfg.bonus, amount);
+    },
+
+    /** Completed trip count for a rider, resolved from their User id. */
+    async riderCompletedTrips(userId: string): Promise<number> {
+        const Rider = (await import('../models/Rider')).default;
+        const rider = await Rider.findOne({ user: userId }).select('trips').lean();
+        return Number((rider as any)?.trips || 0);
     },
 
     /** Ensure the user has a referral code, generating a unique one on demand. */
@@ -256,7 +258,13 @@ export const rewardService = {
             throw errors.badRequest('You cannot use your own code', 'SELF_REFERRAL');
         }
 
-        const delivered = await Booking.countDocuments({ user: userId, status: 'Delivered' });
+        // A code can only be applied before the account has earned anything.
+        // Customers are measured by their delivered bookings, riders by the
+        // trips they have completed.
+        const delivered =
+            me.role === 'rider'
+                ? await this.riderCompletedTrips(userId)
+                : await Booking.countDocuments({ user: userId, status: 'Delivered' });
         if (delivered > 0) {
             throw errors.badRequest('Referral codes only work before your first delivery', 'TOO_LATE');
         }
@@ -297,32 +305,32 @@ export const rewardService = {
         const { walletService } = await import('./walletService');
         const paid: { deliveries: number; reward: number }[] = [];
 
-        for (const m of cfg.referral.milestones) {
-            if (ref.deliveries >= m.deliveries && !awarded.includes(m.deliveries)) {
-                if (m.reward > 0) {
-                    await walletService.creditReward({
-                        userId: String(ref.referrer),
-                        wallet: cfg.referral.rewardWallet,
-                        amount: m.reward,
-                        note: `Referral reward — friend completed ${m.deliveries} deliveries`,
-                        refCode: `referral:${ref._id}:${m.deliveries}`,
-                    });
-                    ref.totalEarned = (ref.totalEarned || 0) + m.reward;
-                }
-                awarded.push(m.deliveries);
-                paid.push(m);
+        for (const m of milestonesDue(cfg.referral.milestones, ref.deliveries, awarded)) {
+            if (m.reward > 0) {
+                await walletService.creditReward({
+                    userId: String(ref.referrer),
+                    wallet: cfg.referral.rewardWallet,
+                    amount: m.reward,
+                    note: `Referral reward — friend completed ${m.deliveries} deliveries`,
+                    refCode: `referral:${ref._id}:${m.deliveries}`,
+                });
+                ref.totalEarned = (ref.totalEarned || 0) + m.reward;
             }
+            awarded.push(m.deliveries);
+            paid.push(m);
         }
         ref.awarded = awarded as any;
         await ref.save();
 
         if (paid.length) {
             const notificationService = (await import('./notificationService')).default;
+            const referrerUser = await User.findById(ref.referrer).select('role').lean();
+            const audience = (referrerUser as any)?.role === 'rider' ? 'rider' : 'customer';
             for (const m of paid) {
                 void notificationService
                     .emit({
                         user: String(ref.referrer),
-                        audience: 'customer',
+                        audience: audience as any,
                         topic: 'wallet',
                         title: 'Referral reward credited',
                         body: `You earned ₹${m.reward} — your friend completed ${m.deliveries} deliveries.`,
@@ -334,37 +342,75 @@ export const rewardService = {
         return { deliveries: ref.deliveries, paid };
     },
 
-    /** Admin listing of referral relationships. */
+    /**
+     * Admin listing of referral relationships, enriched with milestone
+     * progress so the dashboard can show completed vs pending rewards
+     * without recomputing the reward config per row.
+     */
     async listReferrals(opts: { page?: number; limit?: number; q?: string } = {}) {
         const page = Math.max(1, Number(opts.page) || 1);
         const limit = Math.min(100, Math.max(1, Number(opts.limit) || 20));
+        const cfg = await this.getConfig();
+
+        const q = String(opts.q || '').trim();
+        let filter: any = {};
+        if (q) {
+            const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const matched = await User.find({ $or: [{ name: rx }, { phone: rx }, { referralCode: rx }] })
+                .select('_id')
+                .limit(500)
+                .lean();
+            const ids = matched.map((u: any) => u._id);
+            filter = { $or: [{ code: rx }, { referrer: { $in: ids } }, { referee: { $in: ids } }] };
+        }
+
         const [rows, total] = await Promise.all([
-            Referral.find({})
-                .populate('referrer', 'name phone referralCode')
-                .populate('referee', 'name phone')
+            Referral.find(filter)
+                .populate('referrer', 'name phone referralCode role')
+                .populate('referee', 'name phone role')
                 .sort({ createdAt: -1 })
                 .skip((page - 1) * limit)
                 .limit(limit)
                 .lean(),
-            Referral.countDocuments({}),
+            Referral.countDocuments(filter),
         ]);
-        return {
-            items: rows.map((r: any) => ({
+
+        const milestones = cfg.referral.milestones;
+        const items = rows.map((r: any) => {
+            const awarded: number[] = r.awarded || [];
+            const deliveries = r.deliveries || 0;
+            const next = milestones.find((m) => !awarded.includes(m.deliveries)) || null;
+            const pending = pendingReward(milestones, awarded);
+            return {
                 id: String(r._id),
                 code: r.code,
                 referrerName: r.referrer?.name || '—',
                 referrerPhone: r.referrer?.phone || '',
+                referrerRole: r.referrer?.role || 'customer',
                 refereeName: r.referee?.name || '—',
                 refereePhone: r.referee?.phone || '',
-                deliveries: r.deliveries || 0,
-                awarded: r.awarded || [],
+                refereeRole: r.referee?.role || 'customer',
+                deliveries,
+                awarded,
+                milestonesTotal: milestones.length,
+                milestonesDone: awarded.length,
+                nextMilestone: next,
+                target: next ? next.deliveries : milestones.length ? milestones[milestones.length - 1].deliveries : 0,
+                pendingReward: pending,
                 totalEarned: r.totalEarned || 0,
                 createdAt: r.createdAt,
-            })),
+            };
+        });
+
+        return {
+            items,
             total,
             page,
             limit,
             hasMore: page * limit < total,
+            milestones,
+            rewardWallet: cfg.referral.rewardWallet,
+            enabled: cfg.referral.enabled,
         };
     },
 };

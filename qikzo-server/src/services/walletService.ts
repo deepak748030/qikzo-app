@@ -87,11 +87,9 @@ async function postTxn(params: {
     }
 }
 
-/** Max bonus spendable on a bill of `amount`, given balance + admin cap. */
-function bonusUsable(amount: number, bonusBalance: number, maxUsagePct: number) {
-    const cap = Math.floor((amount * Math.max(0, Math.min(100, maxUsagePct))) / 100);
-    return Math.max(0, Math.min(cap, Math.floor(bonusBalance)));
-}
+// Max bonus spendable on a bill — shared with the reward service so the cap
+// is computed identically everywhere (see services/rewardMath.ts).
+import { bonusUsable } from './rewardMath';
 
 export const walletService = {
     async getSummary(userId: string) {
