@@ -27,7 +27,7 @@ export interface CreateBookingInput {
     noteImages?: string[];
     recipientPhone?: string;
     recipientName?: string;
-    payment?: 'cash' | 'upi';
+    payment?: 'cash' | 'upi' | 'wallet';
     couponCode?: string;
     scheduledAt?: string;
 }
@@ -164,6 +164,19 @@ export const bookingService = {
             }).catch(() => { /* redemption failure shouldn't kill the booking */ });
         }
 
+        // Wallet payment is charged up-front so the rider never has to collect.
+        // If the charge fails we roll the booking back rather than leaving an
+        // unpaid "wallet" booking in dispatch.
+        if ((input.payment || 'cash') === 'wallet') {
+            const { walletService } = await import('./walletService');
+            try {
+                await walletService.payForBooking(input.userId, String(booking._id));
+            } catch (e) {
+                await Booking.deleteOne({ _id: booking._id }).catch(() => {});
+                throw e;
+            }
+        }
+
         // Scheduled bookings skip dispatch — the cron below wakes them up ~15 min
         // before pickup and re-enters the normal Searching rider fanout.
         if (!scheduledAt) {
@@ -173,8 +186,9 @@ export const bookingService = {
             // would steal the offer before the rider popup surfaces.
             void this._fanoutJobOffer(String(booking._id)).catch(() => {});
         }
-        return booking;
+        return (await Booking.findById(booking._id)) || booking;
     },
+
 
     /** Cron target: promote scheduled bookings due within 15 min into dispatch. */
     async wakeScheduledDue() {
@@ -333,6 +347,12 @@ export const bookingService = {
         b.history.push({ status: 'Cancelled', note: b.cancelledReason || (fee ? `Fee ₹${fee}` : '') } as any);
         await b.save();
 
+        // Wallet-paid bookings are refunded to the wallets they were charged to.
+        if ((b as any).payment === 'wallet') {
+            const { walletService } = await import('./walletService');
+            await walletService.refundBooking(userId, String(b._id), 'Booking cancelled').catch(() => {});
+        }
+
         // Look up the assigned rider's userId (if any) BEFORE emitting so the
         // socket fanout can reach the rider's personal room too.
         let riderUserId: string | undefined;
@@ -371,6 +391,11 @@ export const bookingService = {
         (b as any).cancelledAt = new Date();
         b.history.push({ status: 'Cancelled', note: `Rider: ${b.cancelledReason}` } as any);
         await b.save();
+
+        if ((b as any).payment === 'wallet') {
+            const { walletService } = await import('./walletService');
+            await walletService.refundBooking(String(b.user), String(b._id), 'Rider cancelled').catch(() => {});
+        }
         emitBookingUpdate(b);
         emitJobCancelled(String(b._id));
 

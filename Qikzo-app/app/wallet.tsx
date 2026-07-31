@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Wallet as WalletIcon, Gift, ArrowDownLeft, ArrowUpRight, Plus } from 'lucide-react-native';
+import { Wallet as WalletIcon, Gift, ArrowDownLeft, ArrowUpRight, Plus, Sparkles } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import BottomSheet from '@/components/BottomSheet';
@@ -10,8 +10,9 @@ import { walletApi, type WalletSummary, type WalletTxn, type WalletKind } from '
 import { ApiError } from '@/lib/api/errors';
 
 /**
- * Wallet screen — one page with two balances (Money + Loyalty). Tabs switch
+ * Wallet screen — one page with two balances (Money + Bonus). Tabs switch
  * the transaction history and the top-up button only applies to Money.
+ * Bonus rules (tiers + usage cap) are server-driven and admin-tunable.
  */
 export default function WalletScreen() {
     const insets = useSafeAreaInsets();
@@ -38,18 +39,45 @@ export default function WalletScreen() {
 
     useEffect(() => { setLoading(true); refresh(tab); /* eslint-disable-next-line */ }, [tab]);
 
-    const quickAmounts = [100, 200, 500, 1000];
+    const cfg = summary?.config;
+    const maxUsagePct = summary?.bonus.maxUsagePct ?? cfg?.maxUsagePct ?? 10;
+    const minTopup = cfg?.minTopup ?? 10;
+    const tiers = cfg?.tiers ?? [];
+    const quickAmounts = useMemo(() => {
+        const fromTiers = tiers.map((t) => t.minAmount);
+        const base = [100, 200, 500, 1000];
+        const merged = Array.from(new Set([...fromTiers, ...base])).sort((a, b) => a - b);
+        return merged.slice(0, 4);
+    }, [tiers]);
+
+    /** Local mirror of the server's tier maths so the hint updates as you type. */
+    const previewBonus = useMemo(() => {
+        const amt = Number(topupAmount);
+        if (!cfg?.bonusEnabled || !Number.isFinite(amt) || amt < minTopup) return 0;
+        const matched = tiers.filter((t) => amt >= t.minAmount);
+        if (!matched.length) return 0;
+        const t = matched[matched.length - 1];
+        let b = t.type === 'flat' ? t.value : (amt * t.value) / 100;
+        if (t.maxBonus > 0) b = Math.min(b, t.maxBonus);
+        return Math.floor(Math.max(0, b));
+    }, [topupAmount, tiers, cfg?.bonusEnabled, minTopup]);
 
     const doTopup = async (amt: number) => {
-        if (!Number.isFinite(amt) || amt < 10) {
-            sheet.show({ variant: 'error', title: 'Enter amount', message: 'Minimum topup is ₹10.' });
+        if (!Number.isFinite(amt) || amt < minTopup) {
+            sheet.show({ variant: 'error', title: 'Enter amount', message: `Minimum topup is ₹${minTopup}.` });
             return;
         }
         setToppingUp(true);
         try {
-            await walletApi.topup(amt, 'upi');
+            const res = await walletApi.topup(amt, 'upi');
             setTopupAmount('');
-            sheet.show({ variant: 'success', title: 'Wallet topped up', message: `₹${amt} added to your wallet.` });
+            sheet.show({
+                variant: 'success',
+                title: 'Wallet topped up',
+                message: res.bonusEarned > 0
+                    ? `₹${amt} added + ₹${res.bonusEarned} bonus — ₹${res.credited} total spending power.`
+                    : `₹${amt} added to your wallet.`,
+            });
             await refresh('money');
         } catch (e) {
             const msg = e instanceof ApiError ? e.message : 'Topup failed.';
@@ -59,13 +87,11 @@ export default function WalletScreen() {
         }
     };
 
-    const activeBalance = tab === 'money' ? summary?.money.balance ?? 0 : summary?.loyalty.balance ?? 0;
-
     return (
         <View style={styles.container}>
             <ScreenHeader title="Wallet" />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-                {/* Two-in-one balance card: Money + Loyalty side by side, zero gap. */}
+                {/* Two-in-one balance card: Money + Bonus side by side, zero gap. */}
                 <View style={styles.balanceCard}>
                     <Pressable style={[styles.balHalf, tab === 'money' && styles.balHalfActive]} onPress={() => setTab('money')}>
                         <View style={styles.balHead}>
@@ -76,14 +102,14 @@ export default function WalletScreen() {
                         <Text style={[styles.balMeta, tab === 'money' && styles.balMetaActive]}>Spent ₹{summary?.money.totalSpent?.toFixed(0) ?? '0'}</Text>
                     </Pressable>
                     <View style={styles.balDivider} />
-                    <Pressable style={[styles.balHalf, tab === 'loyalty' && styles.balHalfActive]} onPress={() => setTab('loyalty')}>
+                    <Pressable style={[styles.balHalf, tab === 'bonus' && styles.balHalfActive]} onPress={() => setTab('bonus')}>
                         <View style={styles.balHead}>
-                            <Gift size={14} color={tab === 'loyalty' ? '#FFFFFF' : colors.mutedForeground} />
-                            <Text style={[styles.balLabel, tab === 'loyalty' && styles.balLabelActive]}>Loyalty</Text>
+                            <Gift size={14} color={tab === 'bonus' ? '#FFFFFF' : colors.mutedForeground} />
+                            <Text style={[styles.balLabel, tab === 'bonus' && styles.balLabelActive]}>Bonus</Text>
                         </View>
-                        <Text style={[styles.balAmount, tab === 'loyalty' && styles.balAmountActive]}>₹{summary?.loyalty.balance?.toFixed(0) ?? '0'}</Text>
-                        <Text style={[styles.balMeta, tab === 'loyalty' && styles.balMetaActive]}>
-                            Up to {summary?.loyalty.maxUsagePct ?? 20}% per bill
+                        <Text style={[styles.balAmount, tab === 'bonus' && styles.balAmountActive]}>₹{summary?.bonus.balance?.toFixed(0) ?? '0'}</Text>
+                        <Text style={[styles.balMeta, tab === 'bonus' && styles.balMetaActive]}>
+                            Up to {maxUsagePct}% per bill
                         </Text>
                     </Pressable>
                 </View>
@@ -92,6 +118,16 @@ export default function WalletScreen() {
                 {tab === 'money' ? (
                     <View style={styles.topupCard}>
                         <Text style={styles.sectionLabel}>Add money</Text>
+                        {cfg?.bonusEnabled && tiers.length > 0 ? (
+                            <View style={styles.tierRow}>
+                                <Sparkles size={12} color={colors.accentForeground} />
+                                <Text style={styles.tierText} numberOfLines={2}>
+                                    {tiers
+                                        .map((t) => `₹${t.minAmount}+ → ${t.type === 'flat' ? `₹${t.value}` : `${t.value}%`} bonus`)
+                                        .join('  •  ')}
+                                </Text>
+                            </View>
+                        ) : null}
                         <View style={styles.quickRow}>
                             {quickAmounts.map((a) => (
                                 <Pressable key={a} style={styles.quickChip} onPress={() => setTopupAmount(String(a))}>
@@ -125,12 +161,17 @@ export default function WalletScreen() {
                                 )}
                             </Pressable>
                         </View>
+                        {previewBonus > 0 ? (
+                            <Text style={styles.bonusHint}>
+                                You'll get ₹{previewBonus} bonus — ₹{Number(topupAmount) + previewBonus} total spending power.
+                            </Text>
+                        ) : null}
                     </View>
                 ) : (
                     <View style={styles.loyaltyNote}>
                         <Text style={styles.loyaltyNoteText}>
-                            Loyalty balance is earned as bonus. You can use up to
-                            {' '}{summary?.loyalty.maxUsagePct ?? 20}% of any bill from this balance.
+                            Bonus balance is earned on wallet topups and referrals. You can use up to
+                            {' '}{maxUsagePct}% of any bill from this balance — the rest comes from your money wallet.
                         </Text>
                     </View>
                 )}
@@ -153,7 +194,7 @@ export default function WalletScreen() {
                                     )}
                                 </View>
                                 <View style={{ flex: 1, minWidth: 0 }}>
-                                    <Text style={styles.txnTitle} numberOfLines={1}>{prettyType(t.type)}</Text>
+                                    <Text style={styles.txnTitle} numberOfLines={1}>{t.note || prettyType(t.type)}</Text>
                                     <Text style={styles.txnMeta} numberOfLines={1}>
                                         {new Date(t.createdAt).toLocaleString()}
                                     </Text>
@@ -181,7 +222,7 @@ function prettyType(t: WalletTxn['type']) {
         case 'refund': return 'Refund';
         case 'trip_debit': return 'Trip payment';
         case 'trip_credit': return 'Trip earnings';
-        case 'bonus': return 'Loyalty bonus';
+        case 'bonus': return 'Bonus credit';
         case 'penalty': return 'Penalty';
         case 'adjustment': return 'Adjustment';
         case 'payout_debit': return 'Payout';
@@ -215,6 +256,11 @@ const styles = StyleSheet.create({
         marginTop: 10, marginHorizontal: 6, padding: 12,
         borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card,
     },
+    tierRow: {
+        flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8,
+        backgroundColor: colors.chipBg, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 6,
+    },
+    tierText: { flex: 1, fontSize: 10, fontFamily: fonts.bodyBold, color: colors.accentForeground },
     quickRow: { flexDirection: 'row', gap: 6, marginBottom: 8, flexWrap: 'wrap' },
     quickChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
     quickText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
@@ -227,6 +273,7 @@ const styles = StyleSheet.create({
     },
     addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.primary },
     addBtnText: { fontSize: 13, color: '#FFFFFF', fontFamily: fonts.bodyBold },
+    bonusHint: { marginTop: 8, fontSize: 11, fontFamily: fonts.bodyBold, color: colors.success },
 
     loyaltyNote: {
         marginTop: 10, marginHorizontal: 6, padding: 12,

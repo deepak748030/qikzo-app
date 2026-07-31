@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Switch, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Banknote, Wallet, Bike, ChevronRight, MapPin, Home, UserPlus, Camera, ImagePlus, X, Plus, Mic, MicOff } from 'lucide-react-native';
+import { Banknote, Wallet, CreditCard, Bike, ChevronRight, MapPin, Home, UserPlus, Camera, ImagePlus, X, Plus, Mic, MicOff } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -18,6 +18,7 @@ import { newBookingId, useBooking } from '@/lib/bookingStore';
 import { ApiError } from '@/lib/api/errors';
 import { tokenStore } from '@/lib/api/tokenStore';
 import { uploadFile } from '@/lib/api/endpoints/uploads';
+import { walletApi, type PayQuote } from '@/lib/api/endpoints/wallet';
 
 declare const require: (moduleName: string) => unknown;
 
@@ -45,6 +46,10 @@ export default function BookDeliveryScreen() {
     const speechSubscriptionsRef = useRef<Array<{ remove: () => void }>>([]);
 
     const isRide = draft.mode === 'ride';
+
+    // Wallet pay quote — server decides the money/bonus split and the cap.
+    const [payQuote, setPayQuote] = useState<PayQuote | null>(null);
+    const [quoting, setQuoting] = useState(false);
 
     const MAX_IMAGES = 4;
     const MAX_EXTRA_PICKUPS = 3;
@@ -225,6 +230,22 @@ export default function BookDeliveryScreen() {
         router.push({ pathname: '/select-location', params: { field } });
     };
 
+
+    // Refresh the wallet split whenever the fare or the payment mode changes.
+    useEffect(() => {
+        if (draft.payment !== 'wallet' || !trip?.price || !tokenStore.get().accessToken) {
+            setPayQuote(null);
+            return;
+        }
+        let cancelled = false;
+        setQuoting(true);
+        walletApi.payQuote(trip.price)
+            .then((q) => { if (!cancelled) setPayQuote(q); })
+            .catch(() => { if (!cancelled) setPayQuote(null); })
+            .finally(() => { if (!cancelled) setQuoting(false); });
+        return () => { cancelled = true; };
+    }, [draft.payment, trip?.price]);
+
     const confirm = async () => {
         // Double-tap guard — the button already shows a spinner, but on
         // Android a fast second tap can fire before the disabled state paints.
@@ -238,6 +259,17 @@ export default function BookDeliveryScreen() {
             return;
         }
         if (!trip) return;
+        if (draft.payment === 'wallet') {
+            if (quoting) return;
+            if (payQuote && !payQuote.canPay) {
+                sheet.show({
+                    variant: 'error',
+                    title: 'Low wallet balance',
+                    message: `Add ₹${payQuote.shortfall} to your wallet, or choose cash/UPI.`,
+                });
+                return;
+            }
+        }
         setLoading(true);
 
         // Signed-in users create on the server so the booking persists, gets a
@@ -588,10 +620,29 @@ export default function BookDeliveryScreen() {
                             style={[styles.payBtn, draft.payment === 'upi' && styles.payBtnActive]}
                             onPress={() => setDraft({ payment: 'upi' })}
                         >
-                            <Wallet size={16} color={colors.foreground} />
+                            <CreditCard size={16} color={colors.foreground} />
                             <Text style={styles.payText}>UPI</Text>
                         </Pressable>
+                        <Pressable
+                            style={[styles.payBtn, draft.payment === 'wallet' && styles.payBtnActive]}
+                            onPress={() => setDraft({ payment: 'wallet' })}
+                        >
+                            <Wallet size={16} color={colors.foreground} />
+                            <Text style={styles.payText}>Wallet</Text>
+                        </Pressable>
                     </View>
+                    {draft.payment === 'wallet' && payQuote ? (
+                        <View style={styles.walletBox}>
+                            <Row label="From bonus balance" value={`₹${payQuote.fromBonus}`} />
+                            <Row label="From money balance" value={`₹${payQuote.fromMoney}`} />
+                            <Text style={styles.walletNote}>
+                                Up to {payQuote.maxUsagePct}% of a bill can be paid from bonus. Balance: ₹{payQuote.moneyBalance} money · ₹{payQuote.bonusBalance} bonus.
+                            </Text>
+                            {!payQuote.canPay ? (
+                                <Text style={styles.walletWarn}>Add ₹{payQuote.shortfall} to your wallet to pay with it.</Text>
+                            ) : null}
+                        </View>
+                    ) : null}
                 </View>
 
                 {/* Estimate breakdown */}
@@ -748,6 +799,9 @@ const styles = StyleSheet.create({
     payBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card },
     payBtnActive: { borderColor: colors.foreground, borderWidth: 2 },
     payText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
+    walletBox: { marginTop: 8, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 10, backgroundColor: colors.card, gap: 2 },
+    walletNote: { fontSize: 10, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 6, lineHeight: 15 },
+    walletWarn: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.danger, marginTop: 6 },
 
     bill: { borderWidth: 1, borderColor: colors.border, padding: 10, borderRadius: radius.md, backgroundColor: colors.card },
     billRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, gap: 8 },

@@ -34,7 +34,7 @@ export type AuthTokens = {
 
 // ---------- Booking ----------
 export type BookingMode = 'ride' | 'delivery';
-export type PaymentMode = 'cash' | 'upi';
+export type PaymentMode = 'cash' | 'upi' | 'wallet';
 
 export type Point = {
     address: string;

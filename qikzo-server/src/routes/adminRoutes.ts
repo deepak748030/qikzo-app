@@ -74,6 +74,11 @@ router.post('/banners', adminController.createBanner);
 router.patch('/banners/:id', adminController.updateBanner);
 router.delete('/banners/:id', adminController.deleteBanner);
 
+// Rewards: wallet bonus tiers + referral milestones
+router.get('/reward-config', adminController.getRewardConfig);
+router.patch('/reward-config', adminController.updateRewardConfig);
+router.get('/referrals', adminController.listReferrals);
+
 // Audit log
 router.get('/audit', adminController.listAudit);
 

@@ -26,7 +26,7 @@ export const createBookingSchema = z.object({
     noteImages: z.array(z.string().min(1).max(500)).max(4).optional(),
     recipientPhone: z.string().max(20).optional(),
     recipientName: z.string().max(80).optional(),
-    payment: z.enum(['cash', 'upi']).optional(),
+    payment: z.enum(['cash', 'upi', 'wallet']).optional(),
     couponCode: z.string().min(2).max(40).optional(),
     // ISO string; must be in the future when scheduling.
     scheduledAt: z.string().datetime().optional(),

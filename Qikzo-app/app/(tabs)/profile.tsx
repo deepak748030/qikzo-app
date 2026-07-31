@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { router, Href } from 'expo-router';
-import { User, MapPin, Activity, HelpCircle, Info, Shield, FileText, ChevronRight, LogOut, Bell, Wallet as WalletIcon, Gift } from 'lucide-react-native';
+import { User, MapPin, Activity, HelpCircle, Info, Shield, FileText, ChevronRight, LogOut, Bell, Wallet as WalletIcon, Gift, Users } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import BottomSheet from '@/components/BottomSheet';
@@ -19,6 +19,7 @@ type Item = { icon: any; label: string; route?: Href };
 
 const ITEMS: Item[] = [
   { icon: User, label: 'Personal information', route: '/personal-info' },
+  { icon: Users, label: 'Refer & earn', route: '/refer-earn' },
   { icon: Activity, label: 'My bookings', route: '/(tabs)/activity' },
   { icon: Bell, label: 'Notifications', route: '/notifications' },
   { icon: HelpCircle, label: 'Help & support', route: '/help-support' },
@@ -117,7 +118,7 @@ export default function ProfileScreen() {
 
         </View>
 
-        {/* Wallet — two balances (Money + Loyalty) with zero gap between them.
+        {/* Wallet — two balances (Money + Bonus) with zero gap between them.
             Tap to open the full wallet screen. */}
         <Pressable style={styles.walletCard} onPress={() => router.push('/wallet' as Href)}>
           <View style={styles.walletHalf}>
@@ -131,9 +132,9 @@ export default function ProfileScreen() {
           <View style={styles.walletHalf}>
             <View style={styles.walletHead}>
               <Gift size={13} color={colors.mutedForeground} />
-              <Text style={styles.walletLabel}>Loyalty</Text>
+              <Text style={styles.walletLabel}>Bonus</Text>
             </View>
-            <Text style={styles.walletAmount}>₹{wallet?.loyalty.balance?.toFixed(0) ?? '0'}</Text>
+            <Text style={styles.walletAmount}>₹{wallet?.bonus.balance?.toFixed(0) ?? '0'}</Text>
           </View>
           <ChevronRight size={18} color={colors.mutedForeground} style={{ marginRight: 8 }} />
         </Pressable>

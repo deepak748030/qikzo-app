@@ -21,7 +21,7 @@ type Draft = {
     recipientPhone: string;
     recipientName: string;
     bookingForOther: boolean;
-    payment: 'cash' | 'upi';
+    payment: 'cash' | 'upi' | 'wallet';
 };
 
 const initialDraft: Draft = {
@@ -67,7 +67,7 @@ type State = {
         noteImages?: string[];
         recipientPhone?: string;
         recipientName?: string;
-        payment: 'cash' | 'upi';
+        payment: 'cash' | 'upi' | 'wallet';
         vehicleTypeSlug?: string;
     }) => Promise<Booking>;
     cancelOnServer: (id: string, reason?: string) => Promise<void>;
@@ -129,7 +129,7 @@ function mapBooking(b: ServerBooking): Booking & { serverId: string } {
         dropCoord: coordFromPoint(b.drop),
         notes: b.notes || '',
         recipientPhone: b.recipientPhone || undefined,
-        payment: (b.payment as 'cash' | 'upi') || 'cash',
+        payment: (b.payment as 'cash' | 'upi' | 'wallet') || 'cash',
         paymentStatus: (b as any).paymentStatus || 'pending',
         distanceKm: Number(b.distanceKm) || 0,
         etaMin: Number(b.etaMin) || 0,

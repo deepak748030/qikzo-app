@@ -89,7 +89,7 @@ export type Booking = {
   dropCoord?: { lat: number; lng: number } | null;
   notes: string;
   recipientPhone?: string;
-  payment: 'cash' | 'upi';
+  payment: 'cash' | 'upi' | 'wallet';
   paymentStatus?: 'pending' | 'paid' | 'disputed';
   distanceKm: number;
   etaMin: number;

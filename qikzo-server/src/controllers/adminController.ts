@@ -2,6 +2,8 @@ import asyncHandler from '../middleware/asyncHandler';
 import adminService from '../services/adminService';
 import supportService from '../services/supportService';
 import AuditLog from '../models/AuditLog';
+import rewardService from '../services/rewardService';
+import auditService from '../services/auditService';
 import { ok } from '../lib/http';
 
 /**
@@ -100,6 +102,25 @@ export const adminController = {
             nextCursor: hasMore ? String(items[limit - 1]._id) : null,
         });
     }),
+
+    // Rewards (wallet bonus + referral programme)
+    getRewardConfig: asyncHandler(async (_req, res) => ok(res, await rewardService.getConfig())),
+    updateRewardConfig: asyncHandler(async (req, res) => {
+        const config = await rewardService.updateConfig(req.body || {});
+        void auditService.audit({
+            actorId: req.user!.id,
+            actorRole: 'admin',
+            action: 'reward_config.update',
+            targetType: 'RewardConfig',
+            targetId: 'default',
+            meta: req.body || {},
+        }).catch(() => {});
+        return ok(res, config, 'Reward settings saved');
+    }),
+    listReferrals: asyncHandler(async (req, res) => ok(res, await rewardService.listReferrals({
+        page: req.query.page ? Number(req.query.page) : undefined,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+    }))),
 
     // Support tickets
     listSupport: asyncHandler(async (req, res) => ok(res, await supportService.listAdmin({

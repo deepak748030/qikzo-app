@@ -35,4 +35,6 @@ export { default as Document } from './Document';
 export { default as KYC } from './KYC';
 export { default as Settings } from './Settings';
 export { default as AppSettings } from './AppSettings';
+export { default as RewardConfig } from './RewardConfig';
+export { default as Referral } from './Referral';
 export { default as Migration } from './Migration';

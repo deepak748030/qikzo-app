@@ -62,7 +62,13 @@ const BookingSchema = new Schema(
         noteImages: { type: [String], default: [] },
         recipientPhone: { type: String, default: '' },
         recipientName: { type: String, default: '' },
-        payment: { type: String, enum: ['cash', 'upi'], default: 'cash' },
+        payment: { type: String, enum: ['cash', 'upi', 'wallet'], default: 'cash' },
+        // Split recorded when the bill is charged to the wallet, so a refund
+        // can return each part to the wallet it came from.
+        walletPaid: {
+            type: new Schema({ money: { type: Number, default: 0 }, bonus: { type: Number, default: 0 } }, { _id: false }),
+            default: null,
+        },
         // Mock payment lifecycle. UPI auto-settles on delivery; cash sits in
         // `pending` until the customer confirms in-app. `disputed` opens a
         // support flow. Real gateway integration replaces the auto-settle

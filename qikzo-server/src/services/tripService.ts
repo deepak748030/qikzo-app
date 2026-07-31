@@ -241,6 +241,14 @@ export const tripService = {
             rider.available = true;
             rider.trips = (rider.trips || 0) + 1;
             await rider.save();
+
+            // Refer & Earn: count this delivery for the customer's referrer and
+            // pay out any milestone they just crossed. Never blocks the trip.
+            const b = await Booking.findById(trip.booking).select('user').lean();
+            if (b) {
+                const rewardService = (await import('./rewardService')).default;
+                void rewardService.onDeliveryCompleted(String(b.user)).catch(() => {});
+            }
         }
 
         emitTripUpdate(trip);

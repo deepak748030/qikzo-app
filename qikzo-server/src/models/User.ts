@@ -26,6 +26,10 @@ const UserSchema = new Schema(
         // Profile photo URL (relative /uploads/... path or absolute). Uploaded
         // via POST /uploads then patched onto the user via PATCH /users/me.
         avatarUrl: { type: String, default: '' },
+        // Refer & Earn. `referralCode` is generated lazily on first read of the
+        // refer screen; `referredBy` is set once when the user applies a code.
+        referralCode: { type: String, default: '', index: true, uppercase: true, trim: true },
+        referredBy: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
     },
     { timestamps: true }
 );
