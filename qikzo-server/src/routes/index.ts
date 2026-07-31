@@ -16,6 +16,7 @@ import supportRoutes from './supportRoutes';
 import bootstrapRoutes from './bootstrapRoutes';
 import walletRoutes from './walletRoutes';
 import referralRoutes from './referralRoutes';
+import orderReviewRoutes from './orderReviewRoutes';
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use('/support', supportRoutes);
 router.use('/admin-bootstrap', bootstrapRoutes);
 router.use('/wallet', walletRoutes);
 router.use('/referrals', referralRoutes);
+router.use('/order-reviews', orderReviewRoutes);
 
 export default router;

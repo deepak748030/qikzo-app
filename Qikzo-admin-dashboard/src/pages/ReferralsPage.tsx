@@ -32,7 +32,6 @@ type Res = {
   total: number;
   hasMore: boolean;
   milestones: Milestone[];
-  rewardWallet: 'money' | 'bonus';
   enabled: boolean;
 };
 
@@ -45,7 +44,7 @@ const money = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
  */
 export default function ReferralsPage() {
   const [rows, setRows] = useState<Row[]>([]);
-  const [meta, setMeta] = useState<{ total: number; milestones: Milestone[]; rewardWallet: string; enabled: boolean }>({ total: 0, milestones: [], rewardWallet: 'money', enabled: true });
+  const [meta, setMeta] = useState<{ total: number; milestones: Milestone[]; enabled: boolean }>({ total: 0, milestones: [], enabled: true });
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -61,7 +60,7 @@ export default function ReferralsPage() {
       setRows(prev => (replace ? res.items : [...prev, ...res.items]));
       setHasMore(res.hasMore);
       setPage(nextPage);
-      setMeta({ total: res.total, milestones: res.milestones || [], rewardWallet: res.rewardWallet, enabled: res.enabled });
+      setMeta({ total: res.total, milestones: res.milestones || [], enabled: res.enabled });
     } catch (e: any) {
       if (id === reqId.current) toast.error(e?.message || 'Could not load referrals');
     } finally {
@@ -85,7 +84,7 @@ export default function ReferralsPage() {
       <div>
         <h1 className="text-2xl font-display font-semibold">Referrals</h1>
         <p className="text-sm text-muted-foreground">
-          {meta.enabled ? 'Campaign is live' : 'Campaign is paused'} · rewards credited to the {meta.rewardWallet} wallet
+          {meta.enabled ? 'Campaign is live' : 'Campaign is paused'} · rewards credited in ₹ to the money wallet
           {meta.milestones.length ? ` · milestones at ${meta.milestones.map(m => m.deliveries).join(', ')} deliveries` : ''}
         </p>
       </div>

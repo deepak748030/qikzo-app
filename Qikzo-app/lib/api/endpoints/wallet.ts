@@ -3,7 +3,7 @@ import { http } from '../client';
 /** Public wallet names. `loyalty` is the legacy alias for `bonus`. */
 export type WalletKind = 'money' | 'bonus';
 
-export type BonusTier = { minAmount: number; type: 'percent' | 'flat'; value: number; maxBonus: number };
+export type BonusTier = { minAmount: number; value: number };
 
 export type WalletSummary = {
     money: { balance: number; currency: string; totalSpent: number; totalEarned?: number };

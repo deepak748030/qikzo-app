@@ -57,9 +57,7 @@ export default function WalletScreen() {
         const matched = tiers.filter((t) => amt >= t.minAmount);
         if (!matched.length) return 0;
         const t = matched[matched.length - 1];
-        let b = t.type === 'flat' ? t.value : (amt * t.value) / 100;
-        if (t.maxBonus > 0) b = Math.min(b, t.maxBonus);
-        return Math.floor(Math.max(0, b));
+        return Math.floor(Math.max(0, t.value));
     }, [topupAmount, tiers, cfg?.bonusEnabled, minTopup]);
 
     const doTopup = async (amt: number) => {
@@ -123,7 +121,7 @@ export default function WalletScreen() {
                                 <Sparkles size={12} color={colors.accentForeground} />
                                 <Text style={styles.tierText} numberOfLines={2}>
                                     {tiers
-                                        .map((t) => `₹${t.minAmount}+ → ${t.type === 'flat' ? `₹${t.value}` : `${t.value}%`} bonus`)
+                                        .map((t) => `₹${t.minAmount}+ → ₹${t.value} bonus`)
                                         .join('  •  ')}
                                 </Text>
                             </View>
@@ -170,7 +168,7 @@ export default function WalletScreen() {
                 ) : (
                     <View style={styles.loyaltyNote}>
                         <Text style={styles.loyaltyNoteText}>
-                            Bonus balance is earned on wallet topups and referrals. You can use up to
+                            Bonus balance is earned on wallet topups. You can use up to
                             {' '}{maxUsagePct}% of any bill from this balance — the rest comes from your money wallet.
                         </Text>
                     </View>

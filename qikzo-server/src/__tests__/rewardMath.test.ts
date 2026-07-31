@@ -7,21 +7,21 @@ import assert from 'node:assert/strict';
 import { bonusForTopup, bonusUsable, splitBill, milestonesDue, pendingReward } from '../services/rewardMath';
 
 const tiers = [
-    { minAmount: 100, type: 'percent' as const, value: 5, maxBonus: 0 },
-    { minAmount: 500, type: 'percent' as const, value: 10, maxBonus: 40 },
-    { minAmount: 1000, type: 'flat' as const, value: 150, maxBonus: 0 },
+    { minAmount: 100, value: 5 },
+    { minAmount: 500, value: 40 },
+    { minAmount: 1000, value: 150 },
 ];
 const bonus = { enabled: true, tiers };
 
 test('top-up bonus picks the highest matching slab', () => {
     assert.equal(bonusForTopup(bonus, 50), 0);
     assert.equal(bonusForTopup(bonus, 100), 5);
-    assert.equal(bonusForTopup(bonus, 499), 24);
+    assert.equal(bonusForTopup(bonus, 499), 5);
     assert.equal(bonusForTopup(bonus, 500), 40);
 });
 
-test('slab cap is respected and flat slabs pay a fixed amount', () => {
-    assert.equal(bonusForTopup(bonus, 900), 40, 'capped at maxBonus 40');
+test('slabs pay a fixed amount', () => {
+    assert.equal(bonusForTopup(bonus, 900), 40);
     assert.equal(bonusForTopup(bonus, 1000), 150);
 });
 

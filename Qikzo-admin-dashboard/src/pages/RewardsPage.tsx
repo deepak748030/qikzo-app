@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import { Button, Card, Input, Textarea, Skeleton } from '@/components/ui';
 import { Gift, Plus, Trash2, Save } from 'lucide-react';
 
-type Tier = { minAmount: number; type: 'percent' | 'flat'; value: number; maxBonus: number };
+type Tier = { minAmount: number; value: number };
 type Milestone = { deliveries: number; reward: number };
 
 type RewardConfig = {
@@ -18,9 +18,6 @@ type RewardConfig = {
   referral: {
     enabled: boolean;
     milestones: Milestone[];
-    rewardWallet: 'money' | 'bonus';
-    refereeSignupReward: number;
-    refereeRewardWallet: 'money' | 'bonus';
     terms: string;
   };
 };
@@ -75,7 +72,6 @@ export default function RewardsPage() {
   const save = async () => {
     if (!cfg) return;
     if (cfg.bonus.maxTopup < cfg.bonus.minTopup) return toast.error('Maximum top-up must be above the minimum');
-    if (cfg.bonus.maxUsagePct < 0 || cfg.bonus.maxUsagePct > 100) return toast.error('Bonus usage cap must be between 0 and 100%');
     if (cfg.bonus.tiers.some(t => t.minAmount < 1)) return toast.error('Every slab needs a top-up amount of at least ₹1');
     if (cfg.referral.milestones.some(m => m.deliveries < 1)) return toast.error('Every milestone needs a delivery target of at least 1');
     setSaving(true);
@@ -110,7 +106,7 @@ export default function RewardsPage() {
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-display font-semibold">Reward settings</h1>
-          <p className="text-sm text-muted-foreground">Wallet bonus slabs and the Refer &amp; Earn programme. Applies instantly to the customer and rider apps.</p>
+          <p className="text-sm text-muted-foreground">Wallet bonus slabs and the delivery partner Refer &amp; Earn programme.</p>
         </div>
         <Button onClick={save} loading={saving}><Save className="h-4 w-4" /> Save changes</Button>
       </div>
@@ -122,15 +118,12 @@ export default function RewardsPage() {
             <Toggle checked={cfg.bonus.enabled} onChange={v => patchBonus({ enabled: v })} label="Bonus programme enabled" />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Minimum top-up (₹)" hint="Smallest amount a customer can add.">
               <Input inputMode="numeric" value={String(cfg.bonus.minTopup)} onChange={e => patchBonus({ minTopup: num(e.target.value) })} />
             </Field>
             <Field label="Maximum top-up (₹)" hint="Largest single top-up allowed.">
               <Input inputMode="numeric" value={String(cfg.bonus.maxTopup)} onChange={e => patchBonus({ maxTopup: num(e.target.value) })} />
-            </Field>
-            <Field label="Bonus usage cap (%)" hint="Max share of any bill payable from the bonus wallet.">
-              <Input inputMode="numeric" value={String(cfg.bonus.maxUsagePct)} onChange={e => patchBonus({ maxUsagePct: num(e.target.value) })} />
             </Field>
           </div>
 
@@ -138,9 +131,9 @@ export default function RewardsPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
               <div>
                 <div className="text-sm font-medium">Bonus slabs</div>
-                <p className="text-xs text-muted-foreground">Highest matching slab wins for a given top-up amount.</p>
+                <p className="text-xs text-muted-foreground">Top-up amount and the bonus credited for it. Highest matching slab wins.</p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => patchBonus({ tiers: [...cfg.bonus.tiers, { minAmount: 1, type: 'percent', value: 0, maxBonus: 0 }] })}>
+              <Button size="sm" variant="outline" onClick={() => patchBonus({ tiers: [...cfg.bonus.tiers, { minAmount: 1, value: 0 }] })}>
                 <Plus className="h-4 w-4" /> Add slab
               </Button>
             </div>
@@ -149,25 +142,12 @@ export default function RewardsPage() {
             ) : (
               <div className="space-y-2">
                 {cfg.bonus.tiers.map((t, i) => (
-                  <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] items-end border border-border rounded-md p-3">
-                    <Field label="Top-up from (₹)">
+                  <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] items-end border border-border rounded-md p-3">
+                    <Field label="Top-up amount (₹)">
                       <Input inputMode="numeric" value={String(t.minAmount)} onChange={e => { const tiers = [...cfg.bonus.tiers]; tiers[i] = { ...t, minAmount: num(e.target.value) }; patchBonus({ tiers }); }} />
                     </Field>
-                    <Field label="Type">
-                      <select
-                        className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                        value={t.type}
-                        onChange={e => { const tiers = [...cfg.bonus.tiers]; tiers[i] = { ...t, type: e.target.value as Tier['type'] }; patchBonus({ tiers }); }}
-                      >
-                        <option value="percent">Percent (%)</option>
-                        <option value="flat">Flat (₹)</option>
-                      </select>
-                    </Field>
-                    <Field label={t.type === 'percent' ? 'Bonus (%)' : 'Bonus (₹)'}>
+                    <Field label="Bonus credited (₹)">
                       <Input inputMode="numeric" value={String(t.value)} onChange={e => { const tiers = [...cfg.bonus.tiers]; tiers[i] = { ...t, value: num(e.target.value) }; patchBonus({ tiers }); }} />
-                    </Field>
-                    <Field label="Cap (₹)">
-                      <Input inputMode="numeric" value={String(t.maxBonus)} onChange={e => { const tiers = [...cfg.bonus.tiers]; tiers[i] = { ...t, maxBonus: num(e.target.value) }; patchBonus({ tiers }); }} />
                     </Field>
                     <Button size="sm" variant="destructive" onClick={() => patchBonus({ tiers: cfg.bonus.tiers.filter((_, j) => j !== i) })}>
                       <Trash2 className="h-4 w-4" />
@@ -187,29 +167,15 @@ export default function RewardsPage() {
             <Toggle checked={cfg.referral.enabled} onChange={v => patchRef({ enabled: v })} label="Referral campaign live" />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Referrer reward wallet" hint="Where milestone rewards are credited.">
-              <select className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={cfg.referral.rewardWallet} onChange={e => patchRef({ rewardWallet: e.target.value as RewardConfig['referral']['rewardWallet'] })}>
-                <option value="money">Money wallet</option>
-                <option value="bonus">Bonus wallet</option>
-              </select>
-            </Field>
-            <Field label="Signup reward (₹)" hint="Credited to the person applying a code.">
-              <Input inputMode="numeric" value={String(cfg.referral.refereeSignupReward)} onChange={e => patchRef({ refereeSignupReward: num(e.target.value) })} />
-            </Field>
-            <Field label="Signup reward wallet">
-              <select className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={cfg.referral.refereeRewardWallet} onChange={e => patchRef({ refereeRewardWallet: e.target.value as RewardConfig['referral']['refereeRewardWallet'] })}>
-                <option value="bonus">Bonus wallet</option>
-                <option value="money">Money wallet</option>
-              </select>
-            </Field>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Delivery partners only. Milestone rewards are credited in ₹ directly to the partner's money wallet. There is no signup bonus.
+          </p>
 
           <div>
             <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
               <div>
                 <div className="text-sm font-medium">Milestones</div>
-                <p className="text-xs text-muted-foreground">Delivery target the referred user must reach, and what the referrer earns.</p>
+                <p className="text-xs text-muted-foreground">Deliveries the invited partner must complete, and the ₹ reward paid to the referrer.</p>
               </div>
               <Button size="sm" variant="outline" onClick={() => patchRef({ milestones: [...cfg.referral.milestones, { deliveries: 1, reward: 0 }] })}>
                 <Plus className="h-4 w-4" /> Add milestone

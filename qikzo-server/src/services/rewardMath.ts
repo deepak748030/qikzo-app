@@ -4,7 +4,7 @@
  * reward service and the wallet service.
  */
 
-export type BonusTier = { minAmount: number; type: 'percent' | 'flat'; value: number; maxBonus: number };
+export type BonusTier = { minAmount: number; value: number };
 export type Milestone = { deliveries: number; reward: number };
 
 /** Bonus earned for a topup of `amount` — highest matching tier wins. */
@@ -16,9 +16,7 @@ export function bonusForTopup(
     const matching = bonus.tiers.filter((t) => amount >= t.minAmount);
     if (!matching.length) return 0;
     const tier = matching[matching.length - 1];
-    let value = tier.type === 'flat' ? tier.value : (amount * tier.value) / 100;
-    if (tier.maxBonus > 0) value = Math.min(value, tier.maxBonus);
-    return Math.floor(Math.max(0, value));
+    return Math.floor(Math.max(0, tier.value));
 }
 
 /** Max bonus spendable on a bill of `amount`, given balance + admin cap. */

@@ -16,9 +16,6 @@ export type ReferralInfo = {
     code: string;
     enabled: boolean;
     milestones: ReferralMilestone[];
-    rewardWallet: 'money' | 'bonus';
-    refereeSignupReward: number;
-    refereeRewardWallet: 'money' | 'bonus';
     terms: string;
     totalInvites: number;
     totalEarned: number;

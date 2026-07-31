@@ -15,7 +15,7 @@ import { bonusForTopup as calcBonusForTopup, milestonesDue, pendingReward } from
 export type PublicRewardConfig = {
     bonus: {
         enabled: boolean;
-        tiers: { minAmount: number; type: 'percent' | 'flat'; value: number; maxBonus: number }[];
+        tiers: { minAmount: number; value: number }[];
         maxUsagePct: number;
         minTopup: number;
         maxTopup: number;
@@ -23,9 +23,6 @@ export type PublicRewardConfig = {
     referral: {
         enabled: boolean;
         milestones: { deliveries: number; reward: number }[];
-        rewardWallet: 'money' | 'bonus';
-        refereeSignupReward: number;
-        refereeRewardWallet: 'money' | 'bonus';
         terms: string;
     };
 };
@@ -34,9 +31,7 @@ function toPublic(c: any): PublicRewardConfig {
     const tiers = (c.bonus?.tiers || [])
         .map((t: any) => ({
             minAmount: Number(t.minAmount) || 0,
-            type: (t.type === 'flat' ? 'flat' : 'percent') as 'percent' | 'flat',
             value: Number(t.value) || 0,
-            maxBonus: Number(t.maxBonus) || 0,
         }))
         .sort((a: any, b: any) => a.minAmount - b.minAmount);
     const milestones = (c.referral?.milestones || [])
@@ -53,9 +48,6 @@ function toPublic(c: any): PublicRewardConfig {
         referral: {
             enabled: c.referral?.enabled !== false,
             milestones,
-            rewardWallet: c.referral?.rewardWallet === 'bonus' ? 'bonus' : 'money',
-            refereeSignupReward: Number(c.referral?.refereeSignupReward ?? 0),
-            refereeRewardWallet: c.referral?.refereeRewardWallet === 'money' ? 'money' : 'bonus',
             terms: String(c.referral?.terms || ''),
         },
     };
@@ -107,16 +99,11 @@ export const rewardService = {
                 const tiers = b.tiers.map((t: any) => {
                     const minAmount = Number(t.minAmount);
                     const value = Number(t.value);
-                    const type = t.type === 'flat' ? 'flat' : 'percent';
-                    const maxBonus = Number(t.maxBonus) || 0;
                     if (!Number.isFinite(minAmount) || minAmount < 1) {
                         throw errors.badRequest('Tier amount must be at least 1', 'BAD_TIER');
                     }
                     if (!Number.isFinite(value) || value < 0) throw errors.badRequest('Invalid tier value', 'BAD_TIER');
-                    if (type === 'percent' && value > 100) {
-                        throw errors.badRequest('Percent bonus cannot exceed 100', 'BAD_TIER');
-                    }
-                    return { minAmount, type, value, maxBonus: maxBonus < 0 ? 0 : maxBonus };
+                    return { minAmount, value };
                 });
                 const seen = new Set<number>();
                 for (const t of tiers) {
@@ -130,17 +117,6 @@ export const rewardService = {
         const r = patch?.referral;
         if (r) {
             if (typeof r.enabled === 'boolean') (c.referral as any).enabled = r.enabled;
-            if (r.rewardWallet) {
-                (c.referral as any).rewardWallet = r.rewardWallet === 'bonus' ? 'bonus' : 'money';
-            }
-            if (r.refereeRewardWallet) {
-                (c.referral as any).refereeRewardWallet = r.refereeRewardWallet === 'money' ? 'money' : 'bonus';
-            }
-            if (r.refereeSignupReward !== undefined) {
-                const v = Number(r.refereeSignupReward);
-                if (!Number.isFinite(v) || v < 0) throw errors.badRequest('Invalid signup reward', 'BAD_REWARD');
-                (c.referral as any).refereeSignupReward = v;
-            }
             if (typeof r.terms === 'string') (c.referral as any).terms = r.terms.slice(0, 2000);
             if (Array.isArray(r.milestones)) {
                 const ms = r.milestones.map((m: any) => {
@@ -224,9 +200,6 @@ export const rewardService = {
             code,
             enabled: cfg.referral.enabled,
             milestones: cfg.referral.milestones,
-            rewardWallet: cfg.referral.rewardWallet,
-            refereeSignupReward: cfg.referral.refereeSignupReward,
-            refereeRewardWallet: cfg.referral.refereeRewardWallet,
             terms: cfg.referral.terms,
             totalInvites: invites.length,
             totalEarned: invites.reduce((s, i) => s + i.earned, 0),
@@ -273,20 +246,8 @@ export const rewardService = {
         await me.save();
         await Referral.create({ referrer: referrer._id, referee: me._id, code });
 
-        // Welcome credit for the new user (optional, admin-configurable).
-        let credited = 0;
-        if (cfg.referral.refereeSignupReward > 0) {
-            const { walletService } = await import('./walletService');
-            await walletService.creditReward({
-                userId,
-                wallet: cfg.referral.refereeRewardWallet,
-                amount: cfg.referral.refereeSignupReward,
-                note: `Referral welcome bonus (${code})`,
-                refCode: `referral-signup:${userId}`,
-            });
-            credited = cfg.referral.refereeSignupReward;
-        }
-        return { applied: true, referrer: referrer.name || 'A Qikzo user', credited, code };
+        // No signup bonus — the referrer is paid in ₹ as milestones are hit.
+        return { applied: true, referrer: referrer.name || 'A Qikzo user', credited: 0, code };
     },
 
     /**
@@ -309,7 +270,8 @@ export const rewardService = {
             if (m.reward > 0) {
                 await walletService.creditReward({
                     userId: String(ref.referrer),
-                    wallet: cfg.referral.rewardWallet,
+                    // Referral rewards are always paid as real money (₹).
+                    wallet: 'money',
                     amount: m.reward,
                     note: `Referral reward — friend completed ${m.deliveries} deliveries`,
                     refCode: `referral:${ref._id}:${m.deliveries}`,
@@ -409,7 +371,6 @@ export const rewardService = {
             limit,
             hasMore: page * limit < total,
             milestones,
-            rewardWallet: cfg.referral.rewardWallet,
             enabled: cfg.referral.enabled,
         };
     },

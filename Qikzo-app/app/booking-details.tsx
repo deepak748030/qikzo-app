@@ -17,7 +17,9 @@ import { subscribe as subscribeSocket, emit as socketEmit, connectSocket } from 
 import BookingStageOverlay, { Stage, VehicleKind } from '@/components/BookingStageOverlay';
 import LeafletMap from '@/components/LeafletMap';
 import { ratingsApi } from '@/lib/api/endpoints/ratings';
+import { orderReviewsApi } from '@/lib/api/endpoints/orderReviews';
 import RateRiderModal from '@/components/RateRiderModal';
+import RateOrderModal from '@/components/RateOrderModal';
 import BookingStageStepper from '@/components/BookingStageStepper';
 
 // Map booking category → vehicle rendered on the "accepted" overlay.
@@ -70,9 +72,14 @@ export default function BookingDetailsScreen() {
 
     // Rating — modal-driven. We only track the existing rating (if any) and
     // whether the modal is open. All input state lives inside the modal.
+    // Two independent reviews: the rider (stars + tip) and the delivered items
+    // (food / medicines / groceries). Either can be skipped on its own.
     const [existingRating, setExistingRating] = useState<any | null>(null);
     const [rateModalOpen, setRateModalOpen] = useState(false);
     const [autoOpenedRate, setAutoOpenedRate] = useState(false);
+    const [existingOrderReview, setExistingOrderReview] = useState<any | null>(null);
+    const [orderModalOpen, setOrderModalOpen] = useState(false);
+    const [autoOpenedOrder, setAutoOpenedOrder] = useState(false);
 
     // Fetch any existing rating once delivered, so we don't let the user
     // rate the same booking twice.
@@ -84,6 +91,9 @@ export default function BookingDetailsScreen() {
         let cancelled = false;
         ratingsApi.getForBooking(serverBookingId)
             .then((res) => { if (!cancelled) setExistingRating(res?.rating || null); })
+            .catch(() => {});
+        orderReviewsApi.getForBooking(serverBookingId)
+            .then((res) => { if (!cancelled) setExistingOrderReview(res?.review || null); })
             .catch(() => {});
         return () => { cancelled = true; };
     }, [serverBookingId, booking?.status]);
@@ -98,6 +108,19 @@ export default function BookingDetailsScreen() {
         setRateModalOpen(true);
         setAutoOpenedRate(true);
     }, [booking?.status, booking?.rider, existingRating, autoOpenedRate]);
+
+    // Then, once the rider sheet is out of the way, prompt for the order
+    // review exactly once. Never both sheets at the same time.
+    useEffect(() => {
+        if (booking?.status !== 'Delivered') return;
+        if (rateModalOpen) return;
+        if (autoOpenedOrder) return;
+        if (existingOrderReview) return;
+        if (booking?.rider && !autoOpenedRate) return;
+        setOrderModalOpen(true);
+        setAutoOpenedOrder(true);
+    }, [booking?.status, booking?.rider, rateModalOpen, autoOpenedRate, autoOpenedOrder, existingOrderReview]);
+
 
     // Reset the dismissed latch if the booking cycles back to searching
     // (e.g. rider cancelled, we're re-dispatching).
@@ -533,6 +556,28 @@ export default function BookingDetailsScreen() {
                     )
                 ) : null}
 
+                {/* Order (items) review opener / summary — post-delivery */}
+                {booking.status === 'Delivered' ? (
+                    existingOrderReview ? (
+                        <View style={styles.ratedCard}>
+                            <BadgeCheck size={16} color={colors.success} />
+                            <Text style={styles.ratedText}>
+                                You rated this order {existingOrderReview.stars}★
+                                {existingOrderReview.comment ? ' · review submitted' : ''}
+                            </Text>
+                        </View>
+                    ) : (
+                        <Pressable style={styles.rateOpener} onPress={() => setOrderModalOpen(true)}>
+                            <Star size={16} color={colors.accent} fill={colors.accent} />
+                            <Text style={styles.rateOpenerText}>
+                                Rate the {booking.categoryId === 'food' ? 'food'
+                                    : booking.categoryId === 'medicines' ? 'medicines'
+                                    : booking.categoryId === 'groceries' ? 'groceries' : 'items'} you received
+                            </Text>
+                        </Pressable>
+                    )
+                ) : null}
+
                 {/* Primary CTA — cancel while active, book another after finished */}
                 {isActive ? (
                     <Button
@@ -560,6 +605,15 @@ export default function BookingDetailsScreen() {
                 serverBookingId={serverBookingId}
                 onSubmitted={(r) => setExistingRating(r)}
             />
+
+            <RateOrderModal
+                visible={orderModalOpen}
+                onClose={() => setOrderModalOpen(false)}
+                categorySlug={booking.categoryId}
+                serverBookingId={serverBookingId}
+                onSubmitted={(r) => setExistingOrderReview(r)}
+            />
+
 
             {/* Full-screen immersive stage overlays */}
             <BookingStageOverlay

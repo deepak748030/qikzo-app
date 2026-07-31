@@ -27,6 +27,7 @@ export { default as Payment } from './Payment';
 export { default as Payout } from './Payout';
 export { default as Notification } from './Notification';
 export { default as Review } from './Review';
+export { default as OrderReview } from './OrderReview';
 export { default as SupportTicket } from './SupportTicket';
 export { default as Chat } from './Chat';
 export { default as Message } from './Message';

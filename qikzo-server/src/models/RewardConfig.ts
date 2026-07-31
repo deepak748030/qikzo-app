@@ -18,10 +18,8 @@ const BonusTierSchema = new Schema(
     {
         // Tier applies when topup amount >= minAmount. Highest matching wins.
         minAmount: { type: Number, required: true, min: 1 },
-        type: { type: String, enum: ['percent', 'flat'], default: 'percent' },
+        // Flat bonus (in ₹) credited for this top-up amount.
         value: { type: Number, required: true, min: 0 },
-        // Optional ceiling for percent tiers (0 = no cap).
-        maxBonus: { type: Number, default: 0, min: 0 },
     },
     { _id: false }
 );
@@ -51,11 +49,7 @@ const RewardConfigSchema = new Schema(
             enabled: { type: Boolean, default: true },
             // Credited to the referrer when the referee hits each milestone.
             milestones: { type: [MilestoneSchema], default: () => DEFAULT_MILESTONES },
-            // Which wallet the referral reward lands in.
-            rewardWallet: { type: String, enum: ['money', 'bonus'], default: 'money' },
-            // One-time credit to the new user when they apply a referral code.
-            refereeSignupReward: { type: Number, default: 50, min: 0 },
-            refereeRewardWallet: { type: String, enum: ['money', 'bonus'], default: 'bonus' },
+
             terms: {
                 type: String,
                 default:
@@ -67,9 +61,8 @@ const RewardConfigSchema = new Schema(
 );
 
 export const DEFAULT_TIERS = [
-    { minAmount: 100, type: 'percent' as const, value: 20, maxBonus: 0 },
-    { minAmount: 500, type: 'percent' as const, value: 25, maxBonus: 0 },
-    { minAmount: 1000, type: 'percent' as const, value: 30, maxBonus: 0 },
+    { minAmount: 100, value: 20 },
+    { minAmount: 500, value: 125 },
 ];
 
 export const DEFAULT_MILESTONES = [

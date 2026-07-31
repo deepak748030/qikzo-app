@@ -41,7 +41,7 @@ export default function ReferEarnScreen() {
     const shareText = useMemo(() => {
         if (!info) return '';
         const top = info.milestones.length ? info.milestones[info.milestones.length - 1] : null;
-        return `Use my Qikzo code ${info.code} to sign up${info.refereeSignupReward > 0 ? ` and get ₹${info.refereeSignupReward} in your wallet` : ''}.${top ? ` I earn up to ₹${top.reward} as you order!` : ''}`;
+        return `Use my Qikzo code ${info.code} to join Qikzo as a delivery partner.${top ? ` I earn up to ₹${top.reward} as you complete deliveries!` : ''}`;
     }, [info]);
 
     const copyCode = async () => {
@@ -68,7 +68,7 @@ export default function ReferEarnScreen() {
             sheet.show({
                 variant: 'success',
                 title: 'Code applied',
-                message: r.credited > 0 ? `₹${r.credited} added to your wallet.` : 'You are now linked to your friend.',
+                message: 'You are now linked to your friend.',
             });
             await load();
         } catch (e) {
@@ -141,12 +141,10 @@ export default function ReferEarnScreen() {
                                 </View>
                             ))
                         )}
-                        {info?.rewardWallet ? (
-                            <Text style={styles.note}>
-                                Rewards are credited to your {info.rewardWallet === 'bonus' ? 'bonus' : 'money'} wallet.
-                                {info.terms ? ` ${info.terms}` : ''}
-                            </Text>
-                        ) : null}
+                        <Text style={styles.note}>
+                            Rewards are credited in ₹ directly to your money wallet.
+                            {info?.terms ? ` ${info.terms}` : ''}
+                        </Text>
                     </View>
 
                     {/* Invites */}
@@ -199,9 +197,7 @@ export default function ReferEarnScreen() {
                                         )}
                                     </Pressable>
                                 </View>
-                                {info.refereeSignupReward > 0 ? (
-                                    <Text style={styles.note}>Get ₹{info.refereeSignupReward} in your wallet when you apply a valid code.</Text>
-                                ) : null}
+                                <Text style={styles.note}>Link your account to the partner who invited you.</Text>
                             </View>
                         </>
                     ) : null}
