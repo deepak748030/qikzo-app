@@ -48,6 +48,7 @@ router.delete('/users/:id', adminController.deleteUser);
 
 // Bookings
 router.get('/bookings', validate(listQuerySchema, 'query'), adminController.listBookings);
+router.get('/bookings/:id', adminController.getBooking);
 
 // Coupons
 router.get('/coupons', validate(listQuerySchema, 'query'), adminController.listCoupons);

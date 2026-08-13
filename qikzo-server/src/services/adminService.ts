@@ -1,16 +1,56 @@
+import mongoose from 'mongoose';
 import KYC from '../models/KYC';
 import Rider from '../models/Rider';
 import User from '../models/User';
 import Document from '../models/Document';
 import Payout from '../models/Payout';
 import Wallet from '../models/Wallet';
-import Booking from '../models/Booking';
+import Booking, { BOOKING_STATUSES } from '../models/Booking';
 import Coupon from '../models/Coupon';
 import PromoBanner from '../models/PromoBanner';
+import SavedPlace from '../models/SavedPlace';
+import Address from '../models/Address';
+import Trip from '../models/Trip';
+import Rating from '../models/Rating';
+import OrderReview from '../models/OrderReview';
+import Payment from '../models/Payment';
+import Vehicle from '../models/Vehicle';
+import EmergencyContact from '../models/EmergencyContact';
 import { errors } from '../lib/errors';
 import notificationService from './notificationService';
 import { audit } from './auditService';
 import { emitKycUpdate } from '../sockets';
+
+/** Admin list historically used snake_case chips; bookings store human labels. */
+const BOOKING_STATUS_ALIASES: Record<string, string> = {
+    created: 'Scheduled',
+    scheduled: 'Scheduled',
+    searching: 'Searching rider',
+    accepted: 'Rider accepted',
+    arrived: 'Arriving for pickup',
+    arriving: 'Arriving for pickup',
+    picked_up: 'Picked up',
+    pickedup: 'Picked up',
+    in_progress: 'On the way',
+    on_the_way: 'On the way',
+    completed: 'Delivered',
+    delivered: 'Delivered',
+    cancelled: 'Cancelled',
+    canceled: 'Cancelled',
+};
+
+function resolveBookingStatus(raw?: string) {
+    if (!raw) return undefined;
+    const trimmed = String(raw).trim();
+    if ((BOOKING_STATUSES as readonly string[]).includes(trimmed)) return trimmed;
+    return BOOKING_STATUS_ALIASES[trimmed.toLowerCase().replace(/[\s-]+/g, '_')] || trimmed;
+}
+
+function slimPoint(p: any) {
+    if (!p || typeof p !== 'object') return p;
+    const { location, ...rest } = p;
+    return rest;
+}
 
 /**
  * Banners are geo-targeted by picking a Category → State → Area. The area's
@@ -255,17 +295,100 @@ export const adminService = {
     async listBookings(opts: { status?: string; limit?: number; cursor?: string } = {}) {
         const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
         const filter: any = {};
-        if (opts.status) filter.status = opts.status;
+        const status = resolveBookingStatus(opts.status);
+        if (status) filter.status = status;
         if (opts.cursor) filter._id = { $lt: opts.cursor };
-        const items = await Booking.find(filter)
+        const rows = await Booking.find(filter)
             .sort({ _id: -1 })
             .limit(limit + 1)
-            .populate('rider')
+            .select('code status mode categorySlug vehicleTypeSlug pickup.address extraPickups.address drop.address price payment paymentStatus createdAt user rider')
+            .populate({ path: 'user', select: 'name phone email avatarUrl' })
+            .populate({ path: 'rider', select: 'name phone vehicle vehicleNo' })
             .lean();
-        const hasMore = items.length > limit;
+        const hasMore = rows.length > limit;
+        const items = rows.slice(0, limit).map((b: any) => ({
+            ...b,
+            customer: b.user || null,
+            fare: { total: Math.round(Number(b.price || 0) * 100) },
+        }));
         return {
-            items: items.slice(0, limit),
-            nextCursor: hasMore ? String(items[limit - 1]._id) : null,
+            items,
+            nextCursor: hasMore ? String(rows[limit - 1]._id) : null,
+        };
+    },
+
+    async getBooking(id: string) {
+        if (!mongoose.isValidObjectId(id)) throw errors.notFound('Booking not found', 'BOOKING_NOT_FOUND');
+        const booking = await Booking.findById(id).lean();
+        if (!booking) throw errors.notFound('Booking not found', 'BOOKING_NOT_FOUND');
+
+        const userId = booking.user ? String(booking.user) : null;
+        const riderId = booking.rider ? String(booking.rider) : null;
+
+        const [
+            customer,
+            rider,
+            customerPlaces,
+            customerAddresses,
+            customerEmergency,
+            customerWallets,
+            trip,
+            rating,
+            orderReview,
+            payments,
+            vehicle,
+        ] = await Promise.all([
+            userId ? User.findById(userId).lean() : null,
+            riderId ? Rider.findById(riderId).lean() : null,
+            userId ? SavedPlace.find({ user: userId }).sort({ createdAt: -1 }).limit(30).lean() : [],
+            userId ? Address.find({ user: userId }).sort({ isDefault: -1, createdAt: -1 }).limit(30).lean() : [],
+            userId ? EmergencyContact.find({ user: userId }).lean() : [],
+            userId
+                ? Wallet.find({ owner: userId, kind: { $in: ['customer', 'loyalty'] } })
+                    .select('kind balance pending totalSpent')
+                    .lean()
+                : [],
+            Trip.findOne({ booking: id }).select('-path').lean(),
+            Rating.findOne({ booking: id }).lean(),
+            OrderReview.findOne({ booking: id }).lean(),
+            Payment.find({ booking: id }).sort({ createdAt: -1 }).lean(),
+            riderId ? Vehicle.findOne({ rider: riderId }).sort({ primary: -1 }).lean() : null,
+        ]);
+
+        let riderUser = null;
+        let riderWallet = null;
+        if (rider) {
+            [riderUser, riderWallet] = await Promise.all([
+                rider.user
+                    ? User.findById(rider.user)
+                        .select('name phone email avatarUrl address city pincode blocked blockedReason lastLoginAt createdAt')
+                        .lean()
+                    : null,
+                Wallet.findOne({ owner: rider._id, kind: 'rider' }).select('balance pending totalEarned').lean(),
+            ]);
+        }
+
+        return {
+            booking: {
+                ...booking,
+                pickup: slimPoint(booking.pickup),
+                drop: slimPoint(booking.drop),
+                extraPickups: Array.isArray(booking.extraPickups) ? booking.extraPickups.map(slimPoint) : [],
+                user: userId,
+                rider: riderId,
+            },
+            customer,
+            customerPlaces,
+            customerAddresses,
+            customerEmergency,
+            customerWallets,
+            rider: rider
+                ? { ...rider, user: riderUser, wallet: riderWallet, vehicleDoc: vehicle }
+                : null,
+            trip,
+            rating,
+            orderReview,
+            payments,
         };
     },
 
