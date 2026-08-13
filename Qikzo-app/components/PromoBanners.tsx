@@ -55,8 +55,17 @@ export default function PromoBanners({
 
     const openBannerLocation = (b: Banner) => {
         if (!b.coord) return;
-        setDraft({ drop: b.address || b.title, dropCoord: b.coord });
-        router.push({ pathname: '/select-location', params: { field: 'drop' } });
+        const drop = b.address || b.title;
+        setDraft({ drop, dropCoord: b.coord });
+        router.push({
+            pathname: '/select-location',
+            params: {
+                field: 'drop',
+                lat: String(b.coord.lat),
+                lng: String(b.coord.lng),
+                address: drop,
+            },
+        });
     };
 
     // Start centered so the user can swipe either direction from the first tick.

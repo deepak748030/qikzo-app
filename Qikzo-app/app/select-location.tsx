@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Keyboard, Platform } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,12 +17,27 @@ import { useSavedPlaces } from '@/lib/savedPlacesStore';
 // Default city: New Delhi
 const DEFAULT_CENTER: LatLng = { lat: 28.6139, lng: 77.209 };
 
+function paramStr(v?: string | string[]): string {
+    if (Array.isArray(v)) return String(v[0] || '');
+    return v ? String(v) : '';
+}
+
 export default function SelectLocationScreen() {
     const insets = useSafeAreaInsets();
-    const { field, slot, purpose } = useLocalSearchParams<{ field?: 'pickup' | 'drop'; slot?: string; purpose?: string }>();
-    const savingPlace = purpose === 'saved';
+    const params = useLocalSearchParams<{
+        field?: string | string[];
+        slot?: string | string[];
+        purpose?: string | string[];
+        lat?: string | string[];
+        lng?: string | string[];
+        address?: string | string[];
+    }>();
+    const fieldStr = paramStr(params.field);
+    const slotStr = paramStr(params.slot);
+    const purposeStr = paramStr(params.purpose);
+    const savingPlace = purposeStr === 'saved';
     // `slot` extends `field` to allow extra-pickup targets: pickup2 / pickup3 / pickup4.
-    const targetSlot = (slot || field || 'pickup') as string;
+    const targetSlot = slotStr || fieldStr || 'pickup';
     const which: 'pickup' | 'drop' = targetSlot === 'drop' ? 'drop' : 'pickup';
     const extraIndex = /^pickup(\d+)$/.exec(targetSlot)?.[1];
     const extraIdx = extraIndex ? Math.max(0, parseInt(extraIndex, 10) - 2) : -1; // pickup2 -> 0
@@ -32,24 +47,56 @@ export default function SelectLocationScreen() {
 
     const extra = extraIdx >= 0 ? draft.extraPickups[extraIdx] : null;
 
+    const paramLat = Number(paramStr(params.lat));
+    const paramLng = Number(paramStr(params.lng));
+    const paramCoord: LatLng | null =
+        Number.isFinite(paramLat) && Number.isFinite(paramLng) ? { lat: paramLat, lng: paramLng } : null;
+    const paramAddress = paramStr(params.address);
+
+    // Drop must never fall back to the pickup pin — banner taps seed drop
+    // via draft + route params, and those are the only source for drop.
+    const dropCoord = paramCoord || (which === 'drop' ? draft.dropCoord : null);
+    const dropAddress = paramAddress || (which === 'drop' ? draft.drop : '');
+
     const hasSavedCoord = extraIdx >= 0
         ? !!extra?.coord
-        : (which === 'pickup' ? !!draft.pickupCoord : !!(draft.dropCoord || draft.pickupCoord));
+        : which === 'pickup'
+            ? !!draft.pickupCoord
+            : !!dropCoord;
 
     const initial = extraIdx >= 0
-        ? (extra?.coord || draft.pickupCoord || DEFAULT_CENTER)
+        ? (extra?.coord || DEFAULT_CENTER)
         : which === 'pickup'
             ? draft.pickupCoord || DEFAULT_CENTER
-            : draft.dropCoord || draft.pickupCoord || DEFAULT_CENTER;
+            : dropCoord || DEFAULT_CENTER;
+
+    const initialAddress = extraIdx >= 0
+        ? (extra?.address || '')
+        : which === 'pickup'
+            ? draft.pickup
+            : dropAddress;
 
     const [center, setCenter] = useState<LatLng>(initial);
-    const [address, setAddress] = useState<string>(
-        extraIdx >= 0 ? (extra?.address || '') : (which === 'pickup' ? draft.pickup : draft.drop)
-    );
+    const [address, setAddress] = useState<string>(initialAddress);
     const [resolving, setResolving] = useState(false);
     const [locating, setLocating] = useState(!hasSavedCoord);
     const [confirming, setConfirming] = useState(false);
     const [kbHeight, setKbHeight] = useState(0);
+    // Keep the seeded drop/banner address until the user actually pans the map.
+    const skipReverseRef = useRef(!!initialAddress && hasSavedCoord);
+
+    // Expo Router can hydrate `field`/`lat` after the first paint. Re-apply
+    // the drop seed so we never stay stuck on a leftover pickup pin.
+    useEffect(() => {
+        if (savingPlace || extraIdx >= 0 || which !== 'drop') return;
+        if (dropCoord) {
+            setCenter(dropCoord);
+            setLocating(false);
+            skipReverseRef.current = !!dropAddress;
+        }
+        if (dropAddress) setAddress(dropAddress);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [which, dropCoord?.lat, dropCoord?.lng, dropAddress]);
 
     // Track keyboard height so the bottom address card lifts above the keyboard
     // and the search input never gets hidden behind it.
@@ -88,7 +135,14 @@ export default function SelectLocationScreen() {
 
 
     // Reverse geocode the current map center (debounced).
+    // Skip the first run when we already have the banner/drop address —
+    // otherwise GPS reverse-geocode overwrites it with the pickup street.
     useEffect(() => {
+        if (skipReverseRef.current) {
+            skipReverseRef.current = false;
+            setResolving(false);
+            return;
+        }
         let cancelled = false;
         setResolving(true);
         const t = setTimeout(async () => {
