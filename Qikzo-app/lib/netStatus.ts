@@ -1,16 +1,16 @@
 /**
  * Device-level network status — NOT server reachability.
  *
- * The API is hosted on a free-tier host that can take ~1 minute to wake
- * on the first request. Socket.io `disconnect` and fetch timeouts therefore
- * do NOT mean the phone has no internet, and must not flash the banner.
+ * The API is on a free-tier host that can take ~1 minute to wake. A socket
+ * drop or a fetch *timeout* therefore must never flash "No internet".
  *
- * "Offline" is only reported when the *device* cannot reach the public
- * internet (airplane mode, mobile data / Wi-Fi off, captive portal).
+ * Offline is only reported when the *phone* has no network:
+ *   - `navigator.onLine === false` (airplane / data+wifi off)
+ *   - an immediate fetch failure (`NETWORK`), never an `AbortError` timeout
  *
  * Screens subscribe via `subscribeNet(cb)` and receive `true`/`false`.
  */
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import { connectSocket } from './socket';
 
 type Listener = (online: boolean) => void;
@@ -19,18 +19,19 @@ type Listener = (online: boolean) => void;
 let online = true;
 const listeners = new Set<Listener>();
 let installed = false;
-let probeInFlight: Promise<boolean> | null = null;
-let offlinePoll: ReturnType<typeof setInterval> | null = null;
 
 function emit() {
     listeners.forEach((cb) => { try { cb(online); } catch {} });
+}
+
+function navOffline(): boolean {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 export function setOnline(next: boolean) {
     if (online === next) return;
     online = next;
     emit();
-    syncOfflinePoll();
     if (next) {
         try { connectSocket(); } catch {}
     }
@@ -50,82 +51,25 @@ export function reportRequest(ok: boolean) {
 }
 
 /**
- * Called by API client when fetch throws / times out.
- * That is often a sleeping free-tier server — verify the *device* first.
+ * Called by the API client when fetch throws.
+ * Timeouts = sleeping free-tier server. Do not treat as offline.
+ * Immediate network failures = phone radio is down.
  */
-export function reportNetworkError() {
-    void verifyDeviceInternet();
+export function reportNetworkError(kind?: 'TIMEOUT' | 'NETWORK') {
+    if (kind === 'TIMEOUT') return;
+    setOnline(false);
 }
 
-const PROBE_TIMEOUT_MS = 3000;
-const PROBE_URLS = [
-    'https://connectivitycheck.gstatic.com/generate_204',
-    'https://www.gstatic.com/generate_204',
-];
-
-async function probeDeviceInternet(): Promise<boolean> {
-    // Instant, reliable "definitely offline" signal where the platform
-    // exposes it (web, and some native runtimes).
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        return false;
-    }
-    // Browsers block the generate_204 probes on CORS; navigator.onLine
-    // is the right signal there.
-    if (Platform.OS === 'web') {
-        return typeof navigator === 'undefined' ? true : navigator.onLine;
-    }
-
-    for (const base of PROBE_URLS) {
-        try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-            const res = await fetch(`${base}?_=${Date.now()}`, {
-                method: 'GET',
-                cache: 'no-store',
-                signal: controller.signal,
-                headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
-            });
-            clearTimeout(timer);
-            // generate_204 → 204; some captive-portal / proxies rewrite to 200.
-            if (res.status === 204 || res.status === 200 || res.ok) return true;
-        } catch {
-            // try the next probe
-        }
-    }
-    return false;
-}
-
-function verifyDeviceInternet(): Promise<boolean> {
-    if (probeInFlight) return probeInFlight;
-    probeInFlight = (async () => {
-        const ok = await probeDeviceInternet();
-        setOnline(ok);
-        return ok;
-    })().finally(() => { probeInFlight = null; });
-    return probeInFlight;
-}
-
-/** While the phone is offline, keep probing so the banner clears quickly. */
-function syncOfflinePoll() {
-    if (online) {
-        if (offlinePoll) { clearInterval(offlinePoll); offlinePoll = null; }
-        return;
-    }
-    if (offlinePoll) return;
-    offlinePoll = setInterval(() => { void verifyDeviceInternet(); }, 4000);
-}
-
-/** Install device-internet detection once at app start. */
 export function installNetStatus() {
     if (installed) return;
     installed = true;
 
-    // First check after mount. Starts optimistic-online so a sleeping
-    // server never produces a false "No internet" flash.
-    void verifyDeviceInternet();
+    // Stay optimistic-online. Never probe a public URL on boot — that
+    // false-positives while the free-tier API is still waking.
+    if (navOffline()) setOnline(false);
 
-    const sub = AppState.addEventListener('change', (state) => {
-        if (state === 'active') void verifyDeviceInternet();
+    AppState.addEventListener('change', (state) => {
+        if (state !== 'active') return;
+        if (navOffline()) setOnline(false);
     });
-    void sub;
 }
