@@ -15,7 +15,7 @@ import { useSheet } from '@/lib/useSheet';
 import { categories } from '@/lib/mockData';
 import { useSavedPlaces } from '@/lib/savedPlacesStore';
 import AssetIcon from '@/components/AssetIcon';
-import { rideOptions, estimateRide } from '@/lib/serviceMode';
+import { rideOptions } from '@/lib/serviceMode';
 import { newBookingId, useBooking } from '@/lib/bookingStore';
 import { ApiError } from '@/lib/api/errors';
 import { tokenStore } from '@/lib/api/tokenStore';
@@ -219,19 +219,16 @@ export default function BookDeliveryScreen() {
         const stops = draft.extraPickups
             .filter((s) => s.address.trim())
             .map((s) => ({ address: s.address, coord: s.coord }));
-        const est = estimateRoute({
+        // Same formula the server uses on create — never the old string-hash
+        // or the ride-chip mock rates (those were why even 1 pickup looked wrong).
+        return estimateRoute({
             pickup: draft.pickup,
             drop: draft.drop,
             pickupCoord: draft.pickupCoord,
             dropCoord: draft.dropCoord,
             stops,
         });
-        if (isRide) {
-            const r = estimateRide(est.distanceKm, draft.categoryId);
-            return { ...est, ...r };
-        }
-        return est;
-    }, [draft.pickup, draft.drop, draft.pickupCoord, draft.dropCoord, draft.extraPickups, draft.categoryId, isRide]);
+    }, [draft.pickup, draft.drop, draft.pickupCoord, draft.dropCoord, draft.extraPickups]);
 
     // Server quote uses the same haversine + extra-pickup legs as create,
     // so this screen matches booking-details.
@@ -364,8 +361,7 @@ export default function BookDeliveryScreen() {
 
         // Fallback: local-only booking (no server session).
         const id = newBookingId();
-        addBooking({
-            id,
+        addBooking({d,
             categoryId: draft.categoryId,
             pickup: draft.pickup.trim(),
             drop: draft.drop.trim(),
@@ -880,4 +876,6 @@ const styles = StyleSheet.create({
     footPrice: { fontSize: 18, fontFamily: fonts.displayBold, color: colors.foreground },
     footMeta: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
     confirmBtn: { flex: 1.2 },
+});
+x: 1.2 },
 });

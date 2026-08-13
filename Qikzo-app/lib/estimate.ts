@@ -28,6 +28,11 @@ function deterministicKm(pickup = '', drop = ''): number {
 
 export type EstimateStop = { address: string; coord?: LatLng | null };
 
+/** Must stay in lockstep with qikzo-server `env.PRICE_*` + `estimateTrip`. */
+export const PRICE_BASE = 25;
+export const PRICE_PER_KM = 8;
+export const PRICE_MIN = 40;
+
 export function estimateRoute(opts: {
     pickup: string;
     drop: string;
@@ -36,6 +41,7 @@ export function estimateRoute(opts: {
     stops?: EstimateStop[];
     base?: number;
     perKm?: number;
+    minFare?: number;
 }) {
     const nodes: { label: string; coord?: LatLng | null }[] = [
         { label: opts.pickup, coord: opts.pickupCoord },
@@ -52,9 +58,10 @@ export function estimateRoute(opts: {
     }
 
     const distanceKm = Math.max(1.5, +total.toFixed(2));
-    const base = opts.base ?? 25;
-    const perKm = opts.perKm ?? 8;
-    const price = Math.round(base + distanceKm * perKm);
+    const base = opts.base ?? PRICE_BASE;
+    const perKm = opts.perKm ?? PRICE_PER_KM;
+    const minFare = opts.minFare ?? PRICE_MIN;
+    const price = Math.max(minFare, Math.round(base + distanceKm * perKm));
     const etaMin = Math.max(6, Math.round(8 + distanceKm * 2.4));
     return { distanceKm, price, etaMin, base, perKm };
 }
