@@ -7,6 +7,8 @@ export const createPlaceSchema = z.object({
     coord: z.object({ lat: z.number(), lng: z.number() }).nullable().optional(),
 });
 
+export const updatePlaceSchema = createPlaceSchema.partial();
+
 export const updateMeSchema = z.object({
     name: z.string().max(80).optional(),
     email: z.string().email().max(120).optional(),

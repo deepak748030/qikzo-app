@@ -12,13 +12,15 @@ import Input from '@/components/Input';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useBooking } from '@/lib/bookingStore';
+import { useSavedPlaces } from '@/lib/savedPlacesStore';
 
 // Default city: New Delhi
 const DEFAULT_CENTER: LatLng = { lat: 28.6139, lng: 77.209 };
 
 export default function SelectLocationScreen() {
     const insets = useSafeAreaInsets();
-    const { field, slot } = useLocalSearchParams<{ field?: 'pickup' | 'drop'; slot?: string }>();
+    const { field, slot, purpose } = useLocalSearchParams<{ field?: 'pickup' | 'drop'; slot?: string; purpose?: string }>();
+    const savingPlace = purpose === 'saved';
     // `slot` extends `field` to allow extra-pickup targets: pickup2 / pickup3 / pickup4.
     const targetSlot = (slot || field || 'pickup') as string;
     const which: 'pickup' | 'drop' = targetSlot === 'drop' ? 'drop' : 'pickup';
@@ -142,7 +144,9 @@ export default function SelectLocationScreen() {
             return;
         }
         setConfirming(true);
-        if (extraIdx >= 0) {
+        if (savingPlace) {
+            useSavedPlaces.getState().setPendingPick({ address: address.trim(), coord: center });
+        } else if (extraIdx >= 0) {
             const next = [...draft.extraPickups];
             next[extraIdx] = { address: address.trim(), coord: center };
             setDraft({ extraPickups: next });
@@ -182,7 +186,7 @@ export default function SelectLocationScreen() {
                 </Pressable>
                 <View style={styles.titleWrap}>
                     <Text style={styles.titleSmall}>
-                        {which === 'pickup' ? 'Set pickup location' : 'Set drop location'}
+                        {savingPlace ? 'Set saved address' : which === 'pickup' ? 'Set pickup location' : 'Set drop location'}
                     </Text>
                     <Text style={styles.titleHint}>Drag the map to move the pin</Text>
                 </View>
@@ -205,7 +209,7 @@ export default function SelectLocationScreen() {
 
                 <View style={styles.handle} />
                 <Text style={styles.label}>
-                    {which === 'pickup' ? 'PICKUP ADDRESS' : 'DROP ADDRESS'}
+                    {savingPlace ? 'ADDRESS' : which === 'pickup' ? 'PICKUP ADDRESS' : 'DROP ADDRESS'}
                 </Text>
                 <View style={styles.addrRow}>
                     <View style={[styles.pinDot, { backgroundColor: accent }]} />
@@ -225,7 +229,7 @@ export default function SelectLocationScreen() {
                     </Text>
                 )}
                 <Button
-                    label={which === 'pickup' ? 'Confirm pickup' : 'Confirm drop'}
+                    label={savingPlace ? 'Confirm address' : which === 'pickup' ? 'Confirm pickup' : 'Confirm drop'}
                     loading={confirming}
                     onPress={confirm}
                     style={{ marginTop: 8 }}

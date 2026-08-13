@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Switch, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { Banknote, Wallet, CreditCard, Bike, ChevronRight, MapPin, Home, UserPlus, Camera, ImagePlus, X, Plus, Mic, MicOff } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,7 +12,8 @@ import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import PromoBanners from '@/components/PromoBanners';
 import { useSheet } from '@/lib/useSheet';
-import { categories, estimateTrip, savedPlaces } from '@/lib/mockData';
+import { categories, estimateTrip } from '@/lib/mockData';
+import { useSavedPlaces } from '@/lib/savedPlacesStore';
 import AssetIcon from '@/components/AssetIcon';
 import { rideOptions, estimateRide } from '@/lib/serviceMode';
 import { newBookingId, useBooking } from '@/lib/bookingStore';
@@ -46,6 +48,11 @@ export default function BookDeliveryScreen() {
     const speechSubscriptionsRef = useRef<Array<{ remove: () => void }>>([]);
 
     const isRide = draft.mode === 'ride';
+    const savedPlaces = useSavedPlaces((s) => s.places);
+
+    useFocusEffect(useCallback(() => {
+        useSavedPlaces.getState().hydrate();
+    }, []));
 
     // Wallet pay quote — server decides the money/bonus split and the cap.
     const [payQuote, setPayQuote] = useState<PayQuote | null>(null);
@@ -465,18 +472,33 @@ export default function BookDeliveryScreen() {
                         </Pressable>
                     ) : null}
 
-                    {/* Saved places shortcut */}
+                    {/* Saved places shortcut — server-backed, never mock */}
                     <View style={styles.savedRow}>
                         {savedPlaces.map((p) => (
                             <Pressable
                                 key={p.id}
                                 style={styles.savedChip}
-                                onPress={() => setDraft({ drop: p.address, dropCoord: null })}
+                                onPress={() => setDraft({ drop: p.address, dropCoord: p.coord })}
                             >
                                 <Text style={{ fontSize: 12 }}>{p.emoji}</Text>
                                 <Text style={styles.savedChipText} numberOfLines={1}>Drop at {p.label}</Text>
                             </Pressable>
                         ))}
+                        {savedPlaces.length === 0 ? (
+                            <Pressable
+                                style={styles.savedChip}
+                                onPress={() => {
+                                    if (!tokenStore.get().accessToken) {
+                                        sheet.show({ variant: 'error', title: 'Sign in required', message: 'Please sign in to save addresses.' });
+                                        return;
+                                    }
+                                    router.push('/addresses');
+                                }}
+                            >
+                                <Plus size={12} color={colors.foreground} />
+                                <Text style={styles.savedChipText}>Add address</Text>
+                            </Pressable>
+                        ) : null}
                     </View>
                 </View>
 

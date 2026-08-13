@@ -21,11 +21,16 @@ export type CreatePlaceInput = {
 export const placesApi = {
     async list(): Promise<SavedPlace[]> {
         const res = await http.get<{ items: SavedPlace[] }>('/places');
-        return res.items;
+        return res.items || [];
     },
 
     async create(input: CreatePlaceInput): Promise<SavedPlace> {
         const res = await http.post<{ place: SavedPlace }>('/places', input);
+        return res.place;
+    },
+
+    async update(id: string, input: Partial<CreatePlaceInput>): Promise<SavedPlace> {
+        const res = await http.patch<{ place: SavedPlace }>(`/places/${id}`, input);
         return res.place;
     },
 

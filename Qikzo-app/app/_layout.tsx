@@ -103,6 +103,7 @@ export default function RootLayout() {
             <Stack.Screen name="wallet" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="personal-info" />
+            <Stack.Screen name="addresses" />
             <Stack.Screen name="help-support" />
             <Stack.Screen name="about-us" />
             <Stack.Screen name="privacy-policy" />

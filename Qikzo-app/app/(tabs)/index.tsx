@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, FlatList } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
-  Search, Bell, ChevronRight, Clock, Zap,
+  Search, Bell, ChevronRight, Clock, Zap, Plus,
   Home as HomeIcon, Building2, Heart, Bookmark, LucideIcon,
 } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import Brand from '@/components/Brand';
 import ServiceToggle from '@/components/ServiceToggle';
 import AssetIcon from '@/components/AssetIcon';
-import { categories as mockCategories, savedPlaces as mockSavedPlaces, DeliveryCategory, SavedPlace } from '@/lib/mockData';
+import { categories as mockCategories, DeliveryCategory } from '@/lib/mockData';
 import { useBooking } from '@/lib/bookingStore';
 import { useServiceMode, rideOptions } from '@/lib/serviceMode';
 import PromoBanners from '@/components/PromoBanners';
@@ -18,14 +19,15 @@ import ExploreBanners from '@/components/ExploreBanners';
 import Skeleton, { SkeletonCard } from '@/components/Skeleton';
 import { useInitialLoad } from '@/lib/useInitialLoad';
 import { catalogApi } from '@/lib/api/endpoints/catalog';
-import { placesApi } from '@/lib/api/endpoints/places';
 import { tokenStore } from '@/lib/api/tokenStore';
+import { useSavedPlaces } from '@/lib/savedPlacesStore';
 import * as Location from 'expo-location';
 
 const PLACE_ICON: Record<string, LucideIcon> = {
   home: HomeIcon,
   office: Building2,
   mom: Heart,
+  "mom's place": Heart,
 };
 
 // Faux ETAs so the ride list feels alive without a live backend.
@@ -46,10 +48,10 @@ export default function HomeScreen() {
 
   const loading = useInitialLoad();
 
-  // Server-backed catalog + saved places, with mock fallback when signed out
-  // or if the request fails so the UI never goes blank.
+  // Server-backed catalog. Saved places come from the user's address book —
+  // never the mock Home/Office/Mom chips.
   const [categories, setCategories] = useState<DeliveryCategory[]>(mockCategories);
-  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>(mockSavedPlaces);
+  const savedPlaces = useSavedPlaces((s) => s.places);
 
   // Best-effort device coord — used to filter promo/explore banners by
   // polygon proximity. Silent failure keeps the home screen usable when
@@ -83,29 +85,19 @@ export default function HomeScreen() {
       })
       .catch(() => { /* keep mock */ });
 
-    const { accessToken } = tokenStore.get();
-    if (accessToken) {
-      placesApi.list()
-        .then((items) => {
-          if (cancelled) return;
-          if (items?.length) {
-            setSavedPlaces(items.map((p) => ({
-              id: p._id,
-              label: p.label,
-              address: p.address,
-              emoji: p.emoji || '📍',
-            })));
-          }
-        })
-        .catch(() => { /* keep mock */ });
-    }
-
     return () => { cancelled = true; };
   }, []);
 
-  const openWithCategory = (categoryId: string, drop?: string) => {
+  useFocusEffect(useCallback(() => {
+    useSavedPlaces.getState().hydrate();
+  }, []));
+
+  const openWithCategory = (categoryId: string, drop?: string, dropCoord?: { lat: number; lng: number } | null) => {
     const patch: Parameters<typeof setDraft>[0] = { mode, categoryId };
-    if (drop) patch.drop = drop;
+    if (drop) {
+      patch.drop = drop;
+      patch.dropCoord = dropCoord ?? null;
+    }
     setDraft(patch);
     router.push('/book-delivery');
   };
@@ -167,7 +159,7 @@ export default function HomeScreen() {
           <ChevronRight size={18} color={'rgba(255,255,255,0.9)'} />
         </Pressable>
 
-        {/* Saved places — quick chips */}
+        {/* Saved places — real addresses from the user's profile */}
         <FlatList
           horizontal
           data={savedPlaces}
@@ -175,10 +167,19 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={{ width: 6 }} />}
           contentContainerStyle={styles.placesRow}
+          ListEmptyComponent={tokenStore.get().accessToken ? (
+            <Pressable style={styles.placeChip} onPress={() => router.push('/addresses')}>
+              <Plus size={13} color={colors.foreground} strokeWidth={1.8} />
+              <Text style={styles.placeLabel}>Add address</Text>
+            </Pressable>
+          ) : null}
           renderItem={({ item }) => {
-            const PIcon = PLACE_ICON[item.id] || Bookmark;
+            const PIcon = PLACE_ICON[item.label.toLowerCase()] || Bookmark;
             return (
-              <Pressable style={styles.placeChip} onPress={() => openWithCategory(mode === 'ride' ? selectedRide : 'parcel', item.address)}>
+              <Pressable
+                style={styles.placeChip}
+                onPress={() => openWithCategory(mode === 'ride' ? selectedRide : 'parcel', item.address, item.coord)}
+              >
                 <PIcon size={13} color={colors.foreground} strokeWidth={1.8} />
                 <Text style={styles.placeLabel}>{item.label}</Text>
               </Pressable>
