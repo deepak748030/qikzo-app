@@ -51,13 +51,23 @@ export const coverageService = {
         return { items };
     },
 
-    async createCity(input: { name: string; slug?: string; active?: boolean }) {
+    async createCity(input: { name: string; slug?: string; active?: boolean; area?: { name?: string; polygon?: any } }) {
         const name = String(input?.name || '').trim();
         if (!name) throw errors.badRequest('City name required', 'NAME_REQUIRED');
         const slug = (input.slug || slugify(name)).toLowerCase();
         const exists = await CoverageCity.findOne({ slug });
         if (exists) throw errors.conflict('City slug already exists', 'SLUG_TAKEN');
-        return CoverageCity.create({ name, slug, active: input.active !== false, areas: [] });
+        const areas: any[] = [];
+        if (input.area?.polygon) {
+            const poly = normalizePolygon(input.area.polygon);
+            areas.push({
+                name: String(input.area.name || name).trim() || name,
+                active: true,
+                polygon: { type: 'Polygon', coordinates: poly.coordinates },
+                coord: poly.coord,
+            });
+        }
+        return CoverageCity.create({ name, slug, active: input.active !== false, areas });
     },
 
     async updateCity(id: string, input: { name?: string; active?: boolean }) {

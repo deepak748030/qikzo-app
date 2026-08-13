@@ -40,6 +40,8 @@ export default function CoveragePage() {
   const [cityModal, setCityModal] = useState(false);
   const [editingCity, setEditingCity] = useState<City | null>(null);
   const [cityName, setCityName] = useState('');
+  const [cityAreaName, setCityAreaName] = useState('');
+  const [cityPoints, setCityPoints] = useState<Point[]>([]);
 
   const [areaModal, setAreaModal] = useState<{ city: City; area?: Area } | null>(null);
   const [areaName, setAreaName] = useState('');
@@ -47,7 +49,8 @@ export default function CoveragePage() {
 
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'city' | 'area'; city: City; area?: Area } | null>(null);
 
-  const mapCenter = useCenterFromPoints(areaPoints);
+  const areaMapCenter = useCenterFromPoints(areaPoints);
+  const cityMapCenter = useCenterFromPoints(cityPoints);
 
   async function refresh() {
     setLoading(true);
@@ -59,16 +62,52 @@ export default function CoveragePage() {
   }
   useEffect(() => { void refresh(); }, []);
 
-  const openCreateCity = () => { setEditingCity(null); setCityName(''); setCityModal(true); };
-  const openEditCity = (c: City) => { setEditingCity(c); setCityName(c.name); setCityModal(true); };
+  const openCreateCity = () => {
+    setEditingCity(null);
+    setCityName('');
+    setCityAreaName('');
+    setCityPoints([]);
+    setCityModal(true);
+  };
+  const openEditCity = (c: City) => {
+    setEditingCity(c);
+    setCityName(c.name);
+    setCityAreaName('');
+    setCityPoints([]);
+    setCityModal(true);
+  };
 
   const submitCity = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!cityName.trim()) { toast.error('City name required'); return; }
+    if (!editingCity && cityPoints.length < 3) {
+      toast.error('Map pe area draw karo — kam se kam 3 points');
+      return;
+    }
     setBusy(true);
     try {
-      if (editingCity) await api(`/admin/coverage/${editingCity._id}`, { method: 'PATCH', body: { name: cityName.trim() } });
-      else await api('/admin/coverage', { method: 'POST', body: { name: cityName.trim() } });
-      toast.success(editingCity ? 'City updated' : 'City created');
+      if (editingCity) {
+        await api(`/admin/coverage/${editingCity._id}`, { method: 'PATCH', body: { name: cityName.trim() } });
+        toast.success('City updated');
+      } else {
+        const ring = [...cityPoints, cityPoints[0]];
+        const created = await api<{ city: City }>('/admin/coverage', {
+          method: 'POST',
+          body: { name: cityName.trim() },
+        });
+        const cityId = created.city?._id;
+        if (cityId) {
+          await api(`/admin/coverage/${cityId}/areas`, {
+            method: 'POST',
+            body: {
+              name: cityAreaName.trim() || cityName.trim(),
+              polygon: { type: 'Polygon', coordinates: [ring] },
+            },
+          });
+          setOpenId(cityId);
+        }
+        toast.success('City + area saved');
+      }
       setCityModal(false);
       await refresh();
     } catch (err: any) { toast.error(err?.message || 'Failed'); }
@@ -129,7 +168,7 @@ export default function CoveragePage() {
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-display font-semibold">Coverage</h1>
-          <p className="text-sm text-muted-foreground">Draw a city or area once, then pick it when creating banners.</p>
+          <p className="text-sm text-muted-foreground">Create a city and draw its area on the map. Reuse it later on banners.</p>
         </div>
         <Button onClick={openCreateCity}><Plus className="h-4 w-4" /> New city</Button>
       </div>
@@ -137,24 +176,24 @@ export default function CoveragePage() {
       {loading && cities.length === 0 ? (
         <Card><TableSkeleton cols={3} /></Card>
       ) : cities.length === 0 ? (
-        <Card><EmptyState icon={<MapPinned className="h-8 w-8" />} title="No coverage yet" hint="Create a city, then draw its areas on the map." /></Card>
+        <Card><EmptyState icon={<MapPinned className="h-8 w-8" />} title="No coverage yet" hint="Tap New city, then draw the area on the map." /></Card>
       ) : (
         <Card className="!p-0 overflow-hidden divide-y divide-border">
           {cities.map((c) => {
             const open = openId === c._id;
             return (
               <div key={c._id}>
-                <div className="flex items-center gap-3 p-4">
-                  <button type="button" className="text-muted-foreground" onClick={() => setOpenId(open ? null : c._id)}>
+                <div className="flex items-center gap-3 p-4 flex-wrap">
+                  <button type="button" className="text-muted-foreground" onClick={() => setOpenId(open ? null : c._id)} aria-label={open ? 'Collapse' : 'Expand'}>
                     {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
-                  <div className="min-w-0 flex-1">
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpenId(open ? null : c._id)}>
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="font-medium truncate">{c.name}</div>
                       <span className="text-xs font-mono text-muted-foreground">{c.slug}</span>
                       <Badge>{c.areas?.length || 0} area{(c.areas?.length || 0) === 1 ? '' : 's'}</Badge>
                     </div>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" onClick={() => openCreateArea(c)}><Plus className="h-4 w-4" /> Area</Button>
                     <Button size="sm" variant="outline" onClick={() => openEditCity(c)}><Pencil className="h-4 w-4" /></Button>
@@ -190,6 +229,7 @@ export default function CoveragePage() {
         open={cityModal}
         onClose={() => setCityModal(false)}
         title={editingCity ? 'Edit city' : 'New city'}
+        size={editingCity ? 'md' : 'lg'}
         footer={<>
           <Button variant="ghost" onClick={() => setCityModal(false)}>Cancel</Button>
           <Button onClick={submitCity as any} loading={busy}>{editingCity ? 'Save' : 'Create'}</Button>
@@ -200,6 +240,30 @@ export default function CoveragePage() {
             <label className="text-sm font-medium block mb-1">City name</label>
             <Input required value={cityName} onChange={e => setCityName(e.target.value)} placeholder="e.g. Delhi, Indore" />
           </div>
+          {!editingCity && (
+            <>
+              <div>
+                <label className="text-sm font-medium block mb-1">Area name</label>
+                <Input
+                  value={cityAreaName}
+                  onChange={e => setCityAreaName(e.target.value)}
+                  placeholder={cityName.trim() ? `${cityName.trim()} (whole city)` : 'e.g. South Delhi, Vijay Nagar'}
+                />
+                <div className="text-[11px] text-muted-foreground mt-1">Blank chhodo to city name hi area naam banega.</div>
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Draw area on map</label>
+                <p className="text-xs text-muted-foreground mb-2">Map pe tap karke points add karo. Kam se kam 3 points. Drag se move.</p>
+                <PolygonEditor value={cityPoints} center={cityMapCenter} height={280} onChange={setCityPoints} />
+                <div className="flex items-center justify-between text-xs text-muted-foreground mt-1.5">
+                  <span>{cityPoints.length} points · ~{polygonAreaKm2(cityPoints).toFixed(1)} km²</span>
+                  {cityPoints.length > 0 && (
+                    <button type="button" className="hover:text-foreground underline" onClick={() => setCityPoints([])}>Clear</button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </form>
       </Modal>
 
@@ -218,9 +282,9 @@ export default function CoveragePage() {
             <label className="text-sm font-medium block mb-1">Area name</label>
             <Input required value={areaName} onChange={e => setAreaName(e.target.value)} placeholder="e.g. South Delhi, Vijay Nagar" />
           </div>
-          <PolygonEditor value={areaPoints} center={mapCenter} height={320} onChange={setAreaPoints} />
+          <PolygonEditor value={areaPoints} center={areaMapCenter} height={320} onChange={setAreaPoints} />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{areaPoints.length} points · ~{polygonAreaKm2(areaPoints).toFixed(1)} km² · click map to add, drag to move</span>
+            <span>{areaPoints.length} points · ~{polygonAreaKm2(areaPoints).toFixed(1)} km² · tap map to add, drag to move</span>
             {areaPoints.length > 0 && (
               <button type="button" className="hover:text-foreground underline" onClick={() => setAreaPoints([])}>Clear</button>
             )}
