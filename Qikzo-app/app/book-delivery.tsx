@@ -12,7 +12,7 @@ import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import PromoBanners from '@/components/PromoBanners';
 import { useSheet } from '@/lib/useSheet';
-import { categories, estimateTrip } from '@/lib/mockData';
+import { categories } from '@/lib/mockData';
 import { useSavedPlaces } from '@/lib/savedPlacesStore';
 import AssetIcon from '@/components/AssetIcon';
 import { rideOptions, estimateRide } from '@/lib/serviceMode';
@@ -21,6 +21,10 @@ import { ApiError } from '@/lib/api/errors';
 import { tokenStore } from '@/lib/api/tokenStore';
 import { uploadFile } from '@/lib/api/endpoints/uploads';
 import { walletApi, type PayQuote } from '@/lib/api/endpoints/wallet';
+import { bookingsApi } from '@/lib/api/endpoints/bookings';
+import { estimateRoute } from '@/lib/estimate';
+import { MAX_EXTRA_PICKUPS } from '@/lib/bannerPickup';
+import type { BookingEstimate } from '@/lib/api/types';
 
 declare const require: (moduleName: string) => unknown;
 
@@ -59,7 +63,7 @@ export default function BookDeliveryScreen() {
     const [quoting, setQuoting] = useState(false);
 
     const MAX_IMAGES = 4;
-    const MAX_EXTRA_PICKUPS = 3;
+    const [serverEst, setServerEst] = useState<BookingEstimate | null>(null);
 
     // Pick an image from the library OR the camera, upload it, and push the
     // returned absolute URL into the draft so it ships with the booking.
@@ -210,28 +214,64 @@ export default function BookDeliveryScreen() {
         setDraft({ extraPickups: draft.extraPickups.filter((_, i) => i !== idx) });
     };
 
-    const trip = useMemo(() => {
+    const localTrip = useMemo(() => {
         if (!draft.pickup.trim() || !draft.drop.trim()) return null;
-        // Build the full leg list: Pickup → Pickup2 → ... → Drop.
-        const stops = [draft.pickup, ...draft.extraPickups.map((s) => s.address).filter((a) => a.trim()), draft.drop];
-        let distanceKm = 0;
-        let etaMin = 0;
-        let base = 0, perKm = 0;
-        for (let i = 0; i < stops.length - 1; i++) {
-            const leg = estimateTrip(stops[i], stops[i + 1]);
-            distanceKm += leg.distanceKm;
-            etaMin += leg.etaMin;
-            base = leg.base;
-            perKm = leg.perKm;
-        }
-        const price = Math.round(base + distanceKm * perKm);
-        const baseTrip = { distanceKm, etaMin, price, base, perKm };
+        const stops = draft.extraPickups
+            .filter((s) => s.address.trim())
+            .map((s) => ({ address: s.address, coord: s.coord }));
+        const est = estimateRoute({
+            pickup: draft.pickup,
+            drop: draft.drop,
+            pickupCoord: draft.pickupCoord,
+            dropCoord: draft.dropCoord,
+            stops,
+        });
         if (isRide) {
-            const r = estimateRide(distanceKm, draft.categoryId);
-            return { ...baseTrip, ...r };
+            const r = estimateRide(est.distanceKm, draft.categoryId);
+            return { ...est, ...r };
         }
-        return baseTrip;
-    }, [draft.pickup, draft.drop, draft.extraPickups, draft.categoryId, isRide]);
+        return est;
+    }, [draft.pickup, draft.drop, draft.pickupCoord, draft.dropCoord, draft.extraPickups, draft.categoryId, isRide]);
+
+    // Server quote uses the same haversine + extra-pickup legs as create,
+    // so this screen matches booking-details.
+    useEffect(() => {
+        if (!draft.pickup.trim() || !draft.drop.trim() || !tokenStore.get().accessToken) {
+            setServerEst(null);
+            return;
+        }
+        let cancelled = false;
+        const t = setTimeout(() => {
+            bookingsApi.estimate({
+                pickup: {
+                    address: draft.pickup.trim(),
+                    lat: draft.pickupCoord?.lat ?? null,
+                    lng: draft.pickupCoord?.lng ?? null,
+                },
+                drop: {
+                    address: draft.drop.trim(),
+                    lat: draft.dropCoord?.lat ?? null,
+                    lng: draft.dropCoord?.lng ?? null,
+                },
+                extraPickups: draft.extraPickups
+                    .filter((s) => s.address.trim())
+                    .map((s) => ({
+                        address: s.address.trim(),
+                        lat: s.coord?.lat ?? null,
+                        lng: s.coord?.lng ?? null,
+                    })),
+            }).then((est) => {
+                if (!cancelled) setServerEst(est);
+            }).catch(() => {
+                if (!cancelled) setServerEst(null);
+            });
+        }, 280);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [draft.pickup, draft.drop, draft.pickupCoord, draft.dropCoord, draft.extraPickups]);
+
+    const trip = (!isRide && serverEst)
+        ? serverEst
+        : localTrip;
 
     const openMap = (field: 'pickup' | 'drop') => {
         router.push({ pathname: '/select-location', params: { field } });

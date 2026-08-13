@@ -7,6 +7,7 @@ export const bookingsApi = {
         drop: string | Point;
         pickupCoord?: { lat: number; lng: number } | null;
         dropCoord?: { lat: number; lng: number } | null;
+        extraPickups?: Point[];
     }): Promise<BookingEstimate> {
         return (await http.post<BookingEstimate>('/bookings/estimate', input)) as unknown as BookingEstimate;
     },

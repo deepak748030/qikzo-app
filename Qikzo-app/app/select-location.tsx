@@ -54,25 +54,21 @@ export default function SelectLocationScreen() {
     const paramAddress = paramStr(params.address);
 
     // Route params (banner tap) win over draft so the map opens on the
-    // intended pin. Pickup and drop never fall back onto each other.
-    const pickupCoord = paramCoord || (which === 'pickup' ? draft.pickupCoord : null);
-    const pickupAddress = paramAddress || (which === 'pickup' ? draft.pickup : '');
-    const dropCoord = paramCoord || (which === 'drop' ? draft.dropCoord : null);
-    const dropAddress = paramAddress || (which === 'drop' ? draft.drop : '');
-    const seededCoord = which === 'pickup' ? pickupCoord : dropCoord;
-    const seededAddress = which === 'pickup' ? pickupAddress : dropAddress;
+    // intended pin. Pickup / extra pickup / drop never fall back onto each other.
+    const seededCoord = extraIdx >= 0
+        ? (paramCoord || extra?.coord || null)
+        : which === 'drop'
+            ? (paramCoord || draft.dropCoord)
+            : (paramCoord || draft.pickupCoord);
+    const seededAddress = extraIdx >= 0
+        ? (paramAddress || extra?.address || '')
+        : which === 'drop'
+            ? (paramAddress || draft.drop)
+            : (paramAddress || draft.pickup);
 
-    const hasSavedCoord = extraIdx >= 0
-        ? !!extra?.coord
-        : !!seededCoord;
-
-    const initial = extraIdx >= 0
-        ? (extra?.coord || DEFAULT_CENTER)
-        : seededCoord || DEFAULT_CENTER;
-
-    const initialAddress = extraIdx >= 0
-        ? (extra?.address || '')
-        : seededAddress;
+    const hasSavedCoord = !!seededCoord;
+    const initial = seededCoord || DEFAULT_CENTER;
+    const initialAddress = seededAddress;
 
     const [center, setCenter] = useState<LatLng>(initial);
     const [address, setAddress] = useState<string>(initialAddress);
@@ -84,17 +80,17 @@ export default function SelectLocationScreen() {
     const skipReverseRef = useRef(!!initialAddress && hasSavedCoord);
 
     // Expo Router can hydrate `field`/`lat` after the first paint. Re-apply
-    // the drop seed so we never stay stuck on a leftover pickup pin.
+    // the seeded pin so a banner tap never stays stuck on the wrong slot.
     useEffect(() => {
-        if (savingPlace || extraIdx >= 0 || which !== 'drop') return;
-        if (dropCoord) {
-            setCenter(dropCoord);
+        if (savingPlace) return;
+        if (seededCoord) {
+            setCenter(seededCoord);
             setLocating(false);
-            skipReverseRef.current = !!dropAddress;
+            skipReverseRef.current = !!seededAddress;
         }
-        if (dropAddress) setAddress(dropAddress);
+        if (seededAddress) setAddress(seededAddress);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [which, dropCoord?.lat, dropCoord?.lng, dropAddress]);
+    }, [which, extraIdx, seededCoord?.lat, seededCoord?.lng, seededAddress]);
 
     // Track keyboard height so the bottom address card lifts above the keyboard
     // and the search input never gets hidden behind it.
@@ -238,7 +234,11 @@ export default function SelectLocationScreen() {
                 </Pressable>
                 <View style={styles.titleWrap}>
                     <Text style={styles.titleSmall}>
-                        {savingPlace ? 'Set saved address' : which === 'pickup' ? 'Set pickup location' : 'Set drop location'}
+                        {savingPlace
+                            ? 'Set saved address'
+                            : extraIdx >= 0
+                                ? `Set pickup ${extraIdx + 2}`
+                                : which === 'pickup' ? 'Set pickup location' : 'Set drop location'}
                     </Text>
                     <Text style={styles.titleHint}>Drag the map to move the pin</Text>
                 </View>
@@ -261,7 +261,11 @@ export default function SelectLocationScreen() {
 
                 <View style={styles.handle} />
                 <Text style={styles.label}>
-                    {savingPlace ? 'ADDRESS' : which === 'pickup' ? 'PICKUP ADDRESS' : 'DROP ADDRESS'}
+                    {savingPlace
+                        ? 'ADDRESS'
+                        : extraIdx >= 0
+                            ? `PICKUP ${extraIdx + 2} ADDRESS`
+                            : which === 'pickup' ? 'PICKUP ADDRESS' : 'DROP ADDRESS'}
                 </Text>
                 <View style={styles.addrRow}>
                     <View style={[styles.pinDot, { backgroundColor: accent }]} />
