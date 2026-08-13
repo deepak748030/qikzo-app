@@ -475,8 +475,8 @@ export default function BookingDetailPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Info label="Vehicle" value={rider.vehicle || rider.vehicleTypeSlug} />
-                <Info label="Vehicle no." value={rider.vehicleNo || rider.vehicle?.plateNo} />
+                <Info label="Vehicle" value={[rider.vehicle || rider.vehicleTypeSlug, rider.vehicleDoc?.make, rider.vehicleDoc?.modelName].filter(Boolean).join(' · ') || '—'} />
+                <Info label="Vehicle no." value={rider.vehicleNo || rider.vehicleDoc?.plateNo} />
                 <Info label="Rating" value={rider.rating != null ? `${Number(rider.rating).toFixed(1)} ★` : '—'} />
                 <Info label="Trips" value={rider.trips != null ? String(rider.trips) : '—'} />
                 <Info label="KYC" value={<Badge tone={statusTone(rider.kycStatus)}>{rider.kycStatus || '—'}</Badge>} />

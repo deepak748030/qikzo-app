@@ -25,6 +25,8 @@ type Banner = {
   coord: { lat: number; lng: number };
   categoryId?: string | null;
   categorySlug?: string;
+  stateId?: string;
+  areaId?: string;
   stateName?: string;
   areaName?: string;
   polygon?: { coordinates: Point[][] } | null;
@@ -160,8 +162,10 @@ export default function BannersPage() {
         imageUrl: form.imageUrl.trim(),
         categoryId: form.categoryId,
         categorySlug: category?.slug || '',
-        stateName: form.locationName.trim(),
-        areaName: form.locationName.trim(),
+        stateId: form.cityId,
+        areaId: form.areaId,
+        stateName: selectedCity?.name || form.locationName.trim(),
+        areaName: selectedArea?.name || form.locationName.trim(),
         polygon: { type: 'Polygon', coordinates: [ring] },
         active: form.active,
         order: Number(form.order) || 0,
