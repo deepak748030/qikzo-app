@@ -4,6 +4,7 @@ import requireAdmin from '../middleware/requireAdmin';
 import validate from '../middleware/validate';
 import adminController from '../controllers/adminController';
 import categoryAdminController from '../controllers/categoryAdminController';
+import coverageController from '../controllers/coverageController';
 import {
     listQuerySchema,
     rejectSchema,
@@ -67,6 +68,15 @@ router.delete('/categories/:id/states/:stateId', categoryAdminController.removeS
 router.post('/categories/:id/states/:stateId/areas', categoryAdminController.addArea);
 router.patch('/categories/:id/states/:stateId/areas/:areaId', categoryAdminController.updateArea);
 router.delete('/categories/:id/states/:stateId/areas/:areaId', categoryAdminController.removeArea);
+
+// Coverage — reusable city / area polygons for banners
+router.get('/coverage', coverageController.list);
+router.post('/coverage', coverageController.createCity);
+router.patch('/coverage/:id', coverageController.updateCity);
+router.delete('/coverage/:id', coverageController.removeCity);
+router.post('/coverage/:id/areas', coverageController.addArea);
+router.patch('/coverage/:id/areas/:areaId', coverageController.updateArea);
+router.delete('/coverage/:id/areas/:areaId', coverageController.removeArea);
 
 // Promo banners
 router.get('/banners', validate(listQuerySchema, 'query'), adminController.listBanners);
