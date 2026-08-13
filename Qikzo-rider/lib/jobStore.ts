@@ -219,7 +219,7 @@ export const useJobs = create<State>((set, get) => ({
         const { accessToken } = tokenStore.get();
         if (!accessToken) return [];
         try {
-            const items = await ridersApi.incoming({ limit: 5 });
+            const items = await ridersApi.incoming({ limit: 10 });
             return items.map(bookingToIncomingJob);
         } catch {
             return [];

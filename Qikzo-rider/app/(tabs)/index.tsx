@@ -1,15 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
-import { Power, MapPin, Bell, ShieldAlert } from 'lucide-react-native';
+import { Power, Bell, ShieldAlert } from 'lucide-react-native';
 import { ridersApi } from '@/lib/api/endpoints/riders';
+import { api } from '@/lib/api';
+import type { EarningsSummary } from '@/lib/api/endpoints/earnings';
 import { colors, fonts, radius } from '@/lib/theme';
-import LeafletMap from '@/components/LeafletMap';
 import JobRequestCard from '@/components/JobRequestCard';
 import BottomSheet from '@/components/BottomSheet';
 import Skeleton from '@/components/Skeleton';
+import { StatCol, StatDivider } from '@/components/ui';
 import { useSheet } from '@/lib/useSheet';
 import { useJobs, nextIncoming } from '@/lib/jobStore';
 import { useAuth } from '@/lib/authStore';
@@ -19,15 +21,9 @@ import { tokenStore } from '@/lib/api/tokenStore';
 import { ApiError } from '@/lib/api/errors';
 import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
 
-const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 }; // Only used until GPS resolves.
-const LOCATION_INTERVAL_MS = 10_000;   // heartbeat while online
-// Socket `job:offer` is the primary channel; this poll is only a safety net
-// for missed sockets. 10s is more than enough — reduces server load by ~50%
-// vs the previous 5s when many riders are online.
+const LOCATION_INTERVAL_MS = 10_000;
 const INCOMING_POLL_MS = 10_000;
 
-// Module-scoped so the "already navigated for this trip" guard survives
-// Home unmount/remount cycles caused by router.replace('/(tabs)').
 let lastNavActiveKey: string | null = null;
 
 export default function DispatchHome() {
@@ -47,54 +43,42 @@ export default function DispatchHome() {
     const hydrateActiveFromServer = useJobs((s) => s.hydrateActiveFromServer);
     const active = useJobs((s) => s.active);
 
-    const [incoming, setIncoming] = useState<IncomingJob | null>(null);
-    const [acceptBusy, setAcceptBusy] = useState(false);
+    const [incoming, setIncoming] = useState<IncomingJob[]>([]);
+    const [acceptBusyId, setAcceptBusyId] = useState<string | null>(null);
     const [kycStatus, setKycStatus] = useState<string | null>(null);
-    // Live GPS center for the map — resolves as soon as permission is granted.
-    const [center, setCenter] = useState(FALLBACK_CENTER);
+    const [today, setToday] = useState<Pick<EarningsSummary, 'today' | 'todayTrips' | 'todayHours'> | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
-    // Resolve the rider's real location on mount so the map isn't stuck on Delhi.
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                let { status } = await Location.getForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                    const req = await Location.requestForegroundPermissionsAsync();
-                    status = req.status;
-                }
-                if (status !== 'granted') return;
-                const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-                if (!cancelled) setCenter({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-            } catch { /* ignore */ }
-        })();
-        return () => { cancelled = true; };
-    }, []);
-
-    // Auth-aware helpers — real online/toggle when signed in, mock in preview.
     const isSignedIn = () => !!tokenStore.get().accessToken;
 
-    // On mount: resume an in-flight trip from the server (survives app restart).
+    const loadToday = useCallback(async () => {
+        if (!isSignedIn()) { setToday({ today: 0, todayTrips: 0, todayHours: 0 }); return; }
+        try {
+            const s = await api.earnings.summary();
+            setToday({ today: s.today, todayTrips: s.todayTrips, todayHours: s.todayHours });
+        } catch { /* keep last */ }
+    }, []);
+
     useEffect(() => { hydrateActiveFromServer(); }, [hydrateActiveFromServer]);
 
-    // Fetch KYC status so we can gate "Go online" client-side and surface a banner.
-    // The server also enforces this (returns KYC_NOT_APPROVED) — this is UX only.
     const refreshKyc = React.useCallback(async () => {
         if (!isSignedIn()) return;
         try {
             const rider = await ridersApi.me();
             const status = (rider as any)?.kycStatus ?? null;
             setKycStatus(status);
-            // Safety: if the server somehow has us online while KYC isn't approved, force offline.
             if (status !== 'approved' && (rider as any)?.online) {
                 try { await setOnlineOnServer(false); } catch { /* ignore */ }
             }
         } catch { /* ignore */ }
     }, [setOnlineOnServer]);
-    useEffect(() => { refreshKyc(); }, [refreshKyc]);
+    useEffect(() => { refreshKyc(); loadToday(); }, [refreshKyc, loadToday]);
 
-    // Realtime KYC updates via socket so the banner + Go-online gate flip the
-    // instant an admin approves/rejects, no refresh needed.
+    useFocusEffect(useCallback(() => {
+        loadToday();
+        hydrateActiveFromServer();
+    }, [loadToday, hydrateActiveFromServer]));
+
     useEffect(() => {
         connectSocket();
         const off = subscribeSocket('kyc:update', (payload: any) => {
@@ -104,21 +88,15 @@ export default function DispatchHome() {
         return () => { off(); };
     }, [refreshKyc]);
 
-    // If a job is active, jump to the active-job screen — but only ONCE per
-    // trip. `lastNavActiveKey` is module-scoped so it survives Home remounts
-    // (e.g. after pressing X on Active Job → router.replace('/(tabs)')),
-    // preventing the blink/loop where Home re-pushes on every remount.
     useEffect(() => {
         const key = active ? String(active.tripId || active.id || '') : '';
         if (!key) { lastNavActiveKey = null; return; }
         if (lastNavActiveKey === key) return;
         lastNavActiveKey = key;
-        // replace (not push) so back-stack doesn't fill with duplicates.
         router.replace('/active-job');
     }, [active]);
 
-    // Location heartbeat: while online, push GPS every ~10s so the server-side
-    // /riders/me/incoming query can $near-filter correctly.
+    // Location heartbeat — still needed so nearby incoming can $near-filter.
     useEffect(() => {
         if (!online || !isSignedIn()) return;
         let stopped = false;
@@ -128,9 +106,7 @@ export default function DispatchHome() {
                 if (status !== 'granted') return;
                 const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
                 if (stopped) return;
-                const next = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-                setCenter(next);
-                await pushLocation(next);
+                await pushLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
             } catch { /* ignore */ }
         };
         tick();
@@ -138,41 +114,33 @@ export default function DispatchHome() {
         return () => { stopped = true; clearInterval(t); };
     }, [online, pushLocation]);
 
-    // Track bookings the server told us are cancelled so we don't re-show
-    // them if a poll response is already in flight when the cancel arrives.
     const cancelledIdsRef = useRef<Set<string>>(new Set());
 
-    // Incoming-jobs poller (fallback) + realtime job:offer push. Runs only
-    // while we don't already have an incoming/active job — that's fine
-    // because pulling more offers when one is already on screen would just
-    // be discarded.
+    const pullIncoming = useCallback(async () => {
+        if (isSignedIn()) {
+            const items = await fetchIncoming();
+            const fresh = items.filter((it: any) => !cancelledIdsRef.current.has(String(it.id)));
+            setIncoming(fresh);
+        } else {
+            setIncoming([nextIncoming()]);
+        }
+    }, [fetchIncoming]);
+
+    // Keep polling the full list while online — new offers append in realtime.
     useEffect(() => {
-        if (!online || active || incoming) return;
+        if (!online || active) return;
         let cancelled = false;
         const pull = async () => {
-            if (isSignedIn()) {
-                const items = await fetchIncoming();
-                if (cancelled) return;
-                // Drop any items already known-cancelled (race: cancel event
-                // fired while this poll was in flight).
-                const fresh = items.filter((it: any) => !cancelledIdsRef.current.has(String(it.id)));
-                if (fresh.length) setIncoming(fresh[0]);
-            } else if (!cancelled) {
-                setIncoming(nextIncoming());
-            }
+            if (cancelled) return;
+            await pullIncoming();
         };
         pull();
         const t = setInterval(pull, INCOMING_POLL_MS);
         connectSocket();
         const offOffer = subscribeSocket('job:offer', () => { if (!cancelled) pull(); });
         return () => { cancelled = true; clearInterval(t); offOffer(); };
-    }, [online, active, incoming, fetchIncoming]);
+    }, [online, active, pullIncoming]);
 
-    // Realtime cancel handler — MUST live in its own effect so it stays
-    // subscribed even while `incoming` is populated. Otherwise the offer card
-    // would sit on screen until its 30s timer expires even if the customer
-    // cancelled instantly. Also handles the case where a cancel event races
-    // ahead of the offer arriving (we remember the id and filter it out).
     useEffect(() => {
         if (!online) return;
         connectSocket();
@@ -180,45 +148,34 @@ export default function DispatchHome() {
             if (!p?.id) return;
             const cancelledId = String(p.id);
             cancelledIdsRef.current.add(cancelledId);
-            setIncoming((cur) => (cur && String((cur as any).id) === cancelledId ? null : cur));
+            setIncoming((cur) => cur.filter((j) => String(j.id) !== cancelledId));
         });
         return () => { off(); };
     }, [online]);
 
-    // Defensive reconciliation: while an offer card is showing, keep polling
-    // the server's incoming list. Server only returns bookings whose status is
-    // still 'Searching rider' and which are unassigned — so if the customer
-    // cancelled (or someone else grabbed it) and we missed the socket event,
-    // this poll will drop the stale card within a couple of seconds.
     useEffect(() => {
-        if (!online || !incoming || !isSignedIn()) return;
+        if (!online || incoming.length === 0 || !isSignedIn()) return;
         let cancelled = false;
-        const currentId = String((incoming as any).id);
         const verify = async () => {
             try {
                 const items = await fetchIncoming();
                 if (cancelled) return;
-                const stillOffered = items.some((it: any) => String(it.id) === currentId);
-                if (!stillOffered) {
-                    cancelledIdsRef.current.add(currentId);
-                    setIncoming(null);
-                }
-            } catch { /* ignore transient errors */ }
+                const live = new Set(items.map((it: any) => String(it.id)));
+                setIncoming((cur) => {
+                    const next = cur.filter((j) => live.has(String(j.id)));
+                    cur.forEach((j) => {
+                        if (!live.has(String(j.id))) cancelledIdsRef.current.add(String(j.id));
+                    });
+                    return next;
+                });
+            } catch { /* ignore */ }
         };
-        // First check quickly (~2s) then every 3s afterwards.
         const first = setTimeout(verify, 2000);
         const t = setInterval(verify, 3000);
         return () => { cancelled = true; clearTimeout(first); clearInterval(t); };
-    }, [online, incoming, fetchIncoming]);
-
-
-
-
+    }, [online, incoming.length, fetchIncoming]);
 
     const goOnline = async () => {
-        // Client-side KYC gate — server also enforces (KYC_NOT_APPROVED).
-        // If signed in, KYC MUST be 'approved'. If status not yet loaded (null),
-        // fetch it now and block the tap so we never flip online before verifying.
         if (isSignedIn()) {
             let status = kycStatus;
             if (!status) {
@@ -260,7 +217,6 @@ export default function DispatchHome() {
         if (isSignedIn()) {
             try {
                 await setOnlineOnServer(true);
-                // seed initial location so incoming feed has a $near anchor
                 try {
                     const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
                     await pushLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
@@ -269,7 +225,6 @@ export default function DispatchHome() {
                 const msg = e instanceof ApiError ? e.message : 'Could not go online.';
                 const code = (e instanceof ApiError ? e.code : '') || '';
                 if (code === 'KYC_NOT_APPROVED') {
-                    // Refresh local status so the banner appears immediately.
                     refreshKyc();
                     sheet.show({
                         variant: 'warning',
@@ -293,61 +248,66 @@ export default function DispatchHome() {
         sheet.show({
             variant: 'warning',
             title: 'Go offline?',
-            message: incoming
-                ? 'You have a pending job request. Going offline will decline it.'
+            message: incoming.length
+                ? 'You have pending job requests. Going offline will decline them.'
                 : 'You will stop receiving new job requests.',
             confirmText: 'Go offline',
             cancelText: 'Stay online',
             onConfirm: async () => {
                 if (isSignedIn()) { try { await setOnlineOnServer(false); } catch { /* ignore */ } }
                 else { setOnline(false); }
-                setIncoming(null);
+                setIncoming([]);
             },
         });
     };
 
     const toggleOnline = () => (online ? goOffline() : goOnline());
 
-    const onAccept = async () => {
-        if (!incoming) return;
+    const onAccept = async (job: IncomingJob) => {
         if (!isSignedIn()) {
-            // preview / signed-out: use local store
-            useJobs.getState().acceptJob(incoming);
-            setIncoming(null);
+            useJobs.getState().acceptJob(job);
+            setIncoming([]);
             return;
         }
-        setAcceptBusy(true);
+        setAcceptBusyId(job.id);
         try {
-            await acceptFromServer(incoming.id);
-            setIncoming(null);
+            await acceptFromServer(job.id);
+            setIncoming([]);
         } catch (e) {
             const msg = e instanceof ApiError ? e.message : 'Could not accept the job.';
             sheet.show({ variant: 'error', title: 'Accept failed', message: msg });
         } finally {
-            setAcceptBusy(false);
+            setAcceptBusyId(null);
         }
     };
 
-    const onDecline = async () => {
-        if (incoming && isSignedIn()) {
-            await declineFromServer(incoming.id, 'Rider declined');
+    const onDecline = async (job: IncomingJob) => {
+        if (isSignedIn()) {
+            await declineFromServer(job.id, 'Rider declined');
         }
-        setIncoming(null);
+        cancelledIdsRef.current.add(String(job.id));
+        setIncoming((cur) => cur.filter((j) => j.id !== job.id));
     };
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([loadToday(), hydrateActiveFromServer(), online ? pullIncoming() : Promise.resolve()]);
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    const earnings = today?.today ?? 0;
+    const trips = today?.todayTrips ?? 0;
+    const hours = today?.todayHours ?? 0;
 
     return (
         <View style={styles.container}>
-            {/* showTraffic disabled — no fake vehicles on the rider map. Only the rider's real GPS drives the view. */}
-            <LeafletMap center={center} showTraffic={false} style={StyleSheet.absoluteFill} />
-
-            {/* Header — hello + city chip */}
             <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-                <View>
+                <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.hello}>Hi, {name.split(' ')[0]}</Text>
-                    <View style={styles.locRow}>
-                        <MapPin size={11} color={colors.mutedForeground} />
-                        <Text style={styles.loc}>New Delhi · Central</Text>
-                    </View>
+                    <Text style={styles.loc}>{online ? 'Receiving nearby requests' : 'You are offline'}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     {online && (
@@ -365,25 +325,32 @@ export default function DispatchHome() {
                 </View>
             </View>
 
-            {/* Bottom stack: incoming job (if any) or the online/offline card */}
-            <View style={[styles.bottom, { paddingBottom: insets.bottom + 84 }]}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 110, paddingHorizontal: 6 }}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+            >
                 {loading ? (
-                    <View style={styles.statusCard}>
-                        <View style={{ flex: 1, gap: 8 }}>
-                            <Skeleton width="55%" height={16} />
-                            <Skeleton width="80%" height={11} />
-                        </View>
-                        <Skeleton width={110} height={44} rounded="pill" />
+                    <View style={{ gap: 8, marginTop: 10 }}>
+                        <Skeleton width="100%" height={72} rounded="md" />
+                        <Skeleton width="100%" height={88} rounded="md" />
+                        <Skeleton width="100%" height={160} rounded="md" />
                     </View>
-                ) : online && incoming ? (
-                    <JobRequestCard job={incoming} onAccept={onAccept} onDecline={onDecline} accepting={acceptBusy} />
                 ) : (
-                    <View style={{ gap: 8 }}>
-                        {kycStatus && kycStatus !== 'approved' && (
-                            <Pressable
-                                onPress={() => router.push('/documents')}
-                                style={styles.kycBanner}
-                            >
+                    <>
+                        <View style={styles.strip}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.stripLabel}>Today</Text>
+                                <Text style={styles.stripValue}>₹{earnings.toLocaleString('en-IN')}</Text>
+                            </View>
+                            <StatDivider />
+                            <StatCol label="Trips" value={String(trips)} />
+                            <StatDivider />
+                            <StatCol label="Online" value={`${hours.toFixed(1)}h`} />
+                        </View>
+
+                        {kycStatus && kycStatus !== 'approved' ? (
+                            <Pressable onPress={() => router.push('/documents')} style={styles.kycBanner}>
                                 <ShieldAlert size={16} color={colors.danger} strokeWidth={2.4} />
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.kycTitle}>
@@ -397,38 +364,62 @@ export default function DispatchHome() {
                                 </View>
                                 <Text style={styles.kycCta}>Fix</Text>
                             </Pressable>
-                        )}
-                        <View style={styles.statusCard}>
-                            <View style={styles.statusText}>
-                                <Text style={styles.statusTitle}>
-                                    {online ? 'You are online' : 'You are offline'}
-                                </Text>
-                                <Text style={styles.statusSub}>
-                                    {online
-                                        ? 'Waiting for a nearby job request…'
-                                        : kycStatus && kycStatus !== 'approved'
+                        ) : null}
+
+                        {!online ? (
+                            <View style={styles.statusCard}>
+                                <View style={styles.statusText}>
+                                    <Text style={styles.statusTitle}>You are offline</Text>
+                                    <Text style={styles.statusSub}>
+                                        {kycStatus && kycStatus !== 'approved'
                                             ? 'Verify KYC to start receiving jobs.'
-                                            : 'Go online to start receiving jobs.'}
-                                </Text>
+                                            : 'Go online to start receiving pickup requests.'}
+                                    </Text>
+                                </View>
+                                <Pressable
+                                    style={[
+                                        styles.powerBtn,
+                                        kycStatus && kycStatus !== 'approved' && styles.powerBtnDisabled,
+                                    ]}
+                                    onPress={toggleOnline}
+                                    hitSlop={6}
+                                >
+                                    <Power size={22} color={colors.primaryForeground} strokeWidth={2.4} />
+                                    <Text style={styles.powerText}>Go online</Text>
+                                </Pressable>
                             </View>
-                            <Pressable
-                                style={[
-                                    styles.powerBtn,
-                                    online && styles.powerBtnOn,
-                                    kycStatus && kycStatus !== 'approved' && !online && styles.powerBtnDisabled,
-                                ]}
-                                onPress={toggleOnline}
-                                hitSlop={6}
-                            >
-                                <Power size={22} color={online ? colors.accentForeground : colors.primaryForeground} strokeWidth={2.4} />
-                                <Text style={[styles.powerText, online && styles.powerTextOn]}>
-                                    {online ? 'Go offline' : 'Go online'}
-                                </Text>
-                            </Pressable>
-                        </View>
-                    </View>
+                        ) : (
+                            <>
+                                <View style={styles.sectionRow}>
+                                    <Text style={styles.section}>Pickup requests</Text>
+                                    <Text style={styles.count}>{incoming.length}</Text>
+                                </View>
+                                {incoming.length === 0 ? (
+                                    <View style={styles.empty}>
+                                        <Text style={styles.emptyTitle}>Waiting for requests</Text>
+                                        <Text style={styles.emptySub}>Nearby pickup jobs will appear here in realtime.</Text>
+                                        <Pressable style={styles.offlineLink} onPress={goOffline} hitSlop={6}>
+                                            <Text style={styles.offlineLinkText}>Go offline</Text>
+                                        </Pressable>
+                                    </View>
+                                ) : (
+                                    <View style={styles.grid}>
+                                        {incoming.map((job) => (
+                                            <JobRequestCard
+                                                key={job.id}
+                                                job={job}
+                                                onAccept={() => onAccept(job)}
+                                                onDecline={() => onDecline(job)}
+                                                accepting={acceptBusyId === job.id}
+                                            />
+                                        ))}
+                                    </View>
+                                )}
+                            </>
+                        )}
+                    </>
                 )}
-            </View>
+            </ScrollView>
 
             <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
         </View>
@@ -438,29 +429,50 @@ export default function DispatchHome() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: {
-        position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 6, paddingBottom: 10,
+        paddingHorizontal: 6, paddingBottom: 10,
         flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
-        backgroundColor: 'rgba(240,237,229,0.92)', borderBottomWidth: 1, borderBottomColor: colors.border,
+        backgroundColor: colors.headerBg, borderBottomWidth: 1, borderBottomColor: colors.border,
     },
     hello: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground, letterSpacing: -0.3 },
-    locRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-    loc: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body },
+    loc: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 3 },
     notifChip: { width: 34, height: 34, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
     notifDot: { position: 'absolute', top: 7, right: 7, width: 7, height: 7, borderRadius: 7, backgroundColor: colors.accent, borderWidth: 1, borderColor: colors.card },
-    bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 6 },
-    statusCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+    strip: {
+        flexDirection: 'row', alignItems: 'center', marginTop: 10, padding: 12,
+        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    },
+    stripLabel: { fontSize: 10, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.5, textTransform: 'uppercase' },
+    stripValue: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 3, letterSpacing: -0.3 },
+    sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 8, paddingHorizontal: 6 },
+    section: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.mutedForeground, letterSpacing: 0.6, textTransform: 'uppercase' },
+    count: { fontSize: 11, fontFamily: fonts.displayBold, color: colors.primary },
+    grid: { gap: 8 },
+    empty: {
+        alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16,
+        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, gap: 6,
+    },
+    emptyTitle: { fontSize: 14, fontFamily: fonts.displayBold, color: colors.foreground },
+    emptySub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, textAlign: 'center' },
+    offlineLink: { marginTop: 8, paddingVertical: 6, paddingHorizontal: 12 },
+    offlineLinkText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.mutedForeground },
+    statusCard: {
+        marginTop: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+        borderRadius: radius.md, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
+    },
     statusText: { flex: 1 },
     statusTitle: { fontSize: 15, fontFamily: fonts.displayBold, color: colors.foreground },
     statusSub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 3 },
     powerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 12, borderRadius: radius.pill },
-    powerBtnOn: { backgroundColor: colors.accent },
     powerBtnDisabled: { opacity: 0.55 },
-    kycBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.danger, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10 },
+    powerText: { color: colors.primaryForeground, fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.3 },
+    kycBanner: {
+        flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10,
+        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.danger,
+        borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10,
+    },
     kycTitle: { fontSize: 13, fontFamily: fonts.displayBold, color: colors.foreground },
     kycSub: { fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground, marginTop: 2 },
     kycCta: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.danger, letterSpacing: 0.4, textTransform: 'uppercase' },
-    powerText: { color: colors.primaryForeground, fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.3 },
-    powerTextOn: { color: colors.accentForeground },
     onlinePill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.accent, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.pill },
     onlineDot: { width: 7, height: 7, borderRadius: 7, backgroundColor: colors.success },
     onlinePillText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.accentForeground, letterSpacing: 0.4, textTransform: 'uppercase' },
