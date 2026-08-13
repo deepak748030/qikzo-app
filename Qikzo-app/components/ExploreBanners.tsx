@@ -33,15 +33,16 @@ export default function ExploreBanners({ userCoord }: { userCoord?: { lat: numbe
 
     const openBanner = (b: Banner) => {
         if (!b.coord) return;
-        const drop = b.address || b.title;
-        setDraft({ drop, dropCoord: b.coord });
+        // Banner spots are pickup points (market / shop) — parcel is collected there.
+        const pickup = b.address || b.title;
+        setDraft({ pickup, pickupCoord: b.coord });
         router.push({
             pathname: '/select-location',
             params: {
-                field: 'drop',
+                field: 'pickup',
                 lat: String(b.coord.lat),
                 lng: String(b.coord.lng),
-                address: drop,
+                address: pickup,
             },
         });
     };

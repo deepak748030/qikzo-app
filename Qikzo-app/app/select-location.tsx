@@ -53,28 +53,26 @@ export default function SelectLocationScreen() {
         Number.isFinite(paramLat) && Number.isFinite(paramLng) ? { lat: paramLat, lng: paramLng } : null;
     const paramAddress = paramStr(params.address);
 
-    // Drop must never fall back to the pickup pin — banner taps seed drop
-    // via draft + route params, and those are the only source for drop.
+    // Route params (banner tap) win over draft so the map opens on the
+    // intended pin. Pickup and drop never fall back onto each other.
+    const pickupCoord = paramCoord || (which === 'pickup' ? draft.pickupCoord : null);
+    const pickupAddress = paramAddress || (which === 'pickup' ? draft.pickup : '');
     const dropCoord = paramCoord || (which === 'drop' ? draft.dropCoord : null);
     const dropAddress = paramAddress || (which === 'drop' ? draft.drop : '');
+    const seededCoord = which === 'pickup' ? pickupCoord : dropCoord;
+    const seededAddress = which === 'pickup' ? pickupAddress : dropAddress;
 
     const hasSavedCoord = extraIdx >= 0
         ? !!extra?.coord
-        : which === 'pickup'
-            ? !!draft.pickupCoord
-            : !!dropCoord;
+        : !!seededCoord;
 
     const initial = extraIdx >= 0
         ? (extra?.coord || DEFAULT_CENTER)
-        : which === 'pickup'
-            ? draft.pickupCoord || DEFAULT_CENTER
-            : dropCoord || DEFAULT_CENTER;
+        : seededCoord || DEFAULT_CENTER;
 
     const initialAddress = extraIdx >= 0
         ? (extra?.address || '')
-        : which === 'pickup'
-            ? draft.pickup
-            : dropAddress;
+        : seededAddress;
 
     const [center, setCenter] = useState<LatLng>(initial);
     const [address, setAddress] = useState<string>(initialAddress);
