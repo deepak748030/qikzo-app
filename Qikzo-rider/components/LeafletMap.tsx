@@ -90,7 +90,6 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   var post = function(p){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(p)); }catch(e){} };
   var map = L.map('map', { zoomControl: false, attributionControl: true })
     .setView([${center.lat}, ${center.lng}], 15);
-  L.control.zoom({ position: 'topright' }).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 20, subdomains: 'abcd',
     attribution: '© OpenStreetMap © CARTO'
@@ -105,6 +104,19 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   }
   ${pickup ? `L.marker([${pickup.lat},${pickup.lng}], { icon: pinIcon('${colors.accent}') }).addTo(map);` : ''}
   ${drop ? `L.marker([${drop.lat},${drop.lng}], { icon: pinIcon('${colors.foreground}') }).addTo(map);` : ''}
+  // Auto-fit: zoom so every known point (pickup, drop, rider) is visible
+  // without the rider having to pinch-zoom out. Re-used after route load too.
+  function fitAll(){
+    try{
+      var pts=[];
+      ${pickup ? `pts.push([${pickup.lat},${pickup.lng}]);` : ''}
+      ${drop ? `pts.push([${drop.lat},${drop.lng}]);` : ''}
+      ${riderLocation ? `pts.push([${riderLocation.lat},${riderLocation.lng}]);` : ''}
+      if(pts.length>=2){ map.fitBounds(L.latLngBounds(pts), { padding:[60,60], maxZoom:16 }); }
+      else if(pts.length===1){ map.setView(pts[0], 15); }
+    }catch(e){}
+  }
+  fitAll();
   // Rider's live position — vehicle emoji marker that rotates in the
   // direction of travel. Created lazily and moved in-place from RN so we
   // don't rebuild the map on every location tick.
@@ -237,14 +249,18 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
         var coords=route.geometry.coordinates.map(function(c){return [c[1],c[0]];});
         routeLineBg = L.polyline(coords, { color:'${colors.primary}', weight:7, opacity:.95 }).addTo(map);
         routeLine   = L.polyline(coords, { color:'${colors.accent}',  weight:3.5 }).addTo(map);
-        map.fitBounds(routeLineBg.getBounds(), { padding:[50,50] });
+        try{
+          var rb=routeLineBg.getBounds();
+          ${riderLocation ? `rb.extend([${riderLocation.lat},${riderLocation.lng}]);` : ''}
+          map.fitBounds(rb, { padding:[60,60], maxZoom:16 });
+        }catch(e){ fitAll(); }
         addDistLabel(midpoint(coords), route.distance/1000);
         post({type:'route', distanceKm: route.distance/1000, durationMin: route.duration/60});
       }).catch(function(){
         // Fallback: straight line + straight-line distance.
         var pts=[[${pickup.lat},${pickup.lng}],[${drop.lat},${drop.lng}]];
         routeLineBg=L.polyline(pts,{color:'${colors.primary}',weight:6,opacity:.9,dashArray:'6,6'}).addTo(map);
-        map.fitBounds(routeLineBg.getBounds(),{padding:[50,50]});
+        fitAll();
         var km = map.distance(pts[0], pts[1]) / 1000;
         addDistLabel(midpoint(pts), km);
       });
@@ -378,9 +394,13 @@ export default function LeafletMap({
     } catch { }
   };
 
-  // Imperatively re-center when `center` changes without rebuilding the HTML
+  // Imperatively re-center when `center` changes without rebuilding the HTML.
+  // Skipped during an active trip (pickup + drop known) — there the map is
+  // auto-fitted to show both points and must not snap back to zoom 16 on
+  // every rider location tick.
   React.useEffect(() => {
     if (!ref.current) return;
+    if (pickup && drop) return;
     const js = `(function(){try{window.postMessage(JSON.stringify({type:'setCenter',lat:${center.lat},lng:${center.lng},zoom:16}));}catch(e){}})();true;`;
     ref.current.injectJavaScript(js);
   }, [center.lat, center.lng]);

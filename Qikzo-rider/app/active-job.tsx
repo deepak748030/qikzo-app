@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
-import { Phone, X, Navigation2, MapPin, ShieldAlert, Navigation, KeyRound, CheckCircle2, Coffee, Home as HomeIcon, PackageCheck } from 'lucide-react-native';
+import { Phone, X, Navigation2, MapPin, Navigation, KeyRound, CheckCircle2, Coffee, Home as HomeIcon, PackageCheck } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import LeafletMap from '@/components/LeafletMap';
 import StageStepper from '@/components/StageStepper';
@@ -285,21 +285,7 @@ export default function ActiveJob() {
                     <Text style={styles.topEmoji}>{cat.emoji}</Text>
                     <Text style={styles.topText}>{cat.label} · #{active.id}</Text>
                 </View>
-                <Pressable
-                    style={styles.sosBtn}
-                    onPress={() => sheet.show({
-                        variant: 'warning',
-                        title: 'Call SOS?',
-                        message: 'This will alert Qikzo safety and share your live location with local authorities.',
-                        confirmText: 'Call SOS',
-                        cancelText: 'Cancel',
-                        onConfirm: () => sheet.show({ variant: 'success', title: 'Help is on the way', message: 'Our safety team has been notified. Stay where you are.' }),
-                    })}
-                    hitSlop={6}
-                >
-                    <ShieldAlert size={16} color={colors.card} strokeWidth={2.4} />
-                    <Text style={styles.sosText}>SOS</Text>
-                </Pressable>
+                <View style={{ width: 36 }} />
             </View>
 
             {/* Bottom sheet */}
@@ -469,8 +455,6 @@ const styles = StyleSheet.create({
     topLabel: { flexDirection: 'row', gap: 6, alignItems: 'center' },
     topEmoji: { fontSize: 16 },
     topText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
-    sosBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 36, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.danger },
-    sosText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.card, letterSpacing: 0.5 },
     navBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card },
     navText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.primary, letterSpacing: 0.3 },
     sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '68%', backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },

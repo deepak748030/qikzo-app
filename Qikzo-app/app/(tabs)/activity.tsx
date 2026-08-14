@@ -73,6 +73,13 @@ export default function ActivityScreen() {
 
     const loading = initialLoading || (storeLoading && bookings.length === 0);
 
+    // Only the latest 8 bookings — activity is a quick recent-history glance,
+    // not a full archive. Newest first (store already sorts by createdAt).
+    const recent = React.useMemo(
+        () => [...bookings].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8),
+        [bookings]
+    );
+
     const renderItem = useCallback(({ item }: { item: Booking }) => (
         <ActivityRow item={item} />
     ), []);
@@ -115,7 +122,7 @@ export default function ActivityScreen() {
         <View style={styles.container}>
             <ScreenHeader title="Activity" showBack={false} />
             <FlatList
-                data={bookings}
+                data={recent}
                 keyExtractor={keyExtractor}
                 renderItem={renderItem}
                 getItemLayout={getItemLayout}

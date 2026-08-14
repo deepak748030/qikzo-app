@@ -37,11 +37,17 @@ const RIDE_META: Record<string, { eta: string; tag?: string }> = {
   cab: { eta: '3 min away' },
 };
 
+// Statuses that mean a booking is still in motion — drives the live
+// "active ride" banner on the home screen.
+const ACTIVE_STATUSES = ['Searching rider', 'Rider accepted', 'Arriving for pickup', 'Picked up', 'On the way'];
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const setDraft = useBooking((s) => s.setDraft);
   const draft = useBooking((s) => s.draft);
+  const bookings = useBooking((s) => s.bookings);
+  const hydrateFromServer = useBooking((s) => s.hydrateFromServer);
   const mode = useServiceMode((s) => s.mode);
   const setMode = useServiceMode((s) => s.setMode);
   const [selectedRide, setSelectedRide] = React.useState<string>(rideOptions[0].id);
@@ -90,7 +96,17 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => {
     useSavedPlaces.getState().hydrate();
-  }, []));
+    // Refresh bookings whenever Home gains focus — this is what surfaces an
+    // in-flight ride after the app is force-closed and reopened.
+    hydrateFromServer();
+  }, [hydrateFromServer]));
+
+  // Most recent still-active booking (if any) → live banner at the top.
+  const activeBooking = React.useMemo(() => {
+    const list = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status));
+    if (!list.length) return null;
+    return [...list].sort((a, b) => b.createdAt - a.createdAt)[0];
+  }, [bookings]);
 
   const openWithCategory = (categoryId: string, drop?: string, dropCoord?: { lat: number; lng: number } | null) => {
     const patch: Parameters<typeof setDraft>[0] = { mode, categoryId };
@@ -143,6 +159,27 @@ export default function HomeScreen() {
           </View>
         ) : (
         <>
+        {/* Live active-ride banner — tap to jump back into the trip. */}
+        {activeBooking ? (
+          <Pressable
+            style={styles.activeCard}
+            onPress={() => router.push({ pathname: '/booking-details', params: { id: activeBooking.id } })}
+          >
+            <View style={styles.activeIconWrap}>
+              <Zap size={16} color={colors.primaryForeground} strokeWidth={2.2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activeTitle} numberOfLines={1}>
+                {activeBooking.status} · #{activeBooking.id}
+              </Text>
+              <Text style={styles.activeSub} numberOfLines={1}>
+                {activeBooking.drop ? `To ${activeBooking.drop}` : 'Tap to view your ride'}
+              </Text>
+            </View>
+            <ChevronRight size={18} color={colors.primaryForeground} />
+          </Pressable>
+        ) : null}
+
         {/* "Where to?" primary CTA */}
         <Pressable style={styles.whereBtn} onPress={() => openMap('drop')}>
           <View style={styles.whereIcon}>
@@ -307,6 +344,19 @@ const styles = StyleSheet.create({
 
   toggleWrap: { marginTop: 10 },
 
+  activeCard: {
+    marginHorizontal: 6, marginTop: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: colors.primary, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.accent,
+    paddingHorizontal: 12, paddingVertical: 12,
+  },
+  activeIconWrap: {
+    width: 30, height: 30, borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center',
+  },
+  activeTitle: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.primaryForeground },
+  activeSub: { fontSize: 11, fontFamily: fonts.body, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
   whereBtn: {
     marginHorizontal: 6, marginTop: 12,
     flexDirection: 'row', alignItems: 'center', gap: 10,

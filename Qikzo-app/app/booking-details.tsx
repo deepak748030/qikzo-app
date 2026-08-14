@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar, KeyRound, ShieldCheck, Gift, Send, Phone, MapPin, Navigation2, Navigation, ShieldAlert } from 'lucide-react-native';
+import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar, KeyRound, ShieldCheck, Gift, Send, Phone, MapPin, Navigation2, Navigation } from 'lucide-react-native';
 import AnimatedIcon from '@/components/AnimatedIcon';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -123,9 +123,13 @@ export default function BookingDetailsScreen() {
         return () => { cancelled = true; };
     }, [serverBookingId, booking?.status]);
 
-    // Auto-open the rate modal once, when the trip flips to Delivered and no
-    // rating exists yet. User can Skip; we don't re-open automatically.
+    // Auto-open the rate modal once, when the trip flips to Delivered WHILE
+    // this screen is open and no rating exists yet. Opening an already
+    // delivered booking (e.g. from the Activity tab) shows only the details —
+    // no rating popups. User can still rate via the openers below.
+    const wasDeliveredOnMount = useRef(booking?.status === 'Delivered' || booking?.status === 'Cancelled');
     useEffect(() => {
+        if (wasDeliveredOnMount.current) return;
         if (booking?.status !== 'Delivered') return;
         if (autoOpenedRate) return;
         if (existingRating) return;
@@ -137,6 +141,7 @@ export default function BookingDetailsScreen() {
     // Then, once the rider sheet is out of the way, prompt for the order
     // review exactly once. Never both sheets at the same time.
     useEffect(() => {
+        if (wasDeliveredOnMount.current) return;
         if (booking?.status !== 'Delivered') return;
         if (rateModalOpen) return;
         if (autoOpenedOrder) return;
@@ -290,7 +295,7 @@ export default function BookingDetailsScreen() {
                 ? 'searching'
                 : booking.status === 'Rider accepted' && !acceptedDismissed
                     ? 'accepted'
-                    : booking.status === 'Delivered' && !deliveredDismissed
+                    : booking.status === 'Delivered' && !deliveredDismissed && !wasDeliveredOnMount.current
                         ? 'delivered'
                         : null;
 
@@ -385,21 +390,7 @@ export default function BookingDetailsScreen() {
                     <Text style={styles.topEmoji}>{catEmoji}</Text>
                     <Text style={styles.topText}>{catName} · #{booking.id}</Text>
                 </View>
-                <Pressable
-                    style={styles.sosBtn}
-                    onPress={() => sheet.show({
-                        variant: 'warning',
-                        title: 'Call SOS?',
-                        message: 'This will alert Qikzo safety and share your live trip with local authorities.',
-                        confirmText: 'Call SOS',
-                        cancelText: 'Cancel',
-                        onConfirm: () => sheet.show({ variant: 'success', title: 'Help is on the way', message: 'Our safety team has been notified. Stay where you are.' }),
-                    })}
-                    hitSlop={6}
-                >
-                    <ShieldAlert size={16} color={colors.card} strokeWidth={2.4} />
-                    <Text style={styles.sosText}>SOS</Text>
-                </Pressable>
+                <View style={{ width: 36 }} />
             </View>
 
             {/* Bottom sheet */}
@@ -700,8 +691,6 @@ const styles = StyleSheet.create({
     topLabel: { flexDirection: 'row', gap: 6, alignItems: 'center' },
     topEmoji: { fontSize: 16 },
     topText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
-    sosBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 36, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.danger },
-    sosText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.card, letterSpacing: 0.5 },
 
     sheet: {
         position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '72%',
