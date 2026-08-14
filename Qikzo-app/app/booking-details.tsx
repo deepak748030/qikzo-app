@@ -30,13 +30,17 @@ function vehicleFor(categoryId?: string): VehicleKind {
     return 'bike';
 }
 
-// Deterministic 4-digit pickup OTP derived from booking id so the same
-// code shows up on every render of the same trip.
-function pickupOtpFor(id: string): string {
+// Preview-only fallback delivery OTP (signed-out mock flow). Deterministic
+// from booking id — matches the rider app's preview formula. When signed in
+// the REAL code comes from the server trip (trip.deliveryOtp).
+function previewDeliveryOtpFor(id: string): string {
     let h = 0;
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
     return String(1000 + (h % 9000));
 }
+
+// Ride categories have no handover — no delivery OTP is shown for them.
+const RIDE_CATEGORY_IDS = ['bike', 'auto', 'cab', 'sedan', 'taxi', 'ride'];
 
 
 
@@ -84,6 +88,27 @@ export default function BookingDetailsScreen() {
     // Fetch any existing rating once delivered, so we don't let the user
     // rate the same booking twice.
     const serverBookingId = (booking as any)?.serverId as string | undefined;
+
+    // Delivery OTP — the REAL code lives on the server trip (customer-only;
+    // the server strips it from rider responses). Fetched once the order is
+    // picked up so the customer can read it out to the rider at drop-off.
+    const [serverDeliveryOtp, setServerDeliveryOtp] = useState<string | null>(null);
+    const otpVisibleStatuses = ['Picked up', 'On the way'];
+    useEffect(() => {
+        if (!serverBookingId) return;
+        if (!booking || !otpVisibleStatuses.includes(booking.status)) return;
+        if (!tokenStore.get().accessToken) return;
+        if (serverDeliveryOtp) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { tripsApi } = await import('@/lib/api/endpoints/trips');
+                const trip: any = await tripsApi.forBooking(serverBookingId);
+                if (!cancelled && trip?.deliveryOtp) setServerDeliveryOtp(String(trip.deliveryOtp));
+            } catch { /* banner falls back to nothing; retried on next status change */ }
+        })();
+        return () => { cancelled = true; };
+    }, [serverBookingId, booking?.status]);
     useEffect(() => {
         if (!serverBookingId) return;
         if (booking?.status !== 'Delivered') return;
@@ -255,8 +280,8 @@ export default function BookingDetailsScreen() {
     //    stuck on "guest is on the way").
     //  • Delivered  → 'delivered' celebration until user dismisses.
     // Once the rider taps "I've arrived" (status → Arriving for pickup) or
-    // any later stage, drop every full-screen overlay so the pickup OTP card
-    // on the details screen becomes visible immediately.
+    // any later stage, drop every full-screen overlay so the trip details
+    // (and, after pickup, the delivery OTP card) are visible immediately.
     const postArrivalStatuses = ['Arriving for pickup', 'Picked up', 'On the way', 'Delivered', 'Cancelled'];
     const overlayStage: Stage | null =
         postArrivalStatuses.includes(booking.status) && booking.status !== 'Delivered'
@@ -455,22 +480,26 @@ export default function BookingDetailsScreen() {
                     </View>
                 </View>
 
-                {/* Pickup OTP banner — appears when rider arrives */}
-                {booking.status === 'Arriving for pickup' ? (
+                {/* Delivery OTP banner — appears once the order is picked up.
+                    The rider must read this code back at drop-off to mark the
+                    order delivered. Ride bookings have no handover → no OTP. */}
+                {otpVisibleStatuses.includes(booking.status)
+                    && !RIDE_CATEGORY_IDS.includes(booking.categoryId)
+                    && (serverDeliveryOtp || !tokenStore.get().accessToken) ? (
                     <View style={styles.otpBanner}>
                         <View style={styles.otpBannerHead}>
                             <View style={styles.otpBannerIcon}>
                                 <ShieldCheck size={16} color={colors.primary} strokeWidth={2.2} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.otpBannerTitle}>Share this pickup OTP</Text>
+                                <Text style={styles.otpBannerTitle}>Delivery OTP</Text>
                                 <Text style={styles.otpBannerText}>
-                                    Read this code to {booking.rider?.name?.split(' ')[0] || 'your rider'} so they can start the trip.
+                                    Share this code with {booking.rider?.name?.split(' ')[0] || 'your rider'} only when your order is handed over. It confirms the delivery.
                                 </Text>
                             </View>
                         </View>
                         <View style={styles.otpDigitsRow}>
-                            {pickupOtpFor(serverBookingId || booking.id).split('').map((d, i) => (
+                            {(serverDeliveryOtp || (!tokenStore.get().accessToken ? previewDeliveryOtpFor(serverBookingId || booking.id) : '')).split('').map((d, i) => (
                                 <View key={i} style={styles.otpDigitBox}>
                                     <Text style={styles.otpDigitText}>{d}</Text>
                                 </View>

@@ -31,7 +31,8 @@ export const tripController = {
         const trip = await tripService.setStage(
             req.user!.id,
             req.params.id,
-            req.body.stage as TripStage
+            req.body.stage as TripStage,
+            req.body.otp
         );
         return ok(res, { trip }, 'Stage updated');
     }),

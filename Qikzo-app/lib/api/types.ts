@@ -150,6 +150,10 @@ export type Trip = {
     user: string;
     vehicle?: string | null;
     stage: TripStage;
+    // Delivery OTP — present only for the CUSTOMER (server strips it from
+    // rider-facing responses). Shown to the customer once the order is
+    // picked up; the rider asks for it at drop-off to complete the trip.
+    deliveryOtp?: string;
     assignedAt?: string;
     arrivingAt?: string | null;
     arrivedAt?: string | null;

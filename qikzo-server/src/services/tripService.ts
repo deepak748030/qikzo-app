@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Trip, { TRIP_STAGES, type TripStage } from '../models/Trip';
 import Booking, { type BookingStatus } from '../models/Booking';
 import Rider from '../models/Rider';
@@ -19,10 +20,12 @@ const STAGE_ORDER: TripStage[] = ['assigned', 'arriving', 'arrived', 'started', 
 
 // Mirror trip stage onto the customer-facing Booking.status string so the
 // existing customer polling logic keeps working without new fields.
-// NOTE: `started` (pickup OTP verified) maps to 'On the way' — the trip is
-// physically underway once the OTP handshake succeeds. The intermediate
-// 'Picked up' step is still recorded in booking.history below so the
-// customer timeline shows both milestones as done.
+// NOTE: `started` maps to 'On the way' — the trip is physically underway
+// once the rider picks the order up. The intermediate 'Picked up' step is
+// still recorded in booking.history below so the customer timeline shows
+// both milestones as done. Delivery handover is verified by a 4-digit
+// delivery OTP: the customer app shows it once the order is picked up and
+// the rider must submit it to move the trip to 'completed'.
 const BOOKING_STATUS_FOR_STAGE: Record<TripStage, BookingStatus | null> = {
     assigned: 'Rider accepted',
     arriving: 'Arriving for pickup',
@@ -49,12 +52,22 @@ export const tripService = {
     // (history, pricing breakdown, coupon/cancel metadata, GeoJSON sub-docs)
     // that neither the rider app nor the customer app renders. Trimming
     // them here cuts per-response payload ~55-70%.
+    // The delivery OTP is a customer-only secret: it is stripped from any
+    // response going to the rider so the rider can never complete a delivery
+    // without physically asking the customer for the code.
+    _stripOtpForRider<T extends { user?: any; deliveryOtp?: string } | null>(trip: T, userId: string): T {
+        if (trip && String((trip as any).user) !== String(userId)) {
+            delete (trip as any).deliveryOtp;
+        }
+        return trip;
+    },
+
     async listMine(userId: string, limit = 50) {
         const filter = await this._ownershipFilter(userId);
-        return Trip.find(filter)
+        const trips = await Trip.find(filter)
             .sort({ createdAt: -1 })
             .limit(Math.min(Math.max(limit, 1), 100))
-            .select('booking rider user stage distanceKm fare createdAt updatedAt')
+            .select('booking rider user stage distanceKm fare deliveryOtp createdAt updatedAt')
             .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone' })
             .populate({
                 path: 'booking',
@@ -62,6 +75,7 @@ export const tripService = {
                 populate: { path: 'user', select: 'name phone' },
             })
             .lean();
+        return trips.map((t) => this._stripOtpForRider(t as any, userId));
     },
 
     async getMine(userId: string, id: string) {
@@ -75,14 +89,14 @@ export const tripService = {
             })
             .lean();
         if (!trip) throw errors.notFound('Trip not found', 'TRIP_NOT_FOUND');
-        return trip;
+        return this._stripOtpForRider(trip as any, userId);
     },
 
     async getActive(userId: string) {
         const rider = await Rider.findOne({ user: userId }).select('_id').lean();
         const or: any[] = [{ user: userId }];
         if (rider?._id) or.push({ rider: rider._id });
-        return Trip.findOne({
+        const trip = await Trip.findOne({
             $or: or,
             stage: { $in: ['assigned', 'arriving', 'arrived', 'started'] },
         })
@@ -94,6 +108,7 @@ export const tripService = {
                 populate: { path: 'user', select: 'name phone' },
             })
             .lean();
+        return this._stripOtpForRider(trip as any, userId);
     },
 
     async getByBooking(userId: string, bookingId: string) {
@@ -133,6 +148,13 @@ export const tripService = {
         rider.available = false;
         await rider.save();
 
+        // Delivery OTP — generated once per trip, shown only to the customer.
+        // The rider must read it back at drop-off to complete the trip.
+        // Ride-mode bookings have no handover, so no OTP is issued.
+        const deliveryOtp = (booking as any).mode === 'ride'
+            ? ''
+            : String(crypto.randomInt(1000, 10000));
+
         const trip = await Trip.create({
             booking: booking._id,
             rider: rider._id,
@@ -140,6 +162,7 @@ export const tripService = {
             stage: 'assigned',
             distanceKm: booking.distanceKm,
             fare: booking.price,
+            deliveryOtp,
         });
 
         // Close any outstanding RideRequests for this booking.
@@ -184,7 +207,7 @@ export const tripService = {
      * Move an owned trip forward. Only forward transitions are allowed; the
      * booking status is mirrored and both sockets are notified.
      */
-    async setStage(userIdOfRider: string, tripId: string, nextStage: TripStage) {
+    async setStage(userIdOfRider: string, tripId: string, nextStage: TripStage, otp?: string) {
         if (!TRIP_STAGES.includes(nextStage)) {
             throw errors.badRequest('Invalid stage', 'INVALID_STAGE');
         }
@@ -200,6 +223,19 @@ export const tripService = {
             throw errors.badRequest('Trips can only move forward', 'STAGE_NOT_FORWARD');
         }
 
+        // Delivery OTP gate — a delivery trip can only be completed when the
+        // rider submits the 4-digit code the customer sees in their app.
+        // Ride-mode trips (no handover) carry no OTP and skip this check.
+        if (nextStage === 'completed' && (trip as any).deliveryOtp) {
+            const given = String(otp ?? '').trim();
+            if (!given) {
+                throw errors.badRequest('Delivery OTP is required to complete this trip', 'DELIVERY_OTP_REQUIRED');
+            }
+            if (given !== String((trip as any).deliveryOtp)) {
+                throw errors.badRequest('Incorrect delivery OTP', 'DELIVERY_OTP_INVALID');
+            }
+        }
+
         trip.stage = nextStage;
         const now = new Date();
         if (nextStage === 'arriving') trip.arrivingAt = now;
@@ -212,7 +248,7 @@ export const tripService = {
         if (bookingStatus) {
             const booking = await Booking.findById(trip.booking);
             if (booking) {
-                // When the pickup OTP is verified we jump straight to
+                // When the rider picks the order up we jump straight to
                 // 'On the way'. Record the intermediate 'Picked up' beat in
                 // history so the customer timeline shows both steps as done.
                 if (nextStage === 'started') {

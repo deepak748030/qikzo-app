@@ -4,16 +4,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShieldCheck, X } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 
-// Pickup OTP sheet — the customer reads out 4 digits from their app and the
-// rider types them in. Only a correct code advances the job to "Picked up".
+// Delivery OTP sheet — at drop-off the customer reads out the 4-digit code
+// from their app and the rider types it in. `onVerify` performs the actual
+// check (server-side when signed in) and must THROW on a wrong code; only a
+// successful verify marks the job as "Delivered".
 export default function OtpVerifySheet({
-    visible, expected, customerName, onClose, onVerified,
+    visible, customerName, onClose, onVerify,
 }: {
     visible: boolean;
-    expected: string;
     customerName: string;
     onClose: () => void;
-    onVerified: () => void;
+    onVerify: (code: string) => Promise<void>;
 }) {
     const insets = useSafeAreaInsets();
     const [digits, setDigits] = useState(['', '', '', '']);
@@ -46,19 +47,17 @@ export default function OtpVerifySheet({
         if (key === 'Backspace' && !digits[i] && i > 0) refs[i - 1].current?.focus();
     };
 
-    const verify = (code: string) => {
+    const verify = async (code: string) => {
         setChecking(true);
-        setTimeout(() => {
-            if (code === expected) {
-                setChecking(false);
-                onVerified();
-            } else {
-                setChecking(false);
-                setError('Incorrect OTP. Ask the customer again.');
-                setDigits(['', '', '', '']);
-                refs[0].current?.focus();
-            }
-        }, 400);
+        try {
+            await onVerify(code);
+            setChecking(false);
+        } catch (e: any) {
+            setChecking(false);
+            setError(e?.message || 'Incorrect OTP. Ask the customer again.');
+            setDigits(['', '', '', '']);
+            refs[0].current?.focus();
+        }
     };
 
     return (
@@ -83,9 +82,9 @@ export default function OtpVerifySheet({
                 <View style={styles.iconWrap}>
                     <ShieldCheck size={28} color={colors.primary} strokeWidth={2.2} />
                 </View>
-                <Text style={styles.title}>Verify pickup</Text>
+                <Text style={styles.title}>Verify delivery</Text>
                 <Text style={styles.sub}>
-                    Ask <Text style={styles.subBold}>{customerName}</Text> for the 4-digit code shown in their Qikzo app.
+                    Ask <Text style={styles.subBold}>{customerName}</Text> for the 4-digit delivery code shown in their Qikzo app.
                 </Text>
 
                 <View style={styles.boxes}>
@@ -111,7 +110,7 @@ export default function OtpVerifySheet({
                         <Text style={styles.checkingText}>Verifying…</Text>
                     </View>
                 ) : (
-                    <Text style={styles.hint}>Only start the trip after the code matches.</Text>
+                    <Text style={styles.hint}>Only mark delivered after the code matches.</Text>
                 )}
             </View>
             </ScrollView>

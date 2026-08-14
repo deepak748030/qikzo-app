@@ -154,7 +154,7 @@ type State = {
     fetchIncoming: () => Promise<IncomingJob[]>;
     acceptFromServer: (bookingId: string) => Promise<void>;
     declineFromServer: (bookingId: string, reason?: string) => Promise<void>;
-    advanceOnServer: () => Promise<void>;
+    advanceOnServer: (otp?: string) => Promise<void>;
     cancelOnServer: (reason: string) => Promise<void>;
     hydrateFromServer: () => Promise<void>;
     hydrateActiveFromServer: () => Promise<void>;
@@ -235,11 +235,13 @@ export const useJobs = create<State>((set, get) => ({
         try { await ridersApi.declineBooking(bookingId, reason); } catch { /* ignore */ }
     },
 
-    advanceOnServer: async () => {
+    advanceOnServer: async (otp?: string) => {
         const a = get().active;
         if (!a || !a.tripId) { get().advanceStage(); return; }
         const nextServerStage = UI_TO_SERVER_NEXT[a.stage];
-        const trip = await tripsApi.setStage(a.tripId, nextServerStage);
+        // `otp` is the delivery OTP the customer reads out at drop-off —
+        // required by the server when completing a delivery trip.
+        const trip = await tripsApi.setStage(a.tripId, nextServerStage, otp);
         if (trip.stage === 'completed') {
             const done = tripToCompleted(trip);
             set((s) => ({
