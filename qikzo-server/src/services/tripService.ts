@@ -62,6 +62,15 @@ export const tripService = {
         return trip;
     },
 
+    // Mutation responses go back to the RIDER — populate the refs and strip
+    // the delivery OTP from the serialized payload unconditionally.
+    async _riderSafe(trip: any) {
+        await trip.populate([{ path: 'rider' }, { path: 'booking', populate: { path: 'user', select: 'name phone' } }]);
+        const obj = trip.toObject({ virtuals: true });
+        delete obj.deliveryOtp;
+        return obj;
+    },
+
     async listMine(userId: string, limit = 50) {
         const filter = await this._ownershipFilter(userId);
         const trips = await Trip.find(filter)
@@ -196,7 +205,7 @@ export const tripService = {
             body: `${rider.name} is on the way for booking ${booking.code}.`,
             data: { bookingId: String(booking._id), tripId: String(trip._id), event: 'trip:assigned' },
         }).catch(() => {});
-        return trip.populate([{ path: 'rider' }, { path: 'booking', populate: { path: 'user', select: 'name phone' } }]);
+        return this._riderSafe(trip);
     },
 
     async declineBooking(userIdOfRider: string, bookingId: string, reason = '') {
@@ -223,16 +232,39 @@ export const tripService = {
             throw errors.badRequest('Trips can only move forward', 'STAGE_NOT_FORWARD');
         }
 
+        // Backfill: older delivery trips (created before the OTP feature)
+        // have no code yet. Generate one on any pre-completion stage move so
+        // the customer sees it in-app before the rider reaches drop-off.
+        if (nextStage !== 'completed' && !(trip as any).deliveryOtp) {
+            const bk = await Booking.findById(trip.booking).select('mode').lean();
+            if (bk && (bk as any).mode !== 'ride') {
+                (trip as any).deliveryOtp = String(crypto.randomInt(1000, 10000));
+            }
+        }
+
         // Delivery OTP gate — a delivery trip can only be completed when the
         // rider submits the 4-digit code the customer sees in their app.
         // Ride-mode trips (no handover) carry no OTP and skip this check.
-        if (nextStage === 'completed' && (trip as any).deliveryOtp) {
-            const given = String(otp ?? '').trim();
-            if (!given) {
-                throw errors.badRequest('Delivery OTP is required to complete this trip', 'DELIVERY_OTP_REQUIRED');
-            }
-            if (given !== String((trip as any).deliveryOtp)) {
-                throw errors.badRequest('Incorrect delivery OTP', 'DELIVERY_OTP_INVALID');
+        if (nextStage === 'completed') {
+            if (!(trip as any).deliveryOtp) {
+                // Legacy delivery trip with no code yet — mint one now, push
+                // it to the customer (trip:update triggers a refetch), and
+                // make the rider ask for it. Rides complete without OTP.
+                const bk = await Booking.findById(trip.booking).select('mode').lean();
+                if (bk && (bk as any).mode !== 'ride') {
+                    (trip as any).deliveryOtp = String(crypto.randomInt(1000, 10000));
+                    await trip.save();
+                    emitTripUpdate(trip);
+                    throw errors.badRequest('Delivery OTP is required to complete this trip', 'DELIVERY_OTP_REQUIRED');
+                }
+            } else {
+                const given = String(otp ?? '').trim();
+                if (!given) {
+                    throw errors.badRequest('Delivery OTP is required to complete this trip', 'DELIVERY_OTP_REQUIRED');
+                }
+                if (given !== String((trip as any).deliveryOtp)) {
+                    throw errors.badRequest('Incorrect delivery OTP', 'DELIVERY_OTP_INVALID');
+                }
             }
         }
 
@@ -313,7 +345,7 @@ export const tripService = {
                 }).catch(() => {});
             }
         }
-        return trip.populate([{ path: 'rider' }, { path: 'booking', populate: { path: 'user', select: 'name phone' } }]);
+        return this._riderSafe(trip);
     },
 
     async cancelByRider(userIdOfRider: string, tripId: string, reason = '') {
@@ -352,7 +384,7 @@ export const tripService = {
                 data: { bookingId: String(trip.booking), tripId: String(trip._id), event: 'trip:cancelled' },
             }).catch(() => {});
         }
-        return trip.populate([{ path: 'rider' }, { path: 'booking', populate: { path: 'user', select: 'name phone' } }]);
+        return this._riderSafe(trip);
     },
 };
 

@@ -100,15 +100,19 @@ export default function BookingDetailsScreen() {
         if (!tokenStore.get().accessToken) return;
         if (serverDeliveryOtp) return;
         let cancelled = false;
-        (async () => {
+        const fetchOtp = async () => {
             try {
                 const { tripsApi } = await import('@/lib/api/endpoints/trips');
                 const trip: any = await tripsApi.forBooking(serverBookingId);
                 if (!cancelled && trip?.deliveryOtp) setServerDeliveryOtp(String(trip.deliveryOtp));
-            } catch { /* banner falls back to nothing; retried on next status change */ }
-        })();
-        return () => { cancelled = true; };
-    }, [serverBookingId, booking?.status]);
+            } catch { /* retried below */ }
+        };
+        fetchOtp();
+        // Retry until the code lands — covers legacy trips where the server
+        // mints the OTP late (on a later stage move) rather than at accept.
+        const t = setInterval(() => { if (!cancelled) fetchOtp(); }, 8000);
+        return () => { cancelled = true; clearInterval(t); };
+    }, [serverBookingId, booking?.status, serverDeliveryOtp]);
     useEffect(() => {
         if (!serverBookingId) return;
         if (booking?.status !== 'Delivered') return;
