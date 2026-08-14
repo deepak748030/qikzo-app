@@ -71,7 +71,7 @@ export const tripService = {
             .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone' })
             .populate({
                 path: 'booking',
-                select: 'code mode categorySlug pickup.address pickup.lat pickup.lng drop.address drop.lat drop.lng notes recipientPhone payment distanceKm etaMin price status createdAt',
+                select: 'code mode categorySlug pickup.address pickup.lat pickup.lng extraPickups.address extraPickups.lat extraPickups.lng drop.address drop.lat drop.lng notes recipientPhone payment distanceKm etaMin price status createdAt',
                 populate: { path: 'user', select: 'name phone' },
             })
             .lean();

@@ -359,6 +359,10 @@ export default function BookingDetailsScreen() {
 
     const pickupCoord = booking.pickupCoord || null;
     const dropCoord = booking.dropCoord || null;
+    // Extra pickup stops (multi-pickup deliveries) — plotted as numbered pins.
+    const extraStopCoords = (booking.extraPickups || [])
+        .map((s) => s.coord)
+        .filter((c): c is { lat: number; lng: number } => !!c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
     const mapCenter = riderLoc || pickupCoord || dropCoord || { lat: 28.6139, lng: 77.2090 };
     const showMap = !!pickupCoord && booking.status !== 'Cancelled';
     const catEmoji = category?.emoji || '📦';
@@ -371,6 +375,7 @@ export default function BookingDetailsScreen() {
                 <LeafletMap
                     center={mapCenter}
                     pickup={pickupCoord}
+                    extraStops={extraStopCoords}
                     drop={dropCoord}
                     riderLocation={riderLoc && riderId ? { lat: riderLoc.lat, lng: riderLoc.lng } : null}
                     vehicleKind={riderId ? vehicleFor(booking.categoryId) : null}
@@ -441,9 +446,15 @@ export default function BookingDetailsScreen() {
                     </View>
                 ) : null}
 
-                {/* Stops — pickup / drop */}
+                {/* Stops — pickup / extra pickups / drop */}
                 <View style={styles.stops}>
-                    <StopRow icon="pickup" label="Pickup" value={booking.pickup} />
+                    <StopRow icon="pickup" label={(booking.extraPickups?.length || 0) > 0 ? 'Pickup 1' : 'Pickup'} value={booking.pickup} />
+                    {(booking.extraPickups || []).map((s, i) => (
+                        <React.Fragment key={i}>
+                            <View style={styles.stopDash} />
+                            <StopRow icon="pickup" label={`Pickup ${i + 2}`} value={s.address} />
+                        </React.Fragment>
+                    ))}
                     <View style={styles.stopDash} />
                     <StopRow icon="drop" label="Drop" value={booking.drop} />
                 </View>

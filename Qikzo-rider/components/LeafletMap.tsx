@@ -11,6 +11,9 @@ export type VehicleKind = 'bike' | 'auto' | 'car';
 type Props = {
   center: LatLng;
   pickup?: LatLng | null;
+  // Additional pickup stops between pickup and drop (multi-pickup
+  // deliveries). Rendered as numbered pins and routed through in order.
+  extraStops?: LatLng[] | null;
   drop?: LatLng | null;
   // Rider's own live location — when provided, a distinct marker is drawn and
   // a real-road route from rider → pickup is fetched.
@@ -37,6 +40,7 @@ type Props = {
 function buildHtml({
   center,
   pickup,
+  extraStops,
   drop,
   riderLocation,
   vehicleKind,
@@ -45,6 +49,10 @@ function buildHtml({
   showTraffic,
 }: Required<Pick<Props, 'center'>> & Partial<Props>) {
   const accent = pinColor || colors.accent;
+  // Valid extra pickup stops — routed pickup → stops[0..n] → drop.
+  const stops = (extraStops || []).filter(
+    (s) => s && Number.isFinite(s.lat) && Number.isFinite(s.lng)
+  );
   // Suppress the random-vehicle simulation whenever we're actively rendering
   // a real rider→pickup / pickup→drop trip. The randomness reads as "wrong".
   const traffic = showTraffic !== false && !riderLocation;
@@ -102,14 +110,25 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
       iconSize:[26,34], iconAnchor:[13,34]
     });
   }
+  // Numbered pin for extra pickup stops (2, 3, …) so multi-pickup
+  // deliveries show every stop, not just the first pickup.
+  function numPinIcon(color, n){
+    return L.divIcon({
+      className:'',
+      html:'<svg width="26" height="34" viewBox="0 0 30 38"><path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 23 15 23s15-12 15-23C30 6.7 23.3 0 15 0z" fill="'+color+'"/><circle cx="15" cy="15" r="8" fill="#fff"/><text x="15" y="19" text-anchor="middle" font-size="11" font-weight="700" fill="'+color+'">'+n+'</text></svg>',
+      iconSize:[26,34], iconAnchor:[13,34]
+    });
+  }
   ${pickup ? `L.marker([${pickup.lat},${pickup.lng}], { icon: pinIcon('${colors.accent}') }).addTo(map);` : ''}
+  ${stops.map((s, i) => `L.marker([${s.lat},${s.lng}], { icon: numPinIcon('${colors.accent}', ${i + 2}) }).addTo(map);`).join('\n  ')}
   ${drop ? `L.marker([${drop.lat},${drop.lng}], { icon: pinIcon('${colors.foreground}') }).addTo(map);` : ''}
-  // Auto-fit: zoom so every known point (pickup, drop, rider) is visible
-  // without the rider having to pinch-zoom out. Re-used after route load too.
+  // Auto-fit: zoom so every known point (pickup, extra stops, drop, rider)
+  // is visible without the rider having to pinch-zoom out.
   function fitAll(){
     try{
       var pts=[];
       ${pickup ? `pts.push([${pickup.lat},${pickup.lng}]);` : ''}
+      ${stops.map((s) => `pts.push([${s.lat},${s.lng}]);`).join('\n      ')}
       ${drop ? `pts.push([${drop.lat},${drop.lng}]);` : ''}
       ${riderLocation ? `pts.push([${riderLocation.lat},${riderLocation.lng}]);` : ''}
       if(pts.length>=2){ map.fitBounds(L.latLngBounds(pts), { padding:[60,60], maxZoom:16 }); }
@@ -241,8 +260,10 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
   }
   ${pickup && drop ? `
     (function(){
-      var a=[${pickup.lng},${pickup.lat}], b=[${drop.lng},${drop.lat}];
-      var url='https://router.project-osrm.org/route/v1/driving/'+a.join(',')+';'+b.join(',')+'?overview=full&geometries=geojson&steps=false';
+      // Waypoints: pickup → extra pickups (in order) → drop. OSRM accepts
+      // multiple semicolon-separated coords and routes through all of them.
+      var wps=[[${pickup.lng},${pickup.lat}]${stops.map((s) => `,[${s.lng},${s.lat}]`).join('')},[${drop.lng},${drop.lat}]];
+      var url='https://router.project-osrm.org/route/v1/driving/'+wps.map(function(w){return w.join(',');}).join(';')+'?overview=full&geometries=geojson&steps=false';
       fetch(url).then(function(r){return r.json();}).then(function(d){
         if(!d || !d.routes || !d.routes[0]){ throw new Error('no route'); }
         var route=d.routes[0];
@@ -257,11 +278,11 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
         addDistLabel(midpoint(coords), route.distance/1000);
         post({type:'route', distanceKm: route.distance/1000, durationMin: route.duration/60});
       }).catch(function(){
-        // Fallback: straight line + straight-line distance.
-        var pts=[[${pickup.lat},${pickup.lng}],[${drop.lat},${drop.lng}]];
+        // Fallback: straight lines through every stop + summed distance.
+        var pts=wps.map(function(w){return [w[1],w[0]];});
         routeLineBg=L.polyline(pts,{color:'${colors.primary}',weight:6,opacity:.9,dashArray:'6,6'}).addTo(map);
         fitAll();
-        var km = map.distance(pts[0], pts[1]) / 1000;
+        var km=0; for(var i=1;i<pts.length;i++){ km += map.distance(pts[i-1], pts[i]) / 1000; }
         addDistLabel(midpoint(pts), km);
       });
     })();
@@ -372,17 +393,18 @@ ${pickerMode ? `<div class="pulse"></div><div class="pin-center"><svg width="30"
 }
 
 export default function LeafletMap({
-  center, pickup, drop, riderLocation, vehicleKind, pickerMode, pinColor, showTraffic, onCenterChange, onReady, onRoute, style,
+  center, pickup, extraStops, drop, riderLocation, vehicleKind, pickerMode, pinColor, showTraffic, onCenterChange, onReady, onRoute, style,
 }: Props) {
   const ref = useRef<WebView>(null);
   // Rebuild the HTML only when the rider location FIRST becomes available
   // (so the rider→pickup route is drawn once). Ongoing location updates are
   // pushed imperatively via `moveRider` to avoid resetting the map.
   const hasRiderLocation = !!(riderLocation && pickup);
+  const stopsKey = (extraStops || []).map((s) => `${s.lat},${s.lng}`).join('|');
   const html = useMemo(
-    () => buildHtml({ center, pickup, drop, riderLocation, vehicleKind, pickerMode, pinColor, showTraffic }),
+    () => buildHtml({ center, pickup, extraStops, drop, riderLocation, vehicleKind, pickerMode, pinColor, showTraffic }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, showTraffic, hasRiderLocation]
+    [pickerMode, pickup?.lat, pickup?.lng, drop?.lat, drop?.lng, stopsKey, showTraffic, hasRiderLocation]
   );
 
   const onMessage = (e: WebViewMessageEvent) => {

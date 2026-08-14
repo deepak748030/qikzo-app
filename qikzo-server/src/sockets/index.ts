@@ -162,6 +162,7 @@ export function emitJobOffer(booking: any, riderUserIds: string[] = []): void {
         // Slim pickup/drop — drop the GeoJSON `location` wrapper (rider app
         // uses only address + lat + lng).
         pickup: slimPoint(booking.pickup),
+        extraPickups: Array.isArray(booking.extraPickups) ? booking.extraPickups.map(slimPoint) : [],
         drop: slimPoint(booking.drop),
         distanceKm: booking.distanceKm,
         etaMin: booking.etaMin,

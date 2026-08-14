@@ -47,6 +47,11 @@ function customerNameOf(u: any): string {
     return raw;
 }
 
+function extraPickupsOf(b: any): { address: string; coord: { lat: number; lng: number } | null }[] {
+    if (!Array.isArray(b?.extraPickups)) return [];
+    return b.extraPickups.map((p: any) => ({ address: p?.address || '—', coord: coordOf(p) }));
+}
+
 function bookingToIncomingJob(b: any): IncomingJob {
     const cat = CATEGORY_FROM_SLUG[b.categorySlug] || 'parcel';
     return {
@@ -55,6 +60,7 @@ function bookingToIncomingJob(b: any): IncomingJob {
         customerPhone: (b.user && typeof b.user === 'object' ? String(b.user.phone || '') : '') || b.recipientPhone || '',
         category: cat,
         pickup: b.pickup?.address || '—',
+        extraPickups: extraPickupsOf(b),
         drop: b.drop?.address || '—',
         distanceKm: Number(b.distanceKm) || 0,
         etaMin: Number(b.etaMin) || 0,
@@ -93,6 +99,7 @@ function tripToActive(t: Trip): ActiveJob {
         customerPhone: (b?.user && typeof b.user === 'object' ? String((b.user as any).phone || '') : '') || b?.recipientPhone || '',
         category: cat,
         pickup: b?.pickup?.address || '—',
+        extraPickups: extraPickupsOf(b),
         drop: b?.drop?.address || '—',
         distanceKm: Number(t.distanceKm) || Number(b?.distanceKm) || 0,
         etaMin: Number(b?.etaMin) || 0,

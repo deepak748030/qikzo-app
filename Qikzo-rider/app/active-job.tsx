@@ -254,6 +254,10 @@ export default function ActiveJob() {
     // yet (fresh mount, permissions denied). NEVER renders random vehicles.
     const pickupCoord = active.pickupCoord ?? null;
     const dropCoord = active.dropCoord ?? null;
+    // Extra pickup stops (multi-pickup deliveries) — numbered pins on the map.
+    const extraStopCoords = (active.extraPickups || [])
+        .map((s) => s.coord)
+        .filter((c): c is { lat: number; lng: number } => !!c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
     const mapCenter = riderLoc ?? pickupCoord ?? dropCoord ?? FALLBACK_CENTER;
 
     // Rider's own vehicle drives the marker shown in both apps. Map the
@@ -268,6 +272,7 @@ export default function ActiveJob() {
             <LeafletMap
                 center={mapCenter}
                 pickup={pickupCoord}
+                extraStops={extraStopCoords}
                 drop={dropCoord}
                 riderLocation={riderLoc}
                 vehicleKind={vehicleKind}
@@ -315,7 +320,13 @@ export default function ActiveJob() {
                 </View>
 
                 <View style={styles.stops}>
-                    <StopRow icon="pickup" label="Pickup" value={active.pickup} onNavigate={() => sheet.show({ variant: 'info', title: 'Opening navigation', message: 'Turn-by-turn directions will open in your default maps app.' })} />
+                    <StopRow icon="pickup" label={(active.extraPickups?.length || 0) > 0 ? 'Pickup 1' : 'Pickup'} value={active.pickup} onNavigate={() => sheet.show({ variant: 'info', title: 'Opening navigation', message: 'Turn-by-turn directions will open in your default maps app.' })} />
+                    {(active.extraPickups || []).map((s, i) => (
+                        <React.Fragment key={i}>
+                            <View style={styles.stopDash} />
+                            <StopRow icon="pickup" label={`Pickup ${i + 2}`} value={s.address} onNavigate={() => sheet.show({ variant: 'info', title: 'Opening navigation', message: 'Turn-by-turn directions will open in your default maps app.' })} />
+                        </React.Fragment>
+                    ))}
                     <View style={styles.stopDash} />
                     <StopRow icon="drop" label="Drop" value={active.drop} onNavigate={() => sheet.show({ variant: 'info', title: 'Opening navigation', message: 'Turn-by-turn directions will open in your default maps app.' })} />
                 </View>

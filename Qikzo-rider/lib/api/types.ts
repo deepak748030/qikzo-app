@@ -78,6 +78,9 @@ export type Booking = {
     categorySlug: string;
     vehicleTypeSlug?: string;
     pickup: Point;
+    // Additional pickup stops (multi-pickup deliveries). Route order is
+    // pickup → extraPickups[0..n] → drop.
+    extraPickups?: Point[];
     drop: Point;
     notes?: string;
     recipientPhone?: string;

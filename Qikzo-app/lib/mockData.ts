@@ -42,6 +42,9 @@ export type Booking = {
   drop: string;
   pickupCoord?: { lat: number; lng: number } | null;
   dropCoord?: { lat: number; lng: number } | null;
+  // Additional pickup stops (multi-pickup deliveries). Route order is
+  // pickup → extraPickups[0..n] → drop.
+  extraPickups?: { address: string; coord?: { lat: number; lng: number } | null }[];
   notes: string;
   recipientPhone?: string;
   payment: 'cash' | 'upi' | 'wallet';

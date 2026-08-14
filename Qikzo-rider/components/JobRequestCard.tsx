@@ -47,7 +47,13 @@ export default function JobRequestCard({ job, onAccept, onDecline, accepting }: 
             </View>
 
             <View style={styles.stops}>
-                <Stop icon="pickup" label="Pickup" value={job.pickup} />
+                <Stop icon="pickup" label={(job.extraPickups?.length || 0) > 0 ? 'Pickup 1' : 'Pickup'} value={job.pickup} />
+                {(job.extraPickups || []).map((s, i) => (
+                    <React.Fragment key={i}>
+                        <View style={styles.dash} />
+                        <Stop icon="pickup" label={`Pickup ${i + 2}`} value={s.address} />
+                    </React.Fragment>
+                ))}
                 <View style={styles.dash} />
                 <Stop icon="drop" label="Drop" value={job.drop} />
             </View>
