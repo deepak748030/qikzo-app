@@ -877,5 +877,3 @@ const styles = StyleSheet.create({
     footMeta: { fontSize: 11, color: colors.mutedForeground, fontFamily: fonts.body, marginTop: 2 },
     confirmBtn: { flex: 1.2 },
 });
-x: 1.2 },
-});
