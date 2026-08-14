@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Phone, Star, MapPin, Navigation2, IndianRupee, Clock, User, CircleCheck, CircleX } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
+import LeafletMap from '@/components/LeafletMap';
 import { tripsApi } from '@/lib/api/endpoints/trips';
 import { ratingsApi } from '@/lib/api/endpoints/ratings';
 import type { Trip, Booking } from '@/lib/api/types';
@@ -76,10 +77,40 @@ export default function TripDetails() {
     const stars = Number(rating?.stars || 0);
     const total = cancelled ? 0 : (Number(trip.fare || booking?.price || 0) + tip);
 
+    // Route map — mirrors the customer app's activity-details view. Plots
+    // pickup, every extra pickup stop, and drop with the road route.
+    const coordOf = (p: any): { lat: number; lng: number } | null => {
+        if (p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))) {
+            return { lat: Number(p.lat), lng: Number(p.lng) };
+        }
+        return null;
+    };
+    const pickupCoord = coordOf(booking?.pickup);
+    const dropCoord = coordOf(booking?.drop);
+    const extraStops = Array.isArray((booking as any)?.extraPickups)
+        ? ((booking as any).extraPickups as any[])
+        : [];
+    const extraStopCoords = extraStops
+        .map(coordOf)
+        .filter((c): c is { lat: number; lng: number } => !!c);
+
     return (
         <View style={styles.container}>
             <ScreenHeader title="Trip details" />
             <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
+                {/* Route map — same as the customer app's booking details */}
+                {pickupCoord && dropCoord ? (
+                    <View style={styles.mapWrap}>
+                        <LeafletMap
+                            center={pickupCoord}
+                            pickup={pickupCoord}
+                            extraStops={extraStopCoords}
+                            drop={dropCoord}
+                            showTraffic={false}
+                            style={styles.map}
+                        />
+                    </View>
+                ) : null}
                 {/* Status banner */}
                 <View style={[styles.banner, cancelled ? styles.bannerCancel : styles.bannerDone]}>
                     {cancelled ? <CircleX size={22} color="#9B2226" /> : <CircleCheck size={22} color="#1B7A3E" />}
@@ -133,10 +164,22 @@ export default function TripDetails() {
                     <View style={styles.stopRow}>
                         <View style={[styles.dot, { backgroundColor: '#1B7A3E' }]} />
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.stopLabel}>Pickup</Text>
+                            <Text style={styles.stopLabel}>{extraStops.length > 0 ? 'Pickup 1' : 'Pickup'}</Text>
                             <Text style={styles.stopText}>{booking?.pickup?.address || '—'}</Text>
                         </View>
                     </View>
+                    {extraStops.map((s: any, i: number) => (
+                        <React.Fragment key={i}>
+                            <View style={styles.stopBar} />
+                            <View style={styles.stopRow}>
+                                <View style={[styles.dot, { backgroundColor: '#1B7A3E', opacity: 0.6 }]} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.stopLabel}>Pickup {i + 2}</Text>
+                                    <Text style={styles.stopText}>{s?.address || '—'}</Text>
+                                </View>
+                            </View>
+                        </React.Fragment>
+                    ))}
                     <View style={styles.stopBar} />
                     <View style={styles.stopRow}>
                         <MapPin size={14} color={colors.primary} />
@@ -217,6 +260,8 @@ function IconStat({ icon, label, value }: { icon: React.ReactNode; label: string
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    mapWrap: { height: 180, borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, marginBottom: 10 },
+    map: { flex: 1 },
     meta: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground },
     banner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: radius.md, borderWidth: 1, marginBottom: 10 },
     bannerDone: { backgroundColor: '#E8F7EE', borderColor: '#B7E4C7' },

@@ -2,8 +2,8 @@ import { http } from '../client';
 import type { Trip, TripStage } from '../types';
 
 export const tripsApi = {
-    async listMine(limit = 50): Promise<Trip[]> {
-        const res = await http.get<{ items: Trip[] }>('/trips', { query: { limit } });
+    async listMine(limit = 50, offset = 0): Promise<Trip[]> {
+        const res = await http.get<{ items: Trip[] }>('/trips', { query: { limit, offset } });
         return res.items;
     },
 

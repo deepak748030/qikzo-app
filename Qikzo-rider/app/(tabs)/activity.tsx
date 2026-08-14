@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Navigation2, ChevronRight } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
@@ -58,6 +58,9 @@ export default function Activity() {
     const completed = useJobs((s) => s.completed);
     const active = useJobs((s) => s.active);
     const storeLoading = useJobs((s) => s.loading);
+    const loadingMore = useJobs((s) => s.loadingMore);
+    const historyEnd = useJobs((s) => s.historyEnd);
+    const loadMoreFromServer = useJobs((s) => s.loadMoreFromServer);
     const hydrateFromServer = useJobs((s) => s.hydrateFromServer);
     const hydrateActiveFromServer = useJobs((s) => s.hydrateActiveFromServer);
     const loading = useInitialLoad();
@@ -153,6 +156,18 @@ export default function Activity() {
                 }
                 ItemSeparatorComponent={() => <View style={styles.sep} />}
                 contentContainerStyle={{ paddingBottom: 110 }}
+                // Infinite scroll — pull the next page as the rider nears the bottom.
+                onEndReached={() => loadMoreFromServer()}
+                onEndReachedThreshold={0.4}
+                ListFooterComponent={
+                    loadingMore ? (
+                        <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        </View>
+                    ) : historyEnd && completed.length > 0 ? (
+                        <Text style={styles.endText}>You're all caught up</Text>
+                    ) : null
+                }
                 ListEmptyComponent={
                     <View style={styles.empty}>
                         <Text style={styles.emptyTitle}>No trips yet</Text>
@@ -184,6 +199,7 @@ const styles = StyleSheet.create({
     badgeTextCancel: { color: '#9B2226' },
     sep: { height: 0, borderBottomWidth: 1, borderBottomColor: colors.divider },
     empty: { alignItems: 'center', paddingTop: 60, gap: 6 },
+    endText: { textAlign: 'center', paddingVertical: 16, fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground },
     emptyTitle: { fontSize: 14, fontFamily: fonts.displayBold, color: colors.foreground },
     emptySub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground },
     activeCard: {

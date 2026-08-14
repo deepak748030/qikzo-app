@@ -71,10 +71,11 @@ export const tripService = {
         return obj;
     },
 
-    async listMine(userId: string, limit = 50) {
+    async listMine(userId: string, limit = 50, offset = 0) {
         const filter = await this._ownershipFilter(userId);
         const trips = await Trip.find(filter)
             .sort({ createdAt: -1 })
+            .skip(Math.max(offset, 0))
             .limit(Math.min(Math.max(limit, 1), 100))
             .select('booking rider user stage distanceKm fare deliveryOtp createdAt updatedAt')
             .populate({ path: 'rider', select: 'name vehicle vehicleNo rating trips phone' })

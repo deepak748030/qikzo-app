@@ -73,12 +73,19 @@ export default function ActivityScreen() {
 
     const loading = initialLoading || (storeLoading && bookings.length === 0);
 
-    // Only the latest 8 bookings — activity is a quick recent-history glance,
-    // not a full archive. Newest first (store already sorts by createdAt).
-    const recent = React.useMemo(
-        () => [...bookings].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8),
+    // Infinite scrolling — render in pages of 10 and grow the window as the
+    // user nears the bottom. Newest first (store already sorts by createdAt).
+    const PAGE = 10;
+    const [visibleCount, setVisibleCount] = useState(PAGE);
+    const sorted = React.useMemo(
+        () => [...bookings].sort((a, b) => b.createdAt - a.createdAt),
         [bookings]
     );
+    const recent = React.useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
+    const hasMore = visibleCount < sorted.length;
+    const loadMore = useCallback(() => {
+        if (hasMore) setVisibleCount((c) => c + PAGE);
+    }, [hasMore]);
 
     const renderItem = useCallback(({ item }: { item: Booking }) => (
         <ActivityRow item={item} />
@@ -133,6 +140,14 @@ export default function ActivityScreen() {
                 updateCellsBatchingPeriod={40}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 24 }}
+                // Infinite scroll — reveal the next page as the user nears the bottom.
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.4}
+                ListFooterComponent={
+                    hasMore ? null : sorted.length > PAGE ? (
+                        <Text style={styles.endText}>You're all caught up</Text>
+                    ) : null
+                }
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             />
         </View>
@@ -189,6 +204,7 @@ const styles = StyleSheet.create({
         alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, marginBottom: 6,
     },
     emptyTitle: { fontSize: 16, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 8 },
+    endText: { textAlign: 'center', paddingVertical: 16, fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground },
     emptySub: { fontSize: 13, color: colors.mutedForeground, fontFamily: fonts.body, textAlign: 'center' },
     row: {
         flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 6,

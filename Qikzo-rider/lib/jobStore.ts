@@ -72,6 +72,9 @@ function bookingToIncomingJob(b: any): IncomingJob {
     };
 }
 
+// Page size for the infinite-scrolling trip history list.
+const PAGE_SIZE = 20;
+
 const SERVER_TO_UI_STAGE: Record<ServerTripStage, JobStage> = {
     assigned: 'Heading to pickup',
     arriving: 'Heading to pickup',
@@ -148,6 +151,10 @@ type State = {
     active: ActiveJob | null;
     completed: CompletedJob[];
     loading: boolean;
+    // Infinite-scroll pagination state for the trip history list.
+    loadingMore: boolean;
+    historyEnd: boolean;
+    loadMoreFromServer: () => Promise<void>;
 
     // Local-only setters (used by mock/preview flow)
     setOnline: (v: boolean) => void;
@@ -172,6 +179,8 @@ export const useJobs = create<State>((set, get) => ({
     active: null,
     completed: [],
     loading: false,
+    loadingMore: false,
+    historyEnd: false,
 
     // -------- Local (fallback / preview) --------
     setOnline: (v) => set({ online: v }),
@@ -272,13 +281,41 @@ export const useJobs = create<State>((set, get) => ({
         if (!accessToken) return;
         set({ loading: true });
         try {
-            const trips = await tripsApi.listMine(50);
+            const trips = await tripsApi.listMine(PAGE_SIZE, 0);
             const completed = trips.map(tripToCompleted).filter(Boolean) as CompletedJob[];
-            set({ completed });
+            // Fresh first page — reset the pagination cursor too.
+            set({ completed, historyEnd: trips.length < PAGE_SIZE, loadingMore: false });
         } catch {
             /* keep mock */
         } finally {
             set({ loading: false });
+        }
+    },
+
+    // Infinite scroll — fetch the next page of trip history and append.
+    // `historyEnd` flips once the server returns a short page so the list
+    // stops firing requests at the bottom.
+    loadMoreFromServer: async () => {
+        const { accessToken } = tokenStore.get();
+        if (!accessToken) return;
+        const s = get();
+        if (s.loading || s.loadingMore || s.historyEnd) return;
+        set({ loadingMore: true });
+        try {
+            const trips = await tripsApi.listMine(PAGE_SIZE, s.completed.length);
+            const next = trips.map(tripToCompleted).filter(Boolean) as CompletedJob[];
+            // De-dupe by trip id — offset pagination can overlap if a trip
+            // completed between page fetches.
+            const seen = new Set(s.completed.map((j) => String(j.tripId || j.id)));
+            const fresh = next.filter((j) => !seen.has(String(j.tripId || j.id)));
+            set({
+                completed: [...s.completed, ...fresh],
+                historyEnd: trips.length < PAGE_SIZE,
+            });
+        } catch {
+            /* keep current list */
+        } finally {
+            set({ loadingMore: false });
         }
     },
 
