@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, Pressable, FlatList, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
 import { MapPin } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
-import { useBooking } from '@/lib/bookingStore';
 import { catalogApi, type ServerBanner } from '@/lib/api/endpoints/catalog';
+import { openBannerAsPickup } from '@/lib/bannerPickup';
 
 // Horizontally scrollable, edge-to-edge banners with auto-scroll + infinite loop.
 // Data comes from the server (`/categories`, `/banners`) — no local mock — so
@@ -21,7 +20,6 @@ export default function PromoBanners({
 }: { userCoord?: { lat: number; lng: number } | null; categorySlug?: string; topGap?: number } = {}) {
 
     const { width } = useWindowDimensions();
-    const setDraft = useBooking((s) => s.setDraft);
     const listRef = useRef<FlatList<Banner>>(null);
     const indexRef = useRef(0);
     const pausedUntilRef = useRef(0);
@@ -55,8 +53,7 @@ export default function PromoBanners({
 
     const openBannerLocation = (b: Banner) => {
         if (!b.coord) return;
-        setDraft({ drop: b.address || b.title, dropCoord: b.coord });
-        router.push({ pathname: '/select-location', params: { field: 'drop' } });
+        openBannerAsPickup({ address: b.address || b.title, coord: b.coord });
     };
 
     // Start centered so the user can swipe either direction from the first tick.

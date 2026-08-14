@@ -26,6 +26,10 @@ const TripSchema = new Schema(
         vehicle: { type: Schema.Types.ObjectId, ref: 'Vehicle', default: null },
 
         stage: { type: String, enum: TRIP_STAGES, default: 'assigned', index: true },
+        // Delivery OTP — 4-digit code shown ONLY to the customer. The rider
+        // must read it back at drop-off to move the trip to 'completed'.
+        // Empty for ride-mode bookings (no handover to verify).
+        deliveryOtp: { type: String, default: '' },
         assignedAt: { type: Date, default: Date.now },
         arrivingAt: { type: Date, default: null },
         arrivedAt: { type: Date, default: null },

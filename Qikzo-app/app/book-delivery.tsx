@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Switch, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { Banknote, Wallet, CreditCard, Bike, ChevronRight, MapPin, Home, UserPlus, Camera, ImagePlus, X, Plus, Mic, MicOff } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,14 +12,19 @@ import Button from '@/components/Button';
 import BottomSheet from '@/components/BottomSheet';
 import PromoBanners from '@/components/PromoBanners';
 import { useSheet } from '@/lib/useSheet';
-import { categories, estimateTrip, savedPlaces } from '@/lib/mockData';
+import { categories } from '@/lib/mockData';
+import { useSavedPlaces } from '@/lib/savedPlacesStore';
 import AssetIcon from '@/components/AssetIcon';
-import { rideOptions, estimateRide } from '@/lib/serviceMode';
+import { rideOptions } from '@/lib/serviceMode';
 import { newBookingId, useBooking } from '@/lib/bookingStore';
 import { ApiError } from '@/lib/api/errors';
 import { tokenStore } from '@/lib/api/tokenStore';
 import { uploadFile } from '@/lib/api/endpoints/uploads';
 import { walletApi, type PayQuote } from '@/lib/api/endpoints/wallet';
+import { bookingsApi } from '@/lib/api/endpoints/bookings';
+import { estimateRoute } from '@/lib/estimate';
+import { MAX_EXTRA_PICKUPS } from '@/lib/bannerPickup';
+import type { BookingEstimate } from '@/lib/api/types';
 
 declare const require: (moduleName: string) => unknown;
 
@@ -46,13 +52,18 @@ export default function BookDeliveryScreen() {
     const speechSubscriptionsRef = useRef<Array<{ remove: () => void }>>([]);
 
     const isRide = draft.mode === 'ride';
+    const savedPlaces = useSavedPlaces((s) => s.places);
+
+    useFocusEffect(useCallback(() => {
+        useSavedPlaces.getState().hydrate();
+    }, []));
 
     // Wallet pay quote — server decides the money/bonus split and the cap.
     const [payQuote, setPayQuote] = useState<PayQuote | null>(null);
     const [quoting, setQuoting] = useState(false);
 
     const MAX_IMAGES = 4;
-    const MAX_EXTRA_PICKUPS = 3;
+    const [serverEst, setServerEst] = useState<BookingEstimate | null>(null);
 
     // Pick an image from the library OR the camera, upload it, and push the
     // returned absolute URL into the draft so it ships with the booking.
@@ -203,28 +214,61 @@ export default function BookDeliveryScreen() {
         setDraft({ extraPickups: draft.extraPickups.filter((_, i) => i !== idx) });
     };
 
-    const trip = useMemo(() => {
+    const localTrip = useMemo(() => {
         if (!draft.pickup.trim() || !draft.drop.trim()) return null;
-        // Build the full leg list: Pickup → Pickup2 → ... → Drop.
-        const stops = [draft.pickup, ...draft.extraPickups.map((s) => s.address).filter((a) => a.trim()), draft.drop];
-        let distanceKm = 0;
-        let etaMin = 0;
-        let base = 0, perKm = 0;
-        for (let i = 0; i < stops.length - 1; i++) {
-            const leg = estimateTrip(stops[i], stops[i + 1]);
-            distanceKm += leg.distanceKm;
-            etaMin += leg.etaMin;
-            base = leg.base;
-            perKm = leg.perKm;
+        const stops = draft.extraPickups
+            .filter((s) => s.address.trim())
+            .map((s) => ({ address: s.address, coord: s.coord }));
+        // Same formula the server uses on create — never the old string-hash
+        // or the ride-chip mock rates (those were why even 1 pickup looked wrong).
+        return estimateRoute({
+            pickup: draft.pickup,
+            drop: draft.drop,
+            pickupCoord: draft.pickupCoord,
+            dropCoord: draft.dropCoord,
+            stops,
+        });
+    }, [draft.pickup, draft.drop, draft.pickupCoord, draft.dropCoord, draft.extraPickups]);
+
+    // Server quote uses the same haversine + extra-pickup legs as create,
+    // so this screen matches booking-details.
+    useEffect(() => {
+        if (!draft.pickup.trim() || !draft.drop.trim() || !tokenStore.get().accessToken) {
+            setServerEst(null);
+            return;
         }
-        const price = Math.round(base + distanceKm * perKm);
-        const baseTrip = { distanceKm, etaMin, price, base, perKm };
-        if (isRide) {
-            const r = estimateRide(distanceKm, draft.categoryId);
-            return { ...baseTrip, ...r };
-        }
-        return baseTrip;
-    }, [draft.pickup, draft.drop, draft.extraPickups, draft.categoryId, isRide]);
+        let cancelled = false;
+        const t = setTimeout(() => {
+            bookingsApi.estimate({
+                pickup: {
+                    address: draft.pickup.trim(),
+                    lat: draft.pickupCoord?.lat ?? null,
+                    lng: draft.pickupCoord?.lng ?? null,
+                },
+                drop: {
+                    address: draft.drop.trim(),
+                    lat: draft.dropCoord?.lat ?? null,
+                    lng: draft.dropCoord?.lng ?? null,
+                },
+                extraPickups: draft.extraPickups
+                    .filter((s) => s.address.trim())
+                    .map((s) => ({
+                        address: s.address.trim(),
+                        lat: s.coord?.lat ?? null,
+                        lng: s.coord?.lng ?? null,
+                    })),
+            }).then((est) => {
+                if (!cancelled) setServerEst(est);
+            }).catch(() => {
+                if (!cancelled) setServerEst(null);
+            });
+        }, 280);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [draft.pickup, draft.drop, draft.pickupCoord, draft.dropCoord, draft.extraPickups]);
+
+    const trip = (!isRide && serverEst)
+        ? serverEst
+        : localTrip;
 
     const openMap = (field: 'pickup' | 'drop') => {
         router.push({ pathname: '/select-location', params: { field } });
@@ -317,8 +361,7 @@ export default function BookDeliveryScreen() {
 
         // Fallback: local-only booking (no server session).
         const id = newBookingId();
-        addBooking({
-            id,
+        addBooking({d,
             categoryId: draft.categoryId,
             pickup: draft.pickup.trim(),
             drop: draft.drop.trim(),
@@ -465,18 +508,33 @@ export default function BookDeliveryScreen() {
                         </Pressable>
                     ) : null}
 
-                    {/* Saved places shortcut */}
+                    {/* Saved places shortcut — server-backed, never mock */}
                     <View style={styles.savedRow}>
                         {savedPlaces.map((p) => (
                             <Pressable
                                 key={p.id}
                                 style={styles.savedChip}
-                                onPress={() => setDraft({ drop: p.address, dropCoord: null })}
+                                onPress={() => setDraft({ drop: p.address, dropCoord: p.coord })}
                             >
                                 <Text style={{ fontSize: 12 }}>{p.emoji}</Text>
                                 <Text style={styles.savedChipText} numberOfLines={1}>Drop at {p.label}</Text>
                             </Pressable>
                         ))}
+                        {savedPlaces.length === 0 ? (
+                            <Pressable
+                                style={styles.savedChip}
+                                onPress={() => {
+                                    if (!tokenStore.get().accessToken) {
+                                        sheet.show({ variant: 'error', title: 'Sign in required', message: 'Please sign in to save addresses.' });
+                                        return;
+                                    }
+                                    router.push('/addresses');
+                                }}
+                            >
+                                <Plus size={12} color={colors.foreground} />
+                                <Text style={styles.savedChipText}>Add address</Text>
+                            </Pressable>
+                        ) : null}
                     </View>
                 </View>
 

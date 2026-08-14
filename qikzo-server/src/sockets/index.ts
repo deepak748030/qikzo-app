@@ -57,6 +57,21 @@ export function initSockets(httpServer: http.Server, opts: { corsOrigin?: string
             // Non-rider users (customers) join a shared room so they receive
             // live nearby-vehicle location fanout for the map.
             socket.join('customers');
+            // Rider-app users often carry role 'customer' in their JWT (the
+            // User record is created as customer; role isn't flipped on rider
+            // onboarding). If a Rider record exists for this user, ALSO join
+            // the rider rooms — otherwise job:cancelled / trip:update fanout
+            // never reaches the rider app and cancellations look stuck.
+            const uid = socket.userId;
+            void import('../models/Rider')
+                .then(({ default: Rider }) => Rider.exists({ user: uid }))
+                .then((exists) => {
+                    if (exists && socket.connected) {
+                        socket.join(`rider:${uid}`);
+                        socket.join('riders');
+                    }
+                })
+                .catch(() => {});
         }
         socket.on('booking:subscribe', (bookingId: string) => {
             if (bookingId) socket.join(`booking:${bookingId}`);
@@ -147,6 +162,7 @@ export function emitJobOffer(booking: any, riderUserIds: string[] = []): void {
         // Slim pickup/drop — drop the GeoJSON `location` wrapper (rider app
         // uses only address + lat + lng).
         pickup: slimPoint(booking.pickup),
+        extraPickups: Array.isArray(booking.extraPickups) ? booking.extraPickups.map(slimPoint) : [],
         drop: slimPoint(booking.drop),
         distanceKm: booking.distanceKm,
         etaMin: booking.etaMin,

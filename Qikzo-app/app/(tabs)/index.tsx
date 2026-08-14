@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, FlatList } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
-  Search, Bell, ChevronRight, Clock, Zap,
+  Search, Bell, ChevronRight, Clock, Zap, Plus,
   Home as HomeIcon, Building2, Heart, Bookmark, LucideIcon,
 } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import Brand from '@/components/Brand';
 import ServiceToggle from '@/components/ServiceToggle';
 import AssetIcon from '@/components/AssetIcon';
-import { categories as mockCategories, savedPlaces as mockSavedPlaces, DeliveryCategory, SavedPlace } from '@/lib/mockData';
+import { categories as mockCategories, DeliveryCategory } from '@/lib/mockData';
 import { useBooking } from '@/lib/bookingStore';
 import { useServiceMode, rideOptions } from '@/lib/serviceMode';
 import PromoBanners from '@/components/PromoBanners';
@@ -18,14 +19,15 @@ import ExploreBanners from '@/components/ExploreBanners';
 import Skeleton, { SkeletonCard } from '@/components/Skeleton';
 import { useInitialLoad } from '@/lib/useInitialLoad';
 import { catalogApi } from '@/lib/api/endpoints/catalog';
-import { placesApi } from '@/lib/api/endpoints/places';
 import { tokenStore } from '@/lib/api/tokenStore';
+import { useSavedPlaces } from '@/lib/savedPlacesStore';
 import * as Location from 'expo-location';
 
 const PLACE_ICON: Record<string, LucideIcon> = {
   home: HomeIcon,
   office: Building2,
   mom: Heart,
+  "mom's place": Heart,
 };
 
 // Faux ETAs so the ride list feels alive without a live backend.
@@ -35,21 +37,27 @@ const RIDE_META: Record<string, { eta: string; tag?: string }> = {
   cab: { eta: '3 min away' },
 };
 
+// Statuses that mean a booking is still in motion — drives the live
+// "active ride" banner on the home screen.
+const ACTIVE_STATUSES = ['Searching rider', 'Rider accepted', 'Arriving for pickup', 'Picked up', 'On the way'];
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const setDraft = useBooking((s) => s.setDraft);
   const draft = useBooking((s) => s.draft);
+  const bookings = useBooking((s) => s.bookings);
+  const hydrateFromServer = useBooking((s) => s.hydrateFromServer);
   const mode = useServiceMode((s) => s.mode);
   const setMode = useServiceMode((s) => s.setMode);
   const [selectedRide, setSelectedRide] = React.useState<string>(rideOptions[0].id);
 
   const loading = useInitialLoad();
 
-  // Server-backed catalog + saved places, with mock fallback when signed out
-  // or if the request fails so the UI never goes blank.
+  // Server-backed catalog. Saved places come from the user's address book —
+  // never the mock Home/Office/Mom chips.
   const [categories, setCategories] = useState<DeliveryCategory[]>(mockCategories);
-  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>(mockSavedPlaces);
+  const savedPlaces = useSavedPlaces((s) => s.places);
 
   // Best-effort device coord — used to filter promo/explore banners by
   // polygon proximity. Silent failure keeps the home screen usable when
@@ -83,29 +91,29 @@ export default function HomeScreen() {
       })
       .catch(() => { /* keep mock */ });
 
-    const { accessToken } = tokenStore.get();
-    if (accessToken) {
-      placesApi.list()
-        .then((items) => {
-          if (cancelled) return;
-          if (items?.length) {
-            setSavedPlaces(items.map((p) => ({
-              id: p._id,
-              label: p.label,
-              address: p.address,
-              emoji: p.emoji || '📍',
-            })));
-          }
-        })
-        .catch(() => { /* keep mock */ });
-    }
-
     return () => { cancelled = true; };
   }, []);
 
-  const openWithCategory = (categoryId: string, drop?: string) => {
+  useFocusEffect(useCallback(() => {
+    useSavedPlaces.getState().hydrate();
+    // Refresh bookings whenever Home gains focus — this is what surfaces an
+    // in-flight ride after the app is force-closed and reopened.
+    hydrateFromServer();
+  }, [hydrateFromServer]));
+
+  // Most recent still-active booking (if any) → live banner at the top.
+  const activeBooking = React.useMemo(() => {
+    const list = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status));
+    if (!list.length) return null;
+    return [...list].sort((a, b) => b.createdAt - a.createdAt)[0];
+  }, [bookings]);
+
+  const openWithCategory = (categoryId: string, drop?: string, dropCoord?: { lat: number; lng: number } | null) => {
     const patch: Parameters<typeof setDraft>[0] = { mode, categoryId };
-    if (drop) patch.drop = drop;
+    if (drop) {
+      patch.drop = drop;
+      patch.dropCoord = dropCoord ?? null;
+    }
     setDraft(patch);
     router.push('/book-delivery');
   };
@@ -151,6 +159,27 @@ export default function HomeScreen() {
           </View>
         ) : (
         <>
+        {/* Live active-ride banner — tap to jump back into the trip. */}
+        {activeBooking ? (
+          <Pressable
+            style={styles.activeCard}
+            onPress={() => router.push({ pathname: '/booking-details', params: { id: activeBooking.id } })}
+          >
+            <View style={styles.activeIconWrap}>
+              <Zap size={16} color={colors.primaryForeground} strokeWidth={2.2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activeTitle} numberOfLines={1}>
+                {activeBooking.status} · #{activeBooking.id}
+              </Text>
+              <Text style={styles.activeSub} numberOfLines={1}>
+                {activeBooking.drop ? `To ${activeBooking.drop}` : 'Tap to view your ride'}
+              </Text>
+            </View>
+            <ChevronRight size={18} color={colors.primaryForeground} />
+          </Pressable>
+        ) : null}
+
         {/* "Where to?" primary CTA */}
         <Pressable style={styles.whereBtn} onPress={() => openMap('drop')}>
           <View style={styles.whereIcon}>
@@ -167,7 +196,7 @@ export default function HomeScreen() {
           <ChevronRight size={18} color={'rgba(255,255,255,0.9)'} />
         </Pressable>
 
-        {/* Saved places — quick chips */}
+        {/* Saved places — real addresses from the user's profile */}
         <FlatList
           horizontal
           data={savedPlaces}
@@ -175,10 +204,19 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={{ width: 6 }} />}
           contentContainerStyle={styles.placesRow}
+          ListEmptyComponent={tokenStore.get().accessToken ? (
+            <Pressable style={styles.placeChip} onPress={() => router.push('/addresses')}>
+              <Plus size={13} color={colors.foreground} strokeWidth={1.8} />
+              <Text style={styles.placeLabel}>Add address</Text>
+            </Pressable>
+          ) : null}
           renderItem={({ item }) => {
-            const PIcon = PLACE_ICON[item.id] || Bookmark;
+            const PIcon = PLACE_ICON[item.label.toLowerCase()] || Bookmark;
             return (
-              <Pressable style={styles.placeChip} onPress={() => openWithCategory(mode === 'ride' ? selectedRide : 'parcel', item.address)}>
+              <Pressable
+                style={styles.placeChip}
+                onPress={() => openWithCategory(mode === 'ride' ? selectedRide : 'parcel', item.address, item.coord)}
+              >
                 <PIcon size={13} color={colors.foreground} strokeWidth={1.8} />
                 <Text style={styles.placeLabel}>{item.label}</Text>
               </Pressable>
@@ -306,6 +344,19 @@ const styles = StyleSheet.create({
 
   toggleWrap: { marginTop: 10 },
 
+  activeCard: {
+    marginHorizontal: 6, marginTop: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: colors.primary, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.accent,
+    paddingHorizontal: 12, paddingVertical: 12,
+  },
+  activeIconWrap: {
+    width: 30, height: 30, borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center',
+  },
+  activeTitle: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.primaryForeground },
+  activeSub: { fontSize: 11, fontFamily: fonts.body, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
   whereBtn: {
     marginHorizontal: 6, marginTop: 12,
     flexDirection: 'row', alignItems: 'center', gap: 10,

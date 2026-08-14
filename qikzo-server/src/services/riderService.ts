@@ -252,7 +252,7 @@ export const riderService = {
         // else (history, pricing internals, coupon fields, cancel metadata,
         // GeoJSON sub-docs) is not rendered and is stripped from the payload
         // to keep the offer card fetch tiny.
-        const BOOKING_FIELDS = 'code user mode categorySlug vehicleTypeSlug pickup.address pickup.lat pickup.lng drop.address drop.lat drop.lng notes recipientPhone payment distanceKm etaMin price status createdAt';
+        const BOOKING_FIELDS = 'code user mode categorySlug vehicleTypeSlug pickup.address pickup.lat pickup.lng extraPickups.address extraPickups.lat extraPickups.lng drop.address drop.lat drop.lng notes recipientPhone payment distanceKm etaMin price status createdAt';
 
         if (hasLocation) {
             return Booking.find({

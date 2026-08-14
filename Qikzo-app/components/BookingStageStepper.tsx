@@ -24,11 +24,18 @@ function indexFor(status: BookingStatus): number {
 
 export default function BookingStageStepper({ status }: { status: BookingStatus }) {
     const idx = indexFor(status);
+    // Most customer statuses are PAST events — 'Rider accepted' means the
+    // acceptance already happened, 'Picked up'/'Delivered' likewise — so the
+    // matched step itself must render as TICKED. Only 'Arriving for pickup'
+    // is in-progress (rider still on the way), so that step stays active
+    // without a tick. Previously `done` was `i < idx` which left the current
+    // step unticked forever — including 'Delivered' at the very end.
+    const currentDone = status !== 'Arriving for pickup';
     return (
         <View style={styles.wrap}>
             {STEPS.map((s, i) => {
-                const done = i < idx;
-                const active = i === idx;
+                const done = i < idx || (i === idx && currentDone);
+                const active = i === idx && !done;
                 return (
                     <React.Fragment key={s.label}>
                         <View style={styles.slot}>

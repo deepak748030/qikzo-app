@@ -14,6 +14,7 @@ export { default as RideRequest } from './RideRequest';
 export { default as Trip } from './Trip';
 export { default as RideHistory } from './RideHistory';
 export { default as Category } from './Category';
+export { default as CoverageCity } from './Coverage';
 export { default as PromoBanner } from './PromoBanner';
 export { default as Promo } from './Promo';
 export { default as Coupon } from './Coupon';

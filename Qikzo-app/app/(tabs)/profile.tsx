@@ -19,6 +19,7 @@ type Item = { icon: any; label: string; route?: Href };
 
 const ITEMS: Item[] = [
   { icon: User, label: 'Personal information', route: '/personal-info' },
+  { icon: MapPin, label: 'Saved addresses', route: '/addresses' },
   { icon: Activity, label: 'My bookings', route: '/(tabs)/activity' },
   { icon: Bell, label: 'Notifications', route: '/notifications' },
   { icon: HelpCircle, label: 'Help & support', route: '/help-support' },

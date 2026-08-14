@@ -127,6 +127,9 @@ function mapBooking(b: ServerBooking): Booking & { serverId: string } {
         drop: b.drop?.address || '',
         pickupCoord: coordFromPoint(b.pickup),
         dropCoord: coordFromPoint(b.drop),
+        extraPickups: Array.isArray((b as any).extraPickups)
+            ? (b as any).extraPickups.map((p: any) => ({ address: p?.address || '', coord: coordFromPoint(p) }))
+            : [],
         notes: b.notes || '',
         recipientPhone: b.recipientPhone || undefined,
         payment: (b.payment as 'cash' | 'upi' | 'wallet') || 'cash',

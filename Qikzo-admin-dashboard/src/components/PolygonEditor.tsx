@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polygon, useMapEvents } from 'react-leaflet';
+import { useEffect, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Polygon, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -27,6 +27,16 @@ function ClickCatcher({ onClick }: { onClick: (lat: number, lng: number) => void
             onClick(e.latlng.lat, e.latlng.lng);
         },
     });
+    return null;
+}
+
+/** Modal / delayed layout: Leaflet needs a kick once the container has a real size. */
+function InvalidateSize() {
+    const map = useMap();
+    useEffect(() => {
+        const t = window.setTimeout(() => map.invalidateSize(), 80);
+        return () => window.clearTimeout(t);
+    }, [map]);
     return null;
 }
 
@@ -62,6 +72,7 @@ export function PolygonEditor({
     return (
         <div className="rounded-md overflow-hidden border border-border" style={{ height }}>
             <MapContainer center={center} zoom={zoom} style={{ height: '100%', width: '100%' }}>
+                <InvalidateSize />
                 <TileLayer
                     attribution='&copy; OpenStreetMap'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

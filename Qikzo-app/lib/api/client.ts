@@ -156,12 +156,15 @@ export async function request<T = any>(path: string, opts: RequestOptions = {}):
             });
         } catch (e: any) {
             clearTimeout(timer);
-            // Report network drop so the global offline banner surfaces.
-            try { require('../netStatus').reportNetworkError(); } catch {}
+            const timedOut = e?.name === 'AbortError';
+            // Timeouts are the free-tier server waking up — not "no internet".
+            if (!timedOut) {
+                try { require('../netStatus').reportNetworkError('NETWORK'); } catch {}
+            }
             throw new ApiError({
                 status: 0,
-                message: e?.name === 'AbortError' ? 'Request timed out' : 'Network error',
-                code: e?.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK',
+                message: timedOut ? 'Request timed out' : 'Network error',
+                code: timedOut ? 'TIMEOUT' : 'NETWORK',
             });
         }
         clearTimeout(timer);

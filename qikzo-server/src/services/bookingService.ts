@@ -360,6 +360,31 @@ export const bookingService = {
             const rider = await Rider.findById(b.rider).lean();
             if ((rider as any)?.user) riderUserId = String((rider as any).user);
         }
+
+        // Cancel the rider's Trip too — otherwise `GET /trips/active` keeps
+        // returning the trip and the rider app never sees the cancellation
+        // (fix: customer cancels after "I've arrived" → rider stuck on job).
+        if (b.rider) {
+            const Trip = (await import('../models/Trip')).default;
+            const trip = await Trip.findOne({
+                booking: b._id,
+                stage: { $in: ['assigned', 'arriving', 'arrived', 'started'] },
+            });
+            if (trip) {
+                trip.stage = 'cancelled';
+                trip.cancelledAt = new Date();
+                trip.cancelReason = b.cancelledReason || 'Cancelled by customer';
+                await trip.save();
+                // Populate rider.user so emitTripUpdate reaches the rider's
+                // personal room (rider:{userId}) for an instant UI update.
+                await trip.populate({ path: 'rider', select: 'user' });
+                const { emitTripUpdate } = await import('../sockets');
+                emitTripUpdate(trip);
+            }
+            // Free the rider for new jobs.
+            await Rider.updateOne({ _id: b.rider }, { available: true }).catch(() => {});
+        }
+
         emitBookingUpdate(b, riderUserId);
         emitJobCancelled(String(b._id), riderUserId);
 

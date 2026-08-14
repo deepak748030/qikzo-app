@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Image, Pressable, StyleSheet, useWindowDimensions, ScrollView, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
 import { colors, fonts, radius } from '@/lib/theme';
-import { useBooking } from '@/lib/bookingStore';
 import { catalogApi, type ServerBanner } from '@/lib/api/endpoints/catalog';
+import { openBannerAsPickup } from '@/lib/bannerPickup';
 
 /**
  * Explore — horizontally scrolling 1:1 banner tiles below the main carousel.
@@ -14,7 +13,6 @@ type Banner = ServerBanner;
 
 export default function ExploreBanners({ userCoord }: { userCoord?: { lat: number; lng: number } | null } = {}) {
     const { width } = useWindowDimensions();
-    const setDraft = useBooking((s) => s.setDraft);
     const [banners, setBanners] = useState<Banner[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -33,8 +31,7 @@ export default function ExploreBanners({ userCoord }: { userCoord?: { lat: numbe
 
     const openBanner = (b: Banner) => {
         if (!b.coord) return;
-        setDraft({ drop: b.address || b.title, dropCoord: b.coord });
-        router.push({ pathname: '/select-location', params: { field: 'drop' } });
+        openBannerAsPickup({ address: b.address || b.title, coord: b.coord });
     };
 
     const tile = Math.min(160, Math.round(width * 0.44));

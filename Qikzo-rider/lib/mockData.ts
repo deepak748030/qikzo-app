@@ -9,6 +9,8 @@ export type IncomingJob = {
     customerPhone: string;
     category: JobCategory;
     pickup: string;
+    // Additional pickup stops (multi-pickup deliveries), in route order.
+    extraPickups?: { address: string; coord?: { lat: number; lng: number } | null }[];
     drop: string;
     distanceKm: number;
     etaMin: number;      // trip time estimate

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
-import { Phone, X, Navigation2, MapPin, ShieldAlert, Navigation, KeyRound, CheckCircle2, Coffee, Home as HomeIcon, PackageCheck } from 'lucide-react-native';
+import { Phone, X, Navigation2, MapPin, Navigation, KeyRound, CheckCircle2, Coffee, Home as HomeIcon, PackageCheck } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import LeafletMap from '@/components/LeafletMap';
 import StageStepper from '@/components/StageStepper';
@@ -20,20 +20,22 @@ import { useAuth } from '@/lib/authStore';
 
 const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 };
 
-// Deterministic 4-digit pickup OTP derived from booking id — MUST match the
-// exact formula used by the customer app (Qikzo-app/app/booking-details.tsx)
-// so the code the rider types matches the one shown to the customer.
-function pickupOtpFor(id: string): string {
+// Preview-only fallback delivery OTP (signed-out mock flow). Deterministic
+// from the booking id — MUST match the formula used by the customer app
+// (Qikzo-app/app/booking-details.tsx) so preview codes line up. When signed
+// in, the SERVER validates the delivery OTP; this is never used.
+function previewDeliveryOtpFor(id: string): string {
     let h = 0;
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
     return String(1000 + (h % 9000));
 }
 
-// CTAs per stage — one primary action advances the flow.
+// CTAs per stage — one primary action advances the flow. The delivery OTP
+// is asked at DROP-OFF (Picked up → Delivered), not at pickup.
 const CTA_BY_STAGE: Record<string, string> = {
     'Heading to pickup': "I've arrived",
-    'Arrived at pickup': 'Verify pickup OTP',
-    'Picked up': 'Mark delivered',
+    'Arrived at pickup': 'Mark picked up',
+    'Picked up': 'Verify delivery OTP',
     'Delivered': 'Done',
 };
 
@@ -188,19 +190,40 @@ export default function ActiveJob() {
     };
 
     const onCta = async () => {
-        if (active.stage === 'Arrived at pickup') { setOtpOpen(true); return; }
+        // Delivery OTP gate — completing a DELIVERY trip requires the 4-digit
+        // code the customer sees in their app once the order is picked up.
+        // Rides have no handover, so they complete without an OTP.
+        if (active.stage === 'Picked up' && active.category !== 'ride') { setOtpOpen(true); return; }
         if (isFinal) { await runAdvance(); router.replace('/(tabs)'); return; }
         await runAdvance();
     };
 
-    const onOtpVerified = async () => {
-        setOtpOpen(false);
-        await runAdvance();
-        sheet.show({
-            variant: 'success',
-            title: 'Pickup verified',
-            message: 'OTP matched. Trip started — drive safe.',
-        });
+    // Called by the OTP sheet with the code the rider typed. When server-backed,
+    // the server verifies the code and completes the trip in one call; a wrong
+    // code throws (DELIVERY_OTP_INVALID) and the sheet shows the error. In
+    // signed-out preview we check against the deterministic preview code.
+    const onOtpVerify = async (code: string) => {
+        if (active.tripId && isSignedIn()) {
+            try {
+                // Server verifies the OTP and completes the trip in one call.
+                // Wrong code → DELIVERY_OTP_INVALID → sheet shows the error.
+                await advanceOnServer(code);
+            } catch (e) {
+                if (e instanceof ApiError) throw new Error(e.message);
+                throw new Error('Could not verify OTP. Try again.');
+            }
+            // Trip completed server-side → active cleared. Head home.
+            setOtpOpen(false);
+            router.replace('/(tabs)');
+        } else {
+            // Signed-out preview — check against the deterministic code the
+            // customer preview shows, then let the auto-finalize effect run.
+            if (code !== previewDeliveryOtpFor(active.bookingId || active.id)) {
+                throw new Error('Incorrect OTP. Ask the customer again.');
+            }
+            setOtpOpen(false);
+            advance(); // 'Picked up' → 'Delivered'
+        }
     };
 
     const chooseReason = async (reason: string) => {
@@ -231,6 +254,10 @@ export default function ActiveJob() {
     // yet (fresh mount, permissions denied). NEVER renders random vehicles.
     const pickupCoord = active.pickupCoord ?? null;
     const dropCoord = active.dropCoord ?? null;
+    // Extra pickup stops (multi-pickup deliveries) — numbered pins on the map.
+    const extraStopCoords = (active.extraPickups || [])
+        .map((s) => s.coord)
+        .filter((c): c is { lat: number; lng: number } => !!c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
     const mapCenter = riderLoc ?? pickupCoord ?? dropCoord ?? FALLBACK_CENTER;
 
     // Rider's own vehicle drives the marker shown in both apps. Map the
@@ -245,6 +272,7 @@ export default function ActiveJob() {
             <LeafletMap
                 center={mapCenter}
                 pickup={pickupCoord}
+                extraStops={extraStopCoords}
                 drop={dropCoord}
                 riderLocation={riderLoc}
                 vehicleKind={vehicleKind}
@@ -262,21 +290,7 @@ export default function ActiveJob() {
                     <Text style={styles.topEmoji}>{cat.emoji}</Text>
                     <Text style={styles.topText}>{cat.label} · #{active.id}</Text>
                 </View>
-                <Pressable
-                    style={styles.sosBtn}
-                    onPress={() => sheet.show({
-                        variant: 'warning',
-                        title: 'Call SOS?',
-                        message: 'This will alert Qikzo safety and share your live location with local authorities.',
-                        confirmText: 'Call SOS',
-                        cancelText: 'Cancel',
-                        onConfirm: () => sheet.show({ variant: 'success', title: 'Help is on the way', message: 'Our safety team has been notified. Stay where you are.' }),
-                    })}
-                    hitSlop={6}
-                >
-                    <ShieldAlert size={16} color={colors.card} strokeWidth={2.4} />
-                    <Text style={styles.sosText}>SOS</Text>
-                </Pressable>
+                <View style={{ width: 36 }} />
             </View>
 
             {/* Bottom sheet */}
@@ -306,7 +320,13 @@ export default function ActiveJob() {
                 </View>
 
                 <View style={styles.stops}>
-                    <StopRow icon="pickup" label="Pickup" value={active.pickup} onNavigate={() => sheet.show({ variant: 'info', title: 'Opening navigation', message: 'Turn-by-turn directions will open in your default maps app.' })} />
+                    <StopRow icon="pickup" label={(active.extraPickups?.length || 0) > 0 ? 'Pickup 1' : 'Pickup'} value={active.pickup} onNavigate={() => sheet.show({ variant: 'info', title: 'Opening navigation', message: 'Turn-by-turn directions will open in your default maps app.' })} />
+                    {(active.extraPickups || []).map((s, i) => (
+                        <React.Fragment key={i}>
+                            <View style={styles.stopDash} />
+                            <StopRow icon="pickup" label={`Pickup ${i + 2}`} value={s.address} onNavigate={() => sheet.show({ variant: 'info', title: 'Opening navigation', message: 'Turn-by-turn directions will open in your default maps app.' })} />
+                        </React.Fragment>
+                    ))}
                     <View style={styles.stopDash} />
                     <StopRow icon="drop" label="Drop" value={active.drop} onNavigate={() => sheet.show({ variant: 'info', title: 'Opening navigation', message: 'Turn-by-turn directions will open in your default maps app.' })} />
                 </View>
@@ -329,19 +349,24 @@ export default function ActiveJob() {
                     </View>
                 </View>
 
-                {active.stage === 'Arrived at pickup' ? (
+                {active.stage === 'Picked up' && active.category !== 'ride' ? (
                     <View style={styles.otpBanner}>
                         <View style={styles.otpBannerIcon}>
                             <KeyRound size={16} color={colors.primary} strokeWidth={2.2} />
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.otpBannerTitle}>Verify pickup with OTP</Text>
-                            <Text style={styles.otpBannerText}>Ask {active.customerName.split(' ')[0]} for the 4-digit code in their Qikzo app before starting the trip.</Text>
+                            <Text style={styles.otpBannerTitle}>Verify delivery with OTP</Text>
+                            <Text style={styles.otpBannerText}>At drop-off, ask {active.customerName.split(' ')[0]} for the 4-digit delivery code in their Qikzo app to complete this order.</Text>
                         </View>
                     </View>
                 ) : null}
 
-                <Button label={CTA_BY_STAGE[active.stage]} loading={busy} onPress={onCta} style={{ marginTop: 12 }} />
+                <Button
+                    label={active.stage === 'Picked up' && active.category === 'ride' ? 'Complete ride' : CTA_BY_STAGE[active.stage]}
+                    loading={busy}
+                    onPress={onCta}
+                    style={{ marginTop: 12 }}
+                />
 
                 <Pressable style={styles.cancelBtn} onPress={() => setCancelOpen(true)}>
                     <Text style={styles.cancelText}>Cancel job</Text>
@@ -352,10 +377,9 @@ export default function ActiveJob() {
 
             <OtpVerifySheet
                 visible={otpOpen}
-                expected={pickupOtpFor(active.bookingId || active.id)}
                 customerName={active.customerName}
                 onClose={() => setOtpOpen(false)}
-                onVerified={onOtpVerified}
+                onVerify={onOtpVerify}
             />
 
             {/* Cancel reasons sheet */}
@@ -442,8 +466,6 @@ const styles = StyleSheet.create({
     topLabel: { flexDirection: 'row', gap: 6, alignItems: 'center' },
     topEmoji: { fontSize: 16 },
     topText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
-    sosBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 36, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.danger },
-    sosText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.card, letterSpacing: 0.5 },
     navBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card },
     navText: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.primary, letterSpacing: 0.3 },
     sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '68%', backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },

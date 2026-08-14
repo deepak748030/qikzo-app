@@ -78,6 +78,9 @@ export type Booking = {
     categorySlug: string;
     vehicleTypeSlug?: string;
     pickup: Point;
+    // Additional pickup stops (multi-pickup deliveries). Route order is
+    // pickup → extraPickups[0..n] → drop.
+    extraPickups?: Point[];
     drop: Point;
     notes?: string;
     recipientPhone?: string;
@@ -149,6 +152,10 @@ export type Trip = {
     user: string;
     vehicle?: string | null;
     stage: TripStage;
+    // Delivery OTP — present only for the CUSTOMER (server strips it from
+    // rider-facing responses). Shown to the customer once the order is
+    // picked up; the rider asks for it at drop-off to complete the trip.
+    deliveryOtp?: string;
     assignedAt?: string;
     arrivingAt?: string | null;
     arrivedAt?: string | null;

@@ -61,6 +61,7 @@ export const adminController = {
         limit: req.query.limit ? Number(req.query.limit) : undefined,
         cursor: req.query.cursor as any,
     }))),
+    getBooking: asyncHandler(async (req, res) => ok(res, await adminService.getBooking(req.params.id))),
 
     // Coupons
     listCoupons: asyncHandler(async (req, res) => ok(res, await adminService.listCoupons({

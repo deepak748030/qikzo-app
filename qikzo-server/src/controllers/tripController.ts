@@ -7,7 +7,8 @@ export const tripController = {
     // ---------- Read-side ----------
     listMine: asyncHandler(async (req, res) => {
         const limit = Number(req.query.limit) || 50;
-        const items = await tripService.listMine(req.user!.id, limit);
+        const offset = Number(req.query.offset) || 0;
+        const items = await tripService.listMine(req.user!.id, limit, offset);
         return ok(res, { items });
     }),
 
@@ -31,7 +32,8 @@ export const tripController = {
         const trip = await tripService.setStage(
             req.user!.id,
             req.params.id,
-            req.body.stage as TripStage
+            req.body.stage as TripStage,
+            req.body.otp
         );
         return ok(res, { trip }, 'Stage updated');
     }),

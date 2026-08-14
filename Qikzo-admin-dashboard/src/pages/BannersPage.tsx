@@ -10,8 +10,8 @@ import { PolygonEditor, polygonAreaKm2, useCenterFromPoints, type Point } from '
 import { Images, Plus, Trash2, MapPin, ImageOff, Layers } from 'lucide-react';
 
 /**
- * Promo banners CRUD. A banner picks a category, then the admin manually
- * types the location name and draws the service polygon on the map.
+ * Promo banners CRUD. Pick a saved Coverage city/area so the polygon
+ * is reused — no need to redraw the same city on every banner.
  */
 type Category = { _id: string; slug: string; name: string; emoji?: string };
 
@@ -25,12 +25,22 @@ type Banner = {
   coord: { lat: number; lng: number };
   categoryId?: string | null;
   categorySlug?: string;
+  stateId?: string;
+  areaId?: string;
   stateName?: string;
   areaName?: string;
   polygon?: { coordinates: Point[][] } | null;
   active?: boolean;
   order?: number;
 };
+
+type CoverageArea = {
+  _id: string;
+  name: string;
+  polygon?: { coordinates: Point[][] };
+  coord?: { lat: number; lng: number };
+};
+type CoverageCity = { _id: string; name: string; areas: CoverageArea[] };
 
 type Form = {
   slug: string;
@@ -39,6 +49,8 @@ type Form = {
   address: string;
   imageUrl: string;
   categoryId: string;
+  cityId: string;
+  areaId: string;
   locationName: string;
   points: Point[];
   order: string;
@@ -52,11 +64,23 @@ const emptyForm: Form = {
   address: '',
   imageUrl: '',
   categoryId: '',
+  cityId: '',
+  areaId: '',
   locationName: '',
   points: [],
   order: '0',
   active: true,
 };
+
+function ringOf(area?: CoverageArea): Point[] {
+  const ring = area?.polygon?.coordinates?.[0] || [];
+  if (ring.length > 3) {
+    const [fx, fy] = ring[0];
+    const [lx, ly] = ring[ring.length - 1];
+    if (fx === lx && fy === ly) return ring.slice(0, -1) as Point[];
+  }
+  return ring as Point[];
+}
 
 export default function BannersPage() {
   const [showForm, setShowForm] = useState(false);
@@ -65,20 +89,39 @@ export default function BannersPage() {
   const [confirmDelete, setConfirmDelete] = useState<Banner | null>(null);
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [cities, setCities] = useState<CoverageCity[]>([]);
   const { items, loading, hasMore, loadMore, refresh } = usePaginated<Banner>('/admin/banners');
   const sentinelRef = useInfiniteScroll(hasMore, loading, loadMore);
 
   useEffect(() => {
     void (async () => {
       try {
-        const res = await api<{ items: Category[] }>('/admin/categories', { query: { limit: 200 } });
-        setCategories(res.items || []);
-      } catch (e: any) { toast.error(e?.message || 'Failed to load categories'); }
+        const [cats, cov] = await Promise.all([
+          api<{ items: Category[] }>('/admin/categories', { query: { limit: 200 } }),
+          api<{ items: CoverageCity[] }>('/admin/coverage'),
+        ]);
+        setCategories(cats.items || []);
+        setCities(cov.items || []);
+      } catch (e: any) { toast.error(e?.message || 'Failed to load form data'); }
     })();
   }, []);
 
   const category = categories.find(c => c._id === form.categoryId);
+  const selectedCity = cities.find(c => c._id === form.cityId);
+  const selectedArea = selectedCity?.areas?.find(a => a._id === form.areaId);
   const mapCenter = useCenterFromPoints(form.points);
+
+  const applyArea = (cityId: string, areaId: string) => {
+    const city = cities.find(c => c._id === cityId);
+    const area = city?.areas?.find(a => a._id === areaId);
+    setForm(f => ({
+      ...f,
+      cityId,
+      areaId,
+      locationName: area && city ? `${area.name}, ${city.name}` : f.locationName,
+      points: area ? ringOf(area) : f.points,
+    }));
+  };
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setShowForm(true); };
   const openEdit = (b: Banner) => {
@@ -91,6 +134,8 @@ export default function BannersPage() {
       address: b.address || '',
       imageUrl: b.imageUrl || '',
       categoryId: b.categoryId ? String(b.categoryId) : '',
+      cityId: b.stateId || '',
+      areaId: b.areaId || '',
       locationName: b.areaName || b.stateName || '',
       points: ring.length > 3 ? (ring.slice(0, -1) as Point[]) : (ring as Point[]),
       order: String(b.order ?? 0),
@@ -104,8 +149,8 @@ export default function BannersPage() {
     setBusy(true);
     try {
       if (!form.categoryId) throw new Error('Select a category');
-      if (!form.locationName.trim()) throw new Error('Enter a location name');
-      if (form.points.length < 3) throw new Error('Draw at least 3 points on the map');
+      if (!form.cityId || !form.areaId) throw new Error('Select a coverage city and area');
+      if (form.points.length < 3) throw new Error('Selected area has no map. Draw or pick another area.');
 
       // Close the polygon ring (GeoJSON requires first == last).
       const ring = [...form.points, form.points[0]];
@@ -117,8 +162,10 @@ export default function BannersPage() {
         imageUrl: form.imageUrl.trim(),
         categoryId: form.categoryId,
         categorySlug: category?.slug || '',
-        stateName: form.locationName.trim(),
-        areaName: form.locationName.trim(),
+        stateId: form.cityId,
+        areaId: form.areaId,
+        stateName: selectedCity?.name || form.locationName.trim(),
+        areaName: selectedArea?.name || form.locationName.trim(),
         polygon: { type: 'Polygon', coordinates: [ring] },
         active: form.active,
         order: Number(form.order) || 0,
@@ -287,37 +334,54 @@ export default function BannersPage() {
           <div className="rounded-md border border-border p-3 space-y-3">
             <div className="text-sm font-medium flex items-center gap-1.5"><Layers className="h-4 w-4" /> Service location</div>
 
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Category</label>
+              <Select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}>
+                <option value="">Select category</option>
+                {categories.map(c => <option key={c._id} value={c._id}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</option>)}
+              </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Category</label>
-                <Select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}>
-                  <option value="">Select category</option>
-                  {categories.map(c => <option key={c._id} value={c._id}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</option>)}
+                <label className="text-xs text-muted-foreground block mb-1">City</label>
+                <Select
+                  value={form.cityId}
+                  onChange={e => setForm(f => ({ ...f, cityId: e.target.value, areaId: '', points: [], locationName: '' }))}
+                >
+                  <option value="">Select city</option>
+                  {cities.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Location name</label>
-                <Input
-                  value={form.locationName}
-                  disabled={!form.categoryId}
-                  onChange={e => setForm(f => ({ ...f, locationName: e.target.value }))}
-                  placeholder={form.categoryId ? 'e.g. South Delhi, Sector 62' : 'Pick a category first'}
-                />
+                <label className="text-xs text-muted-foreground block mb-1">Area</label>
+                <Select
+                  value={form.areaId}
+                  disabled={!form.cityId}
+                  onChange={e => applyArea(form.cityId, e.target.value)}
+                >
+                  <option value="">{form.cityId ? 'Select area' : 'Pick a city first'}</option>
+                  {(selectedCity?.areas || []).map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
+                </Select>
               </div>
             </div>
+            {cities.length === 0 && (
+              <div className="text-xs text-muted-foreground">No coverage yet. Create a city/area under Coverage first.</div>
+            )}
 
-            <PolygonEditor
-              value={form.points}
-              center={mapCenter}
-              height={300}
-              onChange={pts => setForm(f => ({ ...f, points: pts }))}
-            />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{form.points.length} points · ~{polygonAreaKm2(form.points).toFixed(1)} km² · click map to add, drag to move, click a point to remove</span>
-              {form.points.length > 0 && (
-                <button type="button" className="hover:text-foreground underline" onClick={() => setForm(f => ({ ...f, points: [] }))}>Clear</button>
-              )}
-            </div>
+            {form.points.length >= 3 && (
+              <>
+                <PolygonEditor
+                  value={form.points}
+                  center={mapCenter}
+                  height={260}
+                  onChange={pts => setForm(f => ({ ...f, points: pts }))}
+                />
+                <div className="text-xs text-muted-foreground">
+                  {form.locationName} · {form.points.length} points · ~{polygonAreaKm2(form.points).toFixed(1)} km²
+                </div>
+              </>
+            )}
           </div>
 
           <label className="flex items-center gap-2 text-sm">

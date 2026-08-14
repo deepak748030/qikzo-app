@@ -7,11 +7,18 @@ import { JOB_STAGES, JobStage } from '@/lib/mockData';
 // Compact 4-step progress showing the rider's current stage.
 export default function StageStepper({ stage }: { stage: JobStage }) {
     const idx = JOB_STAGES.indexOf(stage);
+    // Every stage except 'Heading to pickup' is a PAST event — 'Arrived at
+    // pickup' / 'Picked up' / 'Delivered' have already happened when they
+    // become the current stage, so the matched step itself renders TICKED.
+    // 'Heading to pickup' is in-progress and stays active without a tick.
+    // Previously `done` was `i < idx`, which left the current step (and the
+    // final 'Delivered' step) without a tick forever.
+    const currentDone = stage !== 'Heading to pickup';
     return (
         <View style={styles.wrap}>
             {JOB_STAGES.map((s, i) => {
-                const done = i < idx;
-                const active = i === idx;
+                const done = i < idx || (i === idx && currentDone);
+                const active = i === idx && !done;
                 return (
                     <React.Fragment key={s}>
                         <View style={styles.slot}>

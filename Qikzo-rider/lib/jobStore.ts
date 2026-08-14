@@ -47,6 +47,11 @@ function customerNameOf(u: any): string {
     return raw;
 }
 
+function extraPickupsOf(b: any): { address: string; coord: { lat: number; lng: number } | null }[] {
+    if (!Array.isArray(b?.extraPickups)) return [];
+    return b.extraPickups.map((p: any) => ({ address: p?.address || '—', coord: coordOf(p) }));
+}
+
 function bookingToIncomingJob(b: any): IncomingJob {
     const cat = CATEGORY_FROM_SLUG[b.categorySlug] || 'parcel';
     return {
@@ -55,6 +60,7 @@ function bookingToIncomingJob(b: any): IncomingJob {
         customerPhone: (b.user && typeof b.user === 'object' ? String(b.user.phone || '') : '') || b.recipientPhone || '',
         category: cat,
         pickup: b.pickup?.address || '—',
+        extraPickups: extraPickupsOf(b),
         drop: b.drop?.address || '—',
         distanceKm: Number(b.distanceKm) || 0,
         etaMin: Number(b.etaMin) || 0,
@@ -65,6 +71,9 @@ function bookingToIncomingJob(b: any): IncomingJob {
         expiresInSec: 30,
     };
 }
+
+// Page size for the infinite-scrolling trip history list.
+const PAGE_SIZE = 20;
 
 const SERVER_TO_UI_STAGE: Record<ServerTripStage, JobStage> = {
     assigned: 'Heading to pickup',
@@ -93,6 +102,7 @@ function tripToActive(t: Trip): ActiveJob {
         customerPhone: (b?.user && typeof b.user === 'object' ? String((b.user as any).phone || '') : '') || b?.recipientPhone || '',
         category: cat,
         pickup: b?.pickup?.address || '—',
+        extraPickups: extraPickupsOf(b),
         drop: b?.drop?.address || '—',
         distanceKm: Number(t.distanceKm) || Number(b?.distanceKm) || 0,
         etaMin: Number(b?.etaMin) || 0,
@@ -141,6 +151,10 @@ type State = {
     active: ActiveJob | null;
     completed: CompletedJob[];
     loading: boolean;
+    // Infinite-scroll pagination state for the trip history list.
+    loadingMore: boolean;
+    historyEnd: boolean;
+    loadMoreFromServer: () => Promise<void>;
 
     // Local-only setters (used by mock/preview flow)
     setOnline: (v: boolean) => void;
@@ -154,7 +168,7 @@ type State = {
     fetchIncoming: () => Promise<IncomingJob[]>;
     acceptFromServer: (bookingId: string) => Promise<void>;
     declineFromServer: (bookingId: string, reason?: string) => Promise<void>;
-    advanceOnServer: () => Promise<void>;
+    advanceOnServer: (otp?: string) => Promise<void>;
     cancelOnServer: (reason: string) => Promise<void>;
     hydrateFromServer: () => Promise<void>;
     hydrateActiveFromServer: () => Promise<void>;
@@ -165,6 +179,8 @@ export const useJobs = create<State>((set, get) => ({
     active: null,
     completed: [],
     loading: false,
+    loadingMore: false,
+    historyEnd: false,
 
     // -------- Local (fallback / preview) --------
     setOnline: (v) => set({ online: v }),
@@ -219,7 +235,7 @@ export const useJobs = create<State>((set, get) => ({
         const { accessToken } = tokenStore.get();
         if (!accessToken) return [];
         try {
-            const items = await ridersApi.incoming({ limit: 5 });
+            const items = await ridersApi.incoming({ limit: 10 });
             return items.map(bookingToIncomingJob);
         } catch {
             return [];
@@ -235,11 +251,13 @@ export const useJobs = create<State>((set, get) => ({
         try { await ridersApi.declineBooking(bookingId, reason); } catch { /* ignore */ }
     },
 
-    advanceOnServer: async () => {
+    advanceOnServer: async (otp?: string) => {
         const a = get().active;
         if (!a || !a.tripId) { get().advanceStage(); return; }
         const nextServerStage = UI_TO_SERVER_NEXT[a.stage];
-        const trip = await tripsApi.setStage(a.tripId, nextServerStage);
+        // `otp` is the delivery OTP the customer reads out at drop-off —
+        // required by the server when completing a delivery trip.
+        const trip = await tripsApi.setStage(a.tripId, nextServerStage, otp);
         if (trip.stage === 'completed') {
             const done = tripToCompleted(trip);
             set((s) => ({
@@ -263,13 +281,41 @@ export const useJobs = create<State>((set, get) => ({
         if (!accessToken) return;
         set({ loading: true });
         try {
-            const trips = await tripsApi.listMine(50);
+            const trips = await tripsApi.listMine(PAGE_SIZE, 0);
             const completed = trips.map(tripToCompleted).filter(Boolean) as CompletedJob[];
-            set({ completed });
+            // Fresh first page — reset the pagination cursor too.
+            set({ completed, historyEnd: trips.length < PAGE_SIZE, loadingMore: false });
         } catch {
             /* keep mock */
         } finally {
             set({ loading: false });
+        }
+    },
+
+    // Infinite scroll — fetch the next page of trip history and append.
+    // `historyEnd` flips once the server returns a short page so the list
+    // stops firing requests at the bottom.
+    loadMoreFromServer: async () => {
+        const { accessToken } = tokenStore.get();
+        if (!accessToken) return;
+        const s = get();
+        if (s.loading || s.loadingMore || s.historyEnd) return;
+        set({ loadingMore: true });
+        try {
+            const trips = await tripsApi.listMine(PAGE_SIZE, s.completed.length);
+            const next = trips.map(tripToCompleted).filter(Boolean) as CompletedJob[];
+            // De-dupe by trip id — offset pagination can overlap if a trip
+            // completed between page fetches.
+            const seen = new Set(s.completed.map((j) => String(j.tripId || j.id)));
+            const fresh = next.filter((j) => !seen.has(String(j.tripId || j.id)));
+            set({
+                completed: [...s.completed, ...fresh],
+                historyEnd: trips.length < PAGE_SIZE,
+            });
+        } catch {
+            /* keep current list */
+        } finally {
+            set({ loadingMore: false });
         }
     },
 

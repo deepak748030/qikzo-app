@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Keyboard, Platform } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,15 +12,32 @@ import Input from '@/components/Input';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useBooking } from '@/lib/bookingStore';
+import { useSavedPlaces } from '@/lib/savedPlacesStore';
 
 // Default city: New Delhi
 const DEFAULT_CENTER: LatLng = { lat: 28.6139, lng: 77.209 };
 
+function paramStr(v?: string | string[]): string {
+    if (Array.isArray(v)) return String(v[0] || '');
+    return v ? String(v) : '';
+}
+
 export default function SelectLocationScreen() {
     const insets = useSafeAreaInsets();
-    const { field, slot } = useLocalSearchParams<{ field?: 'pickup' | 'drop'; slot?: string }>();
+    const params = useLocalSearchParams<{
+        field?: string | string[];
+        slot?: string | string[];
+        purpose?: string | string[];
+        lat?: string | string[];
+        lng?: string | string[];
+        address?: string | string[];
+    }>();
+    const fieldStr = paramStr(params.field);
+    const slotStr = paramStr(params.slot);
+    const purposeStr = paramStr(params.purpose);
+    const savingPlace = purposeStr === 'saved';
     // `slot` extends `field` to allow extra-pickup targets: pickup2 / pickup3 / pickup4.
-    const targetSlot = (slot || field || 'pickup') as string;
+    const targetSlot = slotStr || fieldStr || 'pickup';
     const which: 'pickup' | 'drop' = targetSlot === 'drop' ? 'drop' : 'pickup';
     const extraIndex = /^pickup(\d+)$/.exec(targetSlot)?.[1];
     const extraIdx = extraIndex ? Math.max(0, parseInt(extraIndex, 10) - 2) : -1; // pickup2 -> 0
@@ -30,24 +47,50 @@ export default function SelectLocationScreen() {
 
     const extra = extraIdx >= 0 ? draft.extraPickups[extraIdx] : null;
 
-    const hasSavedCoord = extraIdx >= 0
-        ? !!extra?.coord
-        : (which === 'pickup' ? !!draft.pickupCoord : !!(draft.dropCoord || draft.pickupCoord));
+    const paramLat = Number(paramStr(params.lat));
+    const paramLng = Number(paramStr(params.lng));
+    const paramCoord: LatLng | null =
+        Number.isFinite(paramLat) && Number.isFinite(paramLng) ? { lat: paramLat, lng: paramLng } : null;
+    const paramAddress = paramStr(params.address);
 
-    const initial = extraIdx >= 0
-        ? (extra?.coord || draft.pickupCoord || DEFAULT_CENTER)
-        : which === 'pickup'
-            ? draft.pickupCoord || DEFAULT_CENTER
-            : draft.dropCoord || draft.pickupCoord || DEFAULT_CENTER;
+    // Route params (banner tap) win over draft so the map opens on the
+    // intended pin. Pickup / extra pickup / drop never fall back onto each other.
+    const seededCoord = extraIdx >= 0
+        ? (paramCoord || extra?.coord || null)
+        : which === 'drop'
+            ? (paramCoord || draft.dropCoord)
+            : (paramCoord || draft.pickupCoord);
+    const seededAddress = extraIdx >= 0
+        ? (paramAddress || extra?.address || '')
+        : which === 'drop'
+            ? (paramAddress || draft.drop)
+            : (paramAddress || draft.pickup);
+
+    const hasSavedCoord = !!seededCoord;
+    const initial = seededCoord || DEFAULT_CENTER;
+    const initialAddress = seededAddress;
 
     const [center, setCenter] = useState<LatLng>(initial);
-    const [address, setAddress] = useState<string>(
-        extraIdx >= 0 ? (extra?.address || '') : (which === 'pickup' ? draft.pickup : draft.drop)
-    );
+    const [address, setAddress] = useState<string>(initialAddress);
     const [resolving, setResolving] = useState(false);
     const [locating, setLocating] = useState(!hasSavedCoord);
     const [confirming, setConfirming] = useState(false);
     const [kbHeight, setKbHeight] = useState(0);
+    // Keep the seeded drop/banner address until the user actually pans the map.
+    const skipReverseRef = useRef(!!initialAddress && hasSavedCoord);
+
+    // Expo Router can hydrate `field`/`lat` after the first paint. Re-apply
+    // the seeded pin so a banner tap never stays stuck on the wrong slot.
+    useEffect(() => {
+        if (savingPlace) return;
+        if (seededCoord) {
+            setCenter(seededCoord);
+            setLocating(false);
+            skipReverseRef.current = !!seededAddress;
+        }
+        if (seededAddress) setAddress(seededAddress);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [which, extraIdx, seededCoord?.lat, seededCoord?.lng, seededAddress]);
 
     // Track keyboard height so the bottom address card lifts above the keyboard
     // and the search input never gets hidden behind it.
@@ -86,7 +129,14 @@ export default function SelectLocationScreen() {
 
 
     // Reverse geocode the current map center (debounced).
+    // Skip the first run when we already have the banner/drop address —
+    // otherwise GPS reverse-geocode overwrites it with the pickup street.
     useEffect(() => {
+        if (skipReverseRef.current) {
+            skipReverseRef.current = false;
+            setResolving(false);
+            return;
+        }
         let cancelled = false;
         setResolving(true);
         const t = setTimeout(async () => {
@@ -142,7 +192,9 @@ export default function SelectLocationScreen() {
             return;
         }
         setConfirming(true);
-        if (extraIdx >= 0) {
+        if (savingPlace) {
+            useSavedPlaces.getState().setPendingPick({ address: address.trim(), coord: center });
+        } else if (extraIdx >= 0) {
             const next = [...draft.extraPickups];
             next[extraIdx] = { address: address.trim(), coord: center };
             setDraft({ extraPickups: next });
@@ -182,7 +234,11 @@ export default function SelectLocationScreen() {
                 </Pressable>
                 <View style={styles.titleWrap}>
                     <Text style={styles.titleSmall}>
-                        {which === 'pickup' ? 'Set pickup location' : 'Set drop location'}
+                        {savingPlace
+                            ? 'Set saved address'
+                            : extraIdx >= 0
+                                ? `Set pickup ${extraIdx + 2}`
+                                : which === 'pickup' ? 'Set pickup location' : 'Set drop location'}
                     </Text>
                     <Text style={styles.titleHint}>Drag the map to move the pin</Text>
                 </View>
@@ -205,7 +261,11 @@ export default function SelectLocationScreen() {
 
                 <View style={styles.handle} />
                 <Text style={styles.label}>
-                    {which === 'pickup' ? 'PICKUP ADDRESS' : 'DROP ADDRESS'}
+                    {savingPlace
+                        ? 'ADDRESS'
+                        : extraIdx >= 0
+                            ? `PICKUP ${extraIdx + 2} ADDRESS`
+                            : which === 'pickup' ? 'PICKUP ADDRESS' : 'DROP ADDRESS'}
                 </Text>
                 <View style={styles.addrRow}>
                     <View style={[styles.pinDot, { backgroundColor: accent }]} />
@@ -225,7 +285,7 @@ export default function SelectLocationScreen() {
                     </Text>
                 )}
                 <Button
-                    label={which === 'pickup' ? 'Confirm pickup' : 'Confirm drop'}
+                    label={savingPlace ? 'Confirm address' : which === 'pickup' ? 'Confirm pickup' : 'Confirm drop'}
                     loading={confirming}
                     onPress={confirm}
                     style={{ marginTop: 8 }}

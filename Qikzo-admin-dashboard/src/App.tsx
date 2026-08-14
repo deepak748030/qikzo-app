@@ -14,8 +14,11 @@ const RidersPage = lazy(() => import('@/pages/RidersPage'));
 const UsersPage = lazy(() => import('@/pages/UsersPage'));
 const KycPage = lazy(() => import('@/pages/KycPage'));
 const BookingsPage = lazy(() => import('@/pages/BookingsPage'));
+const BookingDetailPage = lazy(() => import('@/pages/BookingDetailPage'));
 const PayoutsPage = lazy(() => import('@/pages/PayoutsPage'));
-const CouponsPage = lazy(() => import('@/pages/CouponsPage'));
+// Coupons hidden for now — page kept for later.
+// const CouponsPage = lazy(() => import('@/pages/CouponsPage'));
+const CoveragePage = lazy(() => import('@/pages/CoveragePage'));
 const BannersPage = lazy(() => import('@/pages/BannersPage'));
 const SupportPage = lazy(() => import('@/pages/SupportPage'));
 const SupportDetailPage = lazy(() => import('@/pages/SupportDetailPage'));
@@ -50,8 +53,10 @@ export default function App() {
           <Route path="users" element={<UsersPage />} />
           <Route path="kyc" element={<KycPage />} />
           <Route path="bookings" element={<BookingsPage />} />
+          <Route path="bookings/:id" element={<BookingDetailPage />} />
           <Route path="payouts" element={<PayoutsPage />} />
-          <Route path="coupons" element={<CouponsPage />} />
+          {/* <Route path="coupons" element={<CouponsPage />} /> */}
+          <Route path="coverage" element={<CoveragePage />} />
           <Route path="rewards" element={<RewardsPage />} />
           <Route path="referrals" element={<ReferralsPage />} />
           <Route path="categories" element={<CategoriesPage />} />

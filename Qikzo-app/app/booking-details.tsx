@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar, KeyRound, ShieldCheck, Gift, Send, Phone, MapPin, Navigation2, Navigation, ShieldAlert } from 'lucide-react-native';
+import { PhoneCall, X, NotebookPen, Bike, Star, BadgeCheck, MapPinned, Flag, Radar, KeyRound, ShieldCheck, Gift, Send, Phone, MapPin, Navigation2, Navigation } from 'lucide-react-native';
 import AnimatedIcon from '@/components/AnimatedIcon';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -30,13 +30,17 @@ function vehicleFor(categoryId?: string): VehicleKind {
     return 'bike';
 }
 
-// Deterministic 4-digit pickup OTP derived from booking id so the same
-// code shows up on every render of the same trip.
-function pickupOtpFor(id: string): string {
+// Preview-only fallback delivery OTP (signed-out mock flow). Deterministic
+// from booking id — matches the rider app's preview formula. When signed in
+// the REAL code comes from the server trip (trip.deliveryOtp).
+function previewDeliveryOtpFor(id: string): string {
     let h = 0;
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
     return String(1000 + (h % 9000));
 }
+
+// Ride categories have no handover — no delivery OTP is shown for them.
+const RIDE_CATEGORY_IDS = ['bike', 'auto', 'cab', 'sedan', 'taxi', 'ride'];
 
 
 
@@ -84,6 +88,31 @@ export default function BookingDetailsScreen() {
     // Fetch any existing rating once delivered, so we don't let the user
     // rate the same booking twice.
     const serverBookingId = (booking as any)?.serverId as string | undefined;
+
+    // Delivery OTP — the REAL code lives on the server trip (customer-only;
+    // the server strips it from rider responses). Fetched once the order is
+    // picked up so the customer can read it out to the rider at drop-off.
+    const [serverDeliveryOtp, setServerDeliveryOtp] = useState<string | null>(null);
+    const otpVisibleStatuses = ['Picked up', 'On the way'];
+    useEffect(() => {
+        if (!serverBookingId) return;
+        if (!booking || !otpVisibleStatuses.includes(booking.status)) return;
+        if (!tokenStore.get().accessToken) return;
+        if (serverDeliveryOtp) return;
+        let cancelled = false;
+        const fetchOtp = async () => {
+            try {
+                const { tripsApi } = await import('@/lib/api/endpoints/trips');
+                const trip: any = await tripsApi.forBooking(serverBookingId);
+                if (!cancelled && trip?.deliveryOtp) setServerDeliveryOtp(String(trip.deliveryOtp));
+            } catch { /* retried below */ }
+        };
+        fetchOtp();
+        // Retry until the code lands — covers legacy trips where the server
+        // mints the OTP late (on a later stage move) rather than at accept.
+        const t = setInterval(() => { if (!cancelled) fetchOtp(); }, 8000);
+        return () => { cancelled = true; clearInterval(t); };
+    }, [serverBookingId, booking?.status, serverDeliveryOtp]);
     useEffect(() => {
         if (!serverBookingId) return;
         if (booking?.status !== 'Delivered') return;
@@ -98,9 +127,13 @@ export default function BookingDetailsScreen() {
         return () => { cancelled = true; };
     }, [serverBookingId, booking?.status]);
 
-    // Auto-open the rate modal once, when the trip flips to Delivered and no
-    // rating exists yet. User can Skip; we don't re-open automatically.
+    // Auto-open the rate modal once, when the trip flips to Delivered WHILE
+    // this screen is open and no rating exists yet. Opening an already
+    // delivered booking (e.g. from the Activity tab) shows only the details —
+    // no rating popups. User can still rate via the openers below.
+    const wasDeliveredOnMount = useRef(booking?.status === 'Delivered' || booking?.status === 'Cancelled');
     useEffect(() => {
+        if (wasDeliveredOnMount.current) return;
         if (booking?.status !== 'Delivered') return;
         if (autoOpenedRate) return;
         if (existingRating) return;
@@ -112,6 +145,7 @@ export default function BookingDetailsScreen() {
     // Then, once the rider sheet is out of the way, prompt for the order
     // review exactly once. Never both sheets at the same time.
     useEffect(() => {
+        if (wasDeliveredOnMount.current) return;
         if (booking?.status !== 'Delivered') return;
         if (rateModalOpen) return;
         if (autoOpenedOrder) return;
@@ -255,8 +289,8 @@ export default function BookingDetailsScreen() {
     //    stuck on "guest is on the way").
     //  • Delivered  → 'delivered' celebration until user dismisses.
     // Once the rider taps "I've arrived" (status → Arriving for pickup) or
-    // any later stage, drop every full-screen overlay so the pickup OTP card
-    // on the details screen becomes visible immediately.
+    // any later stage, drop every full-screen overlay so the trip details
+    // (and, after pickup, the delivery OTP card) are visible immediately.
     const postArrivalStatuses = ['Arriving for pickup', 'Picked up', 'On the way', 'Delivered', 'Cancelled'];
     const overlayStage: Stage | null =
         postArrivalStatuses.includes(booking.status) && booking.status !== 'Delivered'
@@ -265,7 +299,7 @@ export default function BookingDetailsScreen() {
                 ? 'searching'
                 : booking.status === 'Rider accepted' && !acceptedDismissed
                     ? 'accepted'
-                    : booking.status === 'Delivered' && !deliveredDismissed
+                    : booking.status === 'Delivered' && !deliveredDismissed && !wasDeliveredOnMount.current
                         ? 'delivered'
                         : null;
 
@@ -329,6 +363,10 @@ export default function BookingDetailsScreen() {
 
     const pickupCoord = booking.pickupCoord || null;
     const dropCoord = booking.dropCoord || null;
+    // Extra pickup stops (multi-pickup deliveries) — plotted as numbered pins.
+    const extraStopCoords = (booking.extraPickups || [])
+        .map((s) => s.coord)
+        .filter((c): c is { lat: number; lng: number } => !!c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
     const mapCenter = riderLoc || pickupCoord || dropCoord || { lat: 28.6139, lng: 77.2090 };
     const showMap = !!pickupCoord && booking.status !== 'Cancelled';
     const catEmoji = category?.emoji || '📦';
@@ -341,6 +379,7 @@ export default function BookingDetailsScreen() {
                 <LeafletMap
                     center={mapCenter}
                     pickup={pickupCoord}
+                    extraStops={extraStopCoords}
                     drop={dropCoord}
                     riderLocation={riderLoc && riderId ? { lat: riderLoc.lat, lng: riderLoc.lng } : null}
                     vehicleKind={riderId ? vehicleFor(booking.categoryId) : null}
@@ -360,21 +399,7 @@ export default function BookingDetailsScreen() {
                     <Text style={styles.topEmoji}>{catEmoji}</Text>
                     <Text style={styles.topText}>{catName} · #{booking.id}</Text>
                 </View>
-                <Pressable
-                    style={styles.sosBtn}
-                    onPress={() => sheet.show({
-                        variant: 'warning',
-                        title: 'Call SOS?',
-                        message: 'This will alert Qikzo safety and share your live trip with local authorities.',
-                        confirmText: 'Call SOS',
-                        cancelText: 'Cancel',
-                        onConfirm: () => sheet.show({ variant: 'success', title: 'Help is on the way', message: 'Our safety team has been notified. Stay where you are.' }),
-                    })}
-                    hitSlop={6}
-                >
-                    <ShieldAlert size={16} color={colors.card} strokeWidth={2.4} />
-                    <Text style={styles.sosText}>SOS</Text>
-                </Pressable>
+                <View style={{ width: 36 }} />
             </View>
 
             {/* Bottom sheet */}
@@ -425,9 +450,15 @@ export default function BookingDetailsScreen() {
                     </View>
                 ) : null}
 
-                {/* Stops — pickup / drop */}
+                {/* Stops — pickup / extra pickups / drop */}
                 <View style={styles.stops}>
-                    <StopRow icon="pickup" label="Pickup" value={booking.pickup} />
+                    <StopRow icon="pickup" label={(booking.extraPickups?.length || 0) > 0 ? 'Pickup 1' : 'Pickup'} value={booking.pickup} />
+                    {(booking.extraPickups || []).map((s, i) => (
+                        <React.Fragment key={i}>
+                            <View style={styles.stopDash} />
+                            <StopRow icon="pickup" label={`Pickup ${i + 2}`} value={s.address} />
+                        </React.Fragment>
+                    ))}
                     <View style={styles.stopDash} />
                     <StopRow icon="drop" label="Drop" value={booking.drop} />
                 </View>
@@ -455,22 +486,26 @@ export default function BookingDetailsScreen() {
                     </View>
                 </View>
 
-                {/* Pickup OTP banner — appears when rider arrives */}
-                {booking.status === 'Arriving for pickup' ? (
+                {/* Delivery OTP banner — appears once the order is picked up.
+                    The rider must read this code back at drop-off to mark the
+                    order delivered. Ride bookings have no handover → no OTP. */}
+                {otpVisibleStatuses.includes(booking.status)
+                    && !RIDE_CATEGORY_IDS.includes(booking.categoryId)
+                    && (serverDeliveryOtp || !tokenStore.get().accessToken) ? (
                     <View style={styles.otpBanner}>
                         <View style={styles.otpBannerHead}>
                             <View style={styles.otpBannerIcon}>
                                 <ShieldCheck size={16} color={colors.primary} strokeWidth={2.2} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.otpBannerTitle}>Share this pickup OTP</Text>
+                                <Text style={styles.otpBannerTitle}>Delivery OTP</Text>
                                 <Text style={styles.otpBannerText}>
-                                    Read this code to {booking.rider?.name?.split(' ')[0] || 'your rider'} so they can start the trip.
+                                    Share this code with {booking.rider?.name?.split(' ')[0] || 'your rider'} only when your order is handed over. It confirms the delivery.
                                 </Text>
                             </View>
                         </View>
                         <View style={styles.otpDigitsRow}>
-                            {pickupOtpFor(serverBookingId || booking.id).split('').map((d, i) => (
+                            {(serverDeliveryOtp || (!tokenStore.get().accessToken ? previewDeliveryOtpFor(serverBookingId || booking.id) : '')).split('').map((d, i) => (
                                 <View key={i} style={styles.otpDigitBox}>
                                     <Text style={styles.otpDigitText}>{d}</Text>
                                 </View>
@@ -671,8 +706,6 @@ const styles = StyleSheet.create({
     topLabel: { flexDirection: 'row', gap: 6, alignItems: 'center' },
     topEmoji: { fontSize: 16 },
     topText: { fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
-    sosBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 36, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.danger },
-    sosText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.card, letterSpacing: 0.5 },
 
     sheet: {
         position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '72%',
