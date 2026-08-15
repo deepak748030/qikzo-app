@@ -26,6 +26,17 @@ import { estimateRoute } from '@/lib/estimate';
 import { MAX_EXTRA_PICKUPS } from '@/lib/bannerPickup';
 import type { BookingEstimate } from '@/lib/api/types';
 
+/** Format estimated minutes into a human-friendly string. */
+function fmtDuration(min: number): string {
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h < 24) return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh > 0 ? `${d} day ${rh} hr` : `${d} day`;
+}
+
 declare const require: (moduleName: string) => unknown;
 
 type SpeechModuleLike = {
@@ -769,7 +780,7 @@ export default function BookDeliveryScreen() {
                             <View style={styles.billDivider} />
                             <Row label="Total" value={`₹${trip.price}`} bold />
                             <Text style={styles.etaText}>
-                                {isRide ? `Rider arrives in ~${trip.etaMin} min` : `Estimated arrival in ${trip.etaMin} min after pickup`}
+                                {isRide ? `Rider arrives in ~${fmtDuration(trip.etaMin)}` : `Estimated arrival in ${fmtDuration(trip.etaMin)} after pickup`}
                             </Text>
                         </View>
                     </View>
@@ -784,7 +795,7 @@ export default function BookDeliveryScreen() {
                             <Text style={styles.footPrice}>₹{trip.price}</Text>
                             <Text style={styles.footMeta} numberOfLines={1}>
                                 <Bike size={11} color={colors.mutedForeground} />{'  '}
-                                {trip.distanceKm.toFixed(1)} km · ~{trip.etaMin} min
+                                {trip.distanceKm.toFixed(1)} km · ~{fmtDuration(trip.etaMin)}
                             </Text>
                         </>
                     ) : (

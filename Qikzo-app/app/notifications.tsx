@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { Package, Tag, BellRing, Truck, Gift, Info } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -24,41 +24,67 @@ function topicToType(t: string): NType {
 }
 function fmtTime(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
-    const m = Math.round(diff / 60_000);
-    if (m < 1) return 'Just now';
-    if (m < 60) return `${m}m ago`;
-    const h = Math.round(m / 60);
-    if (h < 24) return `${h}h ago`;
-    const d = Math.round(h / 24);
+    const seconds = Math.floor(diff / 1000);
+    const m = Math.floor(seconds / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    const weeks = Math.floor(d / 7);
+    const months = Math.floor(d / 30);
+    const years = Math.floor(d / 365);
+
+    if (seconds < 60) return 'Just now';
+    if (m < 60) return m === 1 ? '1 min ago' : `${m} mins ago`;
+    if (h < 24) return h === 1 ? '1 hour ago' : `${h} hours ago`;
     if (d === 1) return 'Yesterday';
-    if (d < 7) return `${d}d ago`;
-    return new Date(iso).toLocaleDateString();
+    if (d < 7) return d === 1 ? '1 day ago' : `${d} days ago`;
+    if (weeks < 4) return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+    if (months < 12) return months === 1 ? '1 month ago' : `${months} months ago`;
+    return years === 1 ? '1 year ago' : `${years} years ago`;
 }
+
+const PAGE_SIZE = 20;
 
 export default function NotificationsScreen() {
     const phone = useAuth((s) => s.phone);
     const [items, setItems] = useState<N[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const loading = useInitialLoad();
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (skip = 0, append = false) => {
         if (!phone) { setItems([]); return; }
         try {
-            const { items: server } = await api.notifications.list({ limit: 50 });
-            setItems(server.map((n) => ({
+            const { items: server, hasMore: more } = await api.notifications.list({ limit: PAGE_SIZE, skip });
+            const mapped = server.map((n) => ({
                 id: n._id,
                 type: topicToType(n.topic),
                 title: n.title,
                 body: n.body,
                 time: fmtTime(n.createdAt),
                 read: !!n.readAt,
-            })));
+            }));
+            if (append) {
+                setItems((prev) => [...prev, ...mapped.filter((n) => !prev.some((p) => p.id === n.id))]);
+            } else {
+                setItems(mapped);
+            }
+            setHasMore(more);
         } catch {
-            setItems([]);
+            if (!append) setItems([]);
         }
     }, [phone]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { load(0, false); }, [load]);
+
+    const onRefresh = async () => { setRefreshing(true); await load(0, false); setRefreshing(false); };
+
+    const loadMore = useCallback(async () => {
+        if (loadingMore || !hasMore) return;
+        setLoadingMore(true);
+        await load(items.length, true);
+        setLoadingMore(false);
+    }, [loadingMore, hasMore, items.length, load]);
 
     const markAllRead = async () => {
         setItems((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -68,7 +94,6 @@ export default function NotificationsScreen() {
         setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
         if (phone) { try { await api.notifications.markRead(id); } catch {} }
     };
-    const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
     const unread = items.filter((n) => !n.read).length;
 
@@ -115,6 +140,17 @@ export default function NotificationsScreen() {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.foreground} />}
                 ItemSeparatorComponent={() => <View style={{ height: 0, borderBottomWidth: 1, borderBottomColor: colors.divider }} />}
                 contentContainerStyle={{ paddingBottom: 24 }}
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.4}
+                ListFooterComponent={
+                    loadingMore ? (
+                        <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                            <ActivityIndicator size="small" color={colors.mutedForeground} />
+                        </View>
+                    ) : !hasMore && items.length > 0 ? (
+                        <Text style={styles.endText}>You're all caught up</Text>
+                    ) : null
+                }
                 ListEmptyComponent={
                     <View style={styles.empty}>
                         <BellRing size={42} color={colors.mutedForeground} strokeWidth={1.4} />
@@ -142,4 +178,5 @@ const styles = StyleSheet.create({
     empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 8, paddingHorizontal: 24 },
     emptyTitle: { fontSize: 15, fontFamily: fonts.displayBold, color: colors.foreground, marginTop: 6 },
     emptySub: { fontSize: 12, fontFamily: fonts.body, color: colors.mutedForeground, textAlign: 'center' },
+    endText: { textAlign: 'center', paddingVertical: 16, fontSize: 11, fontFamily: fonts.body, color: colors.mutedForeground },
 });

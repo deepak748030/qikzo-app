@@ -4,11 +4,12 @@ import { ok, created } from '../lib/http';
 
 export const notificationController = {
     list: asyncHandler(async (req, res) => {
-        const { items, unread } = await notificationService.list(req.user!.id, {
+        const { items, unread, total, hasMore } = await notificationService.list(req.user!.id, {
             limit: req.query.limit ? Number(req.query.limit) : undefined,
+            skip: req.query.skip ? Number(req.query.skip) : undefined,
             unreadOnly: req.query.unreadOnly === '1' || req.query.unreadOnly === 'true',
         });
-        return ok(res, { items, unread });
+        return ok(res, { items, unread, total, hasMore });
     }),
     markRead: asyncHandler(async (req, res) => {
         const n = await notificationService.markRead(req.user!.id, req.params.id);

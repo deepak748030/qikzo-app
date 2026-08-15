@@ -14,9 +14,9 @@ export type Notification = {
 };
 
 export const notificationsApi = {
-    async list(opts: { limit?: number; unreadOnly?: boolean } = {}): Promise<{ items: Notification[]; unread: number }> {
+    async list(opts: { limit?: number; skip?: number; unreadOnly?: boolean } = {}): Promise<{ items: Notification[]; unread: number; total: number; hasMore: boolean }> {
         return http.get('/notifications', {
-            query: { limit: opts.limit, unreadOnly: opts.unreadOnly ? '1' : undefined },
+            query: { limit: opts.limit, skip: opts.skip, unreadOnly: opts.unreadOnly ? '1' : undefined },
         });
     },
     async markRead(id: string): Promise<void> {

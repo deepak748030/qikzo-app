@@ -3,15 +3,17 @@ import { errors } from '../lib/errors';
 import pushService from './pushService';
 
 export const notificationService = {
-    async list(userId: string, opts: { limit?: number; unreadOnly?: boolean } = {}) {
+    async list(userId: string, opts: { limit?: number; skip?: number; unreadOnly?: boolean } = {}) {
         const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+        const skip = Math.max(opts.skip ?? 0, 0);
         const filter: any = { user: userId };
         if (opts.unreadOnly) filter.readAt = null;
-        const [items, unread] = await Promise.all([
-            Notification.find(filter).sort({ createdAt: -1 }).limit(limit).lean(),
+        const [items, unread, total] = await Promise.all([
+            Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
             Notification.countDocuments({ user: userId, readAt: null }),
+            Notification.countDocuments(filter),
         ]);
-        return { items, unread };
+        return { items, unread, total, hasMore: skip + items.length < total };
     },
 
     async markRead(userId: string, id: string) {

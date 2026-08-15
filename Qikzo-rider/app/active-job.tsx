@@ -18,6 +18,17 @@ import { ApiError } from '@/lib/api/errors';
 import { subscribe as subscribeSocket, connectSocket } from '@/lib/socket';
 import { useAuth } from '@/lib/authStore';
 
+/** Format estimated minutes into a human-friendly string. */
+function fmtDuration(min: number): string {
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h < 24) return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh > 0 ? `${d} day ${rh} hr` : `${d} day`;
+}
+
 const FALLBACK_CENTER = { lat: 28.6139, lng: 77.2090 };
 
 // Preview-only fallback delivery OTP (signed-out mock flow). Deterministic
@@ -344,7 +355,7 @@ export default function ActiveJob() {
                         <Text style={styles.fareValue}>₹{active.fare}</Text>
                     </View>
                     <View style={styles.fareMeta}>
-                        <Text style={styles.fareMetaText}>{active.distanceKm.toFixed(1)} km · {active.etaMin} min</Text>
+                        <Text style={styles.fareMetaText}>{active.distanceKm.toFixed(1)} km · {fmtDuration(active.etaMin)}</Text>
                         <Text style={styles.fareMetaText}>Payment: {active.payment.toUpperCase()}</Text>
                     </View>
                 </View>
