@@ -3,7 +3,16 @@ import { useBooking } from './bookingStore';
 
 export const MAX_EXTRA_PICKUPS = 3;
 
-type Spot = { address: string; coord: { lat: number; lng: number } };
+type Spot = {
+    address: string;
+    coord: { lat: number; lng: number };
+    banner?: {
+        id: string;
+        title: string;
+        categorySlug?: string;
+        menuImageUrl?: string;
+    };
+};
 
 function sameSpot(
     address: string,
@@ -25,6 +34,12 @@ export function openBannerAsPickup(spot: Spot) {
         lat: String(spot.coord.lat),
         lng: String(spot.coord.lng),
         address: spot.address,
+        // Carry the selected banner through the map confirmation. The booking
+        // draft records it only after the user confirms this exact location.
+        bannerId: spot.banner?.id || '',
+        bannerTitle: spot.banner?.title || '',
+        bannerCategorySlug: spot.banner?.categorySlug || '',
+        menuImageUrl: spot.banner?.menuImageUrl || '',
     };
 
     if (!draft.pickup.trim() || draft.mode === 'ride') {

@@ -11,7 +11,7 @@ import Button from '@/components/Button';
 import Input from '@/components/Input';
 import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
-import { useBooking } from '@/lib/bookingStore';
+import { useBooking, type BannerPickupSource } from '@/lib/bookingStore';
 import { useSavedPlaces } from '@/lib/savedPlacesStore';
 
 // Default city: New Delhi
@@ -31,6 +31,10 @@ export default function SelectLocationScreen() {
         lat?: string | string[];
         lng?: string | string[];
         address?: string | string[];
+        bannerId?: string | string[];
+        bannerTitle?: string | string[];
+        bannerCategorySlug?: string | string[];
+        menuImageUrl?: string | string[];
     }>();
     const fieldStr = paramStr(params.field);
     const slotStr = paramStr(params.slot);
@@ -52,6 +56,10 @@ export default function SelectLocationScreen() {
     const paramCoord: LatLng | null =
         Number.isFinite(paramLat) && Number.isFinite(paramLng) ? { lat: paramLat, lng: paramLng } : null;
     const paramAddress = paramStr(params.address);
+    const bannerId = paramStr(params.bannerId);
+    const bannerTitle = paramStr(params.bannerTitle);
+    const bannerCategorySlug = paramStr(params.bannerCategorySlug).toLowerCase();
+    const menuImageUrl = paramStr(params.menuImageUrl);
 
     // Route params (banner tap) win over draft so the map opens on the
     // intended pin. Pickup / extra pickup / drop never fall back onto each other.
@@ -186,6 +194,21 @@ export default function SelectLocationScreen() {
         }
     };
 
+    const bannerSourceAtCenter = (): BannerPickupSource | null => {
+        // A menu must never follow a manually moved pin. Keep the association
+        // only while the confirmed coordinate is still the banner coordinate.
+        const sameBannerPoint = paramCoord
+            && Math.abs(center.lat - paramCoord.lat) < 1e-5
+            && Math.abs(center.lng - paramCoord.lng) < 1e-5;
+        if (!sameBannerPoint || !bannerId || !menuImageUrl || bannerCategorySlug !== 'food') return null;
+        return {
+            id: bannerId,
+            title: bannerTitle || paramAddress || 'Restaurant',
+            categorySlug: bannerCategorySlug,
+            menuImageUrl,
+        };
+    };
+
     const confirm = () => {
         if (!address.trim()) {
             sheet.show({ variant: 'error', title: 'Address required', message: 'Please pin a location on the map.' });
@@ -196,10 +219,18 @@ export default function SelectLocationScreen() {
             useSavedPlaces.getState().setPendingPick({ address: address.trim(), coord: center });
         } else if (extraIdx >= 0) {
             const next = [...draft.extraPickups];
-            next[extraIdx] = { address: address.trim(), coord: center };
+            next[extraIdx] = {
+                address: address.trim(),
+                coord: center,
+                bannerSource: bannerSourceAtCenter(),
+            };
             setDraft({ extraPickups: next });
         } else if (which === 'pickup') {
-            setDraft({ pickup: address.trim(), pickupCoord: center });
+            setDraft({
+                pickup: address.trim(),
+                pickupCoord: center,
+                pickupBannerSource: bannerSourceAtCenter(),
+            });
         } else {
             setDraft({ drop: address.trim(), dropCoord: center });
         }

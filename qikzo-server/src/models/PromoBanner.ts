@@ -7,6 +7,10 @@ const PromoBannerSchema = new Schema(
         subtitle: { type: String, default: '' },
         address: { type: String, default: '' },
         imageUrl: { type: String, default: '' },
+        // Food banners may include a photographed restaurant menu. It is kept
+        // separate from the promo artwork so the customer can read it while
+        // composing an order. Empty means the admin chose to skip it.
+        menuImageUrl: { type: String, default: '' },
         // Geo targeting: banner is linked to a Category → State → Area.
         // The area polygon is copied here so the customer app can match a
         // pickup point without re-reading the category tree.

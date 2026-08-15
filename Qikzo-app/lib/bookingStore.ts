@@ -5,7 +5,19 @@ import { bookingsApi } from './api/endpoints/bookings';
 import type { Booking as ServerBooking, BookingStatus as ServerBookingStatus, Rider as ServerRider } from './api/types';
 import { tokenStore } from './api/tokenStore';
 
-type Stop = { address: string; coord: LatLng | null };
+export type BannerPickupSource = {
+    id: string;
+    title: string;
+    categorySlug: string;
+    menuImageUrl: string;
+};
+
+type Stop = {
+    address: string;
+    coord: LatLng | null;
+    /** Present only when this stop was confirmed from a promo banner. */
+    bannerSource?: BannerPickupSource | null;
+};
 
 type Draft = {
     mode: 'ride' | 'delivery';
@@ -14,6 +26,8 @@ type Draft = {
     drop: string;
     pickupCoord: LatLng | null;
     dropCoord: LatLng | null;
+    /** Food menu metadata when Pickup 1 was chosen from a banner. */
+    pickupBannerSource: BannerPickupSource | null;
     /** Ordered intermediate pickups (Pickup 2, 3, 4). Max 3. */
     extraPickups: Stop[];
     notes: string;
@@ -31,6 +45,7 @@ const initialDraft: Draft = {
     drop: '',
     pickupCoord: null,
     dropCoord: null,
+    pickupBannerSource: null,
     extraPickups: [],
     notes: '',
     noteImages: [],

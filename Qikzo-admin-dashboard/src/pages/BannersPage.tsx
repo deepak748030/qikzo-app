@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { mediaUrl } from '@/lib/utils';
 import { usePaginated } from '@/lib/usePaginated';
 import { useInfiniteScroll } from '@/lib/useInfiniteScroll';
 import { Badge, Button, Card, EmptyState, Input, InfiniteSentinel, Modal, Select, TableSkeleton, Textarea } from '@/components/ui';
@@ -22,6 +23,7 @@ type Banner = {
   subtitle?: string;
   address?: string;
   imageUrl?: string;
+  menuImageUrl?: string;
   coord: { lat: number; lng: number };
   categoryId?: string | null;
   categorySlug?: string;
@@ -48,6 +50,7 @@ type Form = {
   subtitle: string;
   address: string;
   imageUrl: string;
+  menuImageUrl: string;
   categoryId: string;
   cityId: string;
   areaId: string;
@@ -63,6 +66,7 @@ const emptyForm: Form = {
   subtitle: '',
   address: '',
   imageUrl: '',
+  menuImageUrl: '',
   categoryId: '',
   cityId: '',
   areaId: '',
@@ -107,6 +111,7 @@ export default function BannersPage() {
   }, []);
 
   const category = categories.find(c => c._id === form.categoryId);
+  const isFoodCategory = category?.slug?.trim().toLowerCase() === 'food';
   const selectedCity = cities.find(c => c._id === form.cityId);
   const selectedArea = selectedCity?.areas?.find(a => a._id === form.areaId);
   const mapCenter = useCenterFromPoints(form.points);
@@ -133,6 +138,7 @@ export default function BannersPage() {
       subtitle: b.subtitle || '',
       address: b.address || '',
       imageUrl: b.imageUrl || '',
+      menuImageUrl: b.menuImageUrl || '',
       categoryId: b.categoryId ? String(b.categoryId) : '',
       cityId: b.stateId || '',
       areaId: b.areaId || '',
@@ -160,6 +166,9 @@ export default function BannersPage() {
         subtitle: form.subtitle.trim(),
         address: form.address.trim(),
         imageUrl: form.imageUrl.trim(),
+        // Optional, and meaningful only for the Food category. Sending an
+        // explicit empty string also clears an old menu when category changes.
+        menuImageUrl: isFoodCategory ? form.menuImageUrl.trim() : '',
         categoryId: form.categoryId,
         categorySlug: category?.slug || '',
         stateId: form.cityId,
@@ -202,7 +211,7 @@ export default function BannersPage() {
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-11 w-20 rounded-md bg-muted border border-border overflow-hidden flex-shrink-0 flex items-center justify-center">
             {b.imageUrl ? (
-              <img src={b.imageUrl} alt="" className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <img src={mediaUrl(b.imageUrl)} alt="" className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             ) : (
               <ImageOff className="h-4 w-4 text-muted-foreground" />
             )}
@@ -275,7 +284,7 @@ export default function BannersPage() {
           <div className="relative h-28 rounded-md overflow-hidden bg-muted border border-border">
             {form.imageUrl ? (
               <img
-                src={form.imageUrl}
+                src={mediaUrl(form.imageUrl)}
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover"
                 onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0'; }}
@@ -383,6 +392,19 @@ export default function BannersPage() {
               </>
             )}
           </div>
+
+          {isFoodCategory && (
+            <div className="rounded-md border border-border bg-muted/20 p-3">
+              <ImageField
+                value={form.menuImageUrl}
+                onChange={url => setForm(f => ({ ...f, menuImageUrl: url }))}
+                label="Restaurant menu image (optional)"
+                aspect="h-24"
+                fit="contain"
+                hint="Customers can open this menu after selecting the banner location. You can skip it."
+              />
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active
