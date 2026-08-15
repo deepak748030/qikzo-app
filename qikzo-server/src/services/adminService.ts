@@ -62,7 +62,7 @@ function resolveBannerGeo(input: any) {
         input?.polygon?.coordinates?.[0] ?? (Array.isArray(input?.polygon?.coordinates?.[0]?.[0]) ? undefined : input?.polygon?.coordinates);
     const out: any = {
         categoryId: input.categoryId || null,
-        categorySlug: String(input.categorySlug || ''),
+        categorySlug: String(input.categorySlug || '').trim().toLowerCase(),
         stateId: String(input.stateId || ''),
         stateName: String(input.stateName || ''),
         areaId: String(input.areaId || ''),
@@ -447,6 +447,12 @@ export const adminService = {
             subtitle: String(input.subtitle || '').trim(),
             address: String(input.address || '').trim(),
             imageUrl: String(input.imageUrl || '').trim(),
+            // A menu belongs only to a food pickup banner. Keeping this rule
+            // server-side prevents stale hidden menu data when an admin later
+            // changes the banner's category.
+            menuImageUrl: geo.categorySlug === 'food'
+                ? String(input.menuImageUrl || '').trim()
+                : '',
             ...geo,
             active: input.active !== false,
             order: Number.isFinite(Number(input.order)) ? Number(input.order) : 0,
@@ -458,9 +464,17 @@ export const adminService = {
         if (typeof patch.subtitle === 'string') clean.subtitle = patch.subtitle.trim();
         if (typeof patch.address === 'string') clean.address = patch.address.trim();
         if (typeof patch.imageUrl === 'string') clean.imageUrl = patch.imageUrl.trim();
+        if (typeof patch.menuImageUrl === 'string') clean.menuImageUrl = patch.menuImageUrl.trim();
         if (typeof patch.active === 'boolean') clean.active = patch.active;
         if (patch.order !== undefined && Number.isFinite(Number(patch.order))) clean.order = Number(patch.order);
-        if (patch.polygon || patch.categoryId || patch.coord) Object.assign(clean, resolveBannerGeo(patch));
+        if (patch.polygon || patch.categoryId || patch.coord) {
+            Object.assign(clean, resolveBannerGeo(patch));
+        }
+        const current = await PromoBanner.findById(id).select('categorySlug').lean();
+        if (!current) throw errors.notFound('Banner not found', 'BANNER_NOT_FOUND');
+        const resultingCategory = String(clean.categorySlug ?? current.categorySlug ?? '').toLowerCase();
+        if (resultingCategory !== 'food') clean.menuImageUrl = '';
+
         const doc = await PromoBanner.findByIdAndUpdate(id, clean, { new: true });
         if (!doc) throw errors.notFound('Banner not found', 'BANNER_NOT_FOUND');
         return doc;

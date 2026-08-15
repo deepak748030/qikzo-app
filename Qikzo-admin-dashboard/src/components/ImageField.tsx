@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ImageOff, Upload, X, Link2 } from 'lucide-react';
 import { uploadFile } from '@/lib/api';
+import { mediaUrl } from '@/lib/utils';
 import { Button, Input } from '@/components/ui';
 
 /**
@@ -14,12 +15,14 @@ export function ImageField({
     onChange,
     label = 'Image',
     aspect = 'h-32',
+    fit = 'cover',
     hint,
 }: {
     value: string;
     onChange: (url: string) => void;
     label?: string;
     aspect?: string;
+    fit?: 'cover' | 'contain';
     hint?: string;
 }) {
     const inputRef = useRef<HTMLInputElement>(null);
@@ -58,7 +61,12 @@ export function ImageField({
             >
                 {value ? (
                     <>
-                        <img src={value} alt="" className="absolute inset-0 h-full w-full object-cover" onError={e => { (e.target as HTMLImageElement).style.opacity = '0'; }} />
+                        <img
+                            src={mediaUrl(value)}
+                            alt=""
+                            className={`absolute inset-0 h-full w-full ${fit === 'contain' ? 'object-contain bg-white' : 'object-cover'}`}
+                            onError={e => { (e.target as HTMLImageElement).style.opacity = '0'; }}
+                        />
                         <button
                             type="button"
                             onClick={() => onChange('')}

@@ -31,7 +31,16 @@ export default function ExploreBanners({ userCoord }: { userCoord?: { lat: numbe
 
     const openBanner = (b: Banner) => {
         if (!b.coord) return;
-        openBannerAsPickup({ address: b.address || b.title, coord: b.coord });
+        openBannerAsPickup({
+            address: b.address || b.title,
+            coord: b.coord,
+            banner: {
+                id: b._id,
+                title: b.title,
+                categorySlug: b.categorySlug,
+                menuImageUrl: b.menuImageUrl,
+            },
+        });
     };
 
     const tile = Math.min(160, Math.round(width * 0.44));

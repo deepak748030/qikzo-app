@@ -53,7 +53,16 @@ export default function PromoBanners({
 
     const openBannerLocation = (b: Banner) => {
         if (!b.coord) return;
-        openBannerAsPickup({ address: b.address || b.title, coord: b.coord });
+        openBannerAsPickup({
+            address: b.address || b.title,
+            coord: b.coord,
+            banner: {
+                id: b._id,
+                title: b.title,
+                categorySlug: b.categorySlug,
+                menuImageUrl: b.menuImageUrl,
+            },
+        });
     };
 
     // Start centered so the user can swipe either direction from the first tick.

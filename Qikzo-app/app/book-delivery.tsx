@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Switch, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Switch, Image, ActivityIndicator, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { Banknote, Wallet, CreditCard, Bike, ChevronRight, MapPin, Home, UserPlus, Camera, ImagePlus, X, Plus, Mic, MicOff } from 'lucide-react-native';
+import { Banknote, Wallet, CreditCard, Bike, ChevronRight, MapPin, Home, UserPlus, Camera, ImagePlus, X, Plus, Mic, MicOff, UtensilsCrossed, Maximize2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -46,6 +46,7 @@ export default function BookDeliveryScreen() {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [recording, setRecording] = useState(false);
+    const [menuPreview, setMenuPreview] = useState<{ title: string; imageUrl: string } | null>(null);
     const notesBaseRef = useRef<string>('');
     const speechRef = useRef<SpeechModuleLike | null>(null);
     const speechInstalledRef = useRef(false);
@@ -53,6 +54,28 @@ export default function BookDeliveryScreen() {
 
     const isRide = draft.mode === 'ride';
     const savedPlaces = useSavedPlaces((s) => s.places);
+    const selectedMenus = useMemo(() => {
+        if (isRide || draft.categoryId !== 'food') return [];
+        const menus: Array<{ key: string; title: string; imageUrl: string; pickupLabel: string }> = [];
+        if (draft.pickupBannerSource?.menuImageUrl) {
+            menus.push({
+                key: `pickup-1-${draft.pickupBannerSource.id}`,
+                title: draft.pickupBannerSource.title,
+                imageUrl: draft.pickupBannerSource.menuImageUrl,
+                pickupLabel: draft.extraPickups.length > 0 ? 'Pickup 1' : 'Pickup',
+            });
+        }
+        draft.extraPickups.forEach((stop, index) => {
+            if (!stop.bannerSource?.menuImageUrl) return;
+            menus.push({
+                key: `pickup-${index + 2}-${stop.bannerSource.id}`,
+                title: stop.bannerSource.title,
+                imageUrl: stop.bannerSource.menuImageUrl,
+                pickupLabel: `Pickup ${index + 2}`,
+            });
+        });
+        return menus;
+    }, [isRide, draft.categoryId, draft.pickupBannerSource, draft.extraPickups]);
 
     useFocusEffect(useCallback(() => {
         useSavedPlaces.getState().hydrate();
@@ -538,6 +561,36 @@ export default function BookDeliveryScreen() {
                     </View>
                 </View>
 
+                {/* A photographed menu is shown only after the exact Food-banner
+                    pickup has been confirmed. The compact card keeps ordering
+                    uncluttered; tapping it opens a readable full-screen copy. */}
+                {selectedMenus.length > 0 ? (
+                    <View style={styles.section}>
+                        <Text style={styles.label}>Restaurant menu</Text>
+                        <View style={styles.menuList}>
+                            {selectedMenus.map((menu) => (
+                                <Pressable
+                                    key={menu.key}
+                                    style={styles.menuCard}
+                                    onPress={() => setMenuPreview({ title: menu.title, imageUrl: menu.imageUrl })}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Open menu for ${menu.title}`}
+                                >
+                                    <Image source={{ uri: menu.imageUrl }} style={styles.menuThumb} resizeMode="contain" />
+                                    <View style={styles.menuBody}>
+                                        <View style={styles.menuTitleRow}>
+                                            <UtensilsCrossed size={14} color={colors.primary} />
+                                            <Text style={styles.menuTitle} numberOfLines={1}>{menu.title}</Text>
+                                        </View>
+                                        <Text style={styles.menuMeta}>{menu.pickupLabel} · Tap to view full menu</Text>
+                                    </View>
+                                    <Maximize2 size={17} color={colors.mutedForeground} />
+                                </Pressable>
+                            ))}
+                        </View>
+                    </View>
+                ) : null}
+
                 {/* Notes + photo attachments — only for deliveries */}
                 {!isRide ? (
                     <View style={styles.section}>
@@ -749,6 +802,40 @@ export default function BookDeliveryScreen() {
                 />
             </View>
 
+            <Modal
+                visible={!!menuPreview}
+                transparent
+                animationType="fade"
+                statusBarTranslucent
+                onRequestClose={() => setMenuPreview(null)}
+            >
+                <View style={styles.menuModalBackdrop}>
+                    <View style={[styles.menuModalHeader, { paddingTop: insets.top + 10 }]}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.menuModalEyebrow}>RESTAURANT MENU</Text>
+                            <Text style={styles.menuModalTitle} numberOfLines={1}>{menuPreview?.title}</Text>
+                        </View>
+                        <Pressable
+                            style={styles.menuModalClose}
+                            onPress={() => setMenuPreview(null)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Close menu"
+                            hitSlop={8}
+                        >
+                            <X size={21} color="#FFFFFF" />
+                        </Pressable>
+                    </View>
+                    {menuPreview ? (
+                        <Image
+                            source={{ uri: menuPreview.imageUrl }}
+                            style={styles.menuFullImage}
+                            resizeMode="contain"
+                        />
+                    ) : null}
+                    <Text style={[styles.menuModalHint, { paddingBottom: insets.bottom + 12 }]}>Use this menu to list the items you want the rider to pick up.</Text>
+                </View>
+            </Modal>
+
             <BottomSheet visible={sheet.visible} {...sheet.config} onClose={sheet.hide} />
         </View>
     );
@@ -834,6 +921,39 @@ const styles = StyleSheet.create({
         borderStyle: 'dashed', borderRadius: radius.md, backgroundColor: colors.card,
     },
     addPickupText: { fontSize: 12, fontFamily: fonts.bodyBold, color: colors.foreground },
+
+    menuList: { gap: 8 },
+    menuCard: {
+        minHeight: 92, flexDirection: 'row', alignItems: 'center', gap: 10,
+        padding: 8, paddingRight: 12, borderWidth: 1, borderColor: colors.border,
+        borderRadius: radius.md, backgroundColor: colors.card, overflow: 'hidden',
+    },
+    menuThumb: {
+        width: 72, height: 76, borderRadius: radius.sm,
+        borderWidth: 1, borderColor: colors.border, backgroundColor: '#FFFFFF',
+    },
+    menuBody: { flex: 1, minWidth: 0 },
+    menuTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    menuTitle: { flex: 1, fontSize: 13, fontFamily: fonts.bodyBold, color: colors.foreground },
+    menuMeta: { marginTop: 5, fontSize: 10, lineHeight: 14, fontFamily: fonts.body, color: colors.mutedForeground },
+    menuModalBackdrop: { flex: 1, backgroundColor: '#111111' },
+    menuModalHeader: {
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        paddingHorizontal: 14, paddingBottom: 10,
+        backgroundColor: 'rgba(0,0,0,0.92)',
+    },
+    menuModalEyebrow: { fontSize: 9, letterSpacing: 1.2, fontFamily: fonts.bodyBold, color: 'rgba(255,255,255,0.62)' },
+    menuModalTitle: { marginTop: 2, fontSize: 15, fontFamily: fonts.displayBold, color: '#FFFFFF' },
+    menuModalClose: {
+        width: 38, height: 38, borderRadius: radius.pill,
+        alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)',
+    },
+    menuFullImage: { flex: 1, width: '100%', backgroundColor: '#111111' },
+    menuModalHint: {
+        paddingHorizontal: 18, paddingTop: 12, textAlign: 'center',
+        fontSize: 11, lineHeight: 16, fontFamily: fonts.body, color: 'rgba(255,255,255,0.72)',
+        backgroundColor: 'rgba(0,0,0,0.92)',
+    },
 
     // Notes header with an inline "Voice" mic button.
     noteHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 },
