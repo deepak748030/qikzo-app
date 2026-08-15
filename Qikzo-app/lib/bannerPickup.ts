@@ -25,8 +25,11 @@ function sameSpot(
 }
 
 /**
- * Banner spots are pickup points. First confirm → Pickup 1.
- * Each later banner confirm → Pickup 2 / 3 / 4 (delivery only).
+ * Banner spots are pickup points. Confirming the pin on /select-location
+ * redirects straight into the parcel screen (/book-delivery) via
+ * router.replace — Back from there returns Home, where another banner can
+ * be picked. First confirm → Pickup 1, each later banner confirm →
+ * Pickup 2 / 3 / 4 (delivery only).
  */
 export function openBannerAsPickup(spot: Spot) {
     const draft = useBooking.getState().draft;

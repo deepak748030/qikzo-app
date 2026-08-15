@@ -13,6 +13,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { useSheet } from '@/lib/useSheet';
 import { useBooking, type BannerPickupSource } from '@/lib/bookingStore';
 import { useSavedPlaces } from '@/lib/savedPlacesStore';
+import { rideOptions, useServiceMode } from '@/lib/serviceMode';
 
 // Default city: New Delhi
 const DEFAULT_CENTER: LatLng = { lat: 28.6139, lng: 77.209 };
@@ -209,6 +210,12 @@ export default function SelectLocationScreen() {
         };
     };
 
+    // Banner flow = this screen was opened from a promo/explore banner tap
+    // (bannerId travels in the route params). After confirming the pickup we
+    // take the user straight to the parcel (book-delivery) screen instead of
+    // landing them back on Home with nothing visible having happened.
+    const bannerFlow = !savingPlace && which === 'pickup' && !!bannerId;
+
     const confirm = () => {
         if (!address.trim()) {
             sheet.show({ variant: 'error', title: 'Address required', message: 'Please pin a location on the map.' });
@@ -234,9 +241,28 @@ export default function SelectLocationScreen() {
         } else {
             setDraft({ drop: address.trim(), dropCoord: center });
         }
+        if (bannerFlow) {
+            // Banners are delivery offers — flip the whole app into delivery
+            // mode and pre-select the banner's category (parcel by default)
+            // so the parcel screen opens with the right form.
+            const isRideCategory = rideOptions.some((r) => r.id === draft.categoryId);
+            setDraft({
+                mode: 'delivery',
+                categoryId: bannerCategorySlug || (isRideCategory ? 'parcel' : draft.categoryId),
+            });
+            useServiceMode.getState().setMode('delivery');
+        }
         setTimeout(() => {
             setConfirming(false);
-            router.back();
+            if (bannerFlow) {
+                // Replace (not push): the stack stays Home → parcel screen, so
+                // pressing Back on the parcel screen returns to the banner list
+                // where the user can pick another banner. A different banner is
+                // then stacked as Pickup 2/3/4 by openBannerAsPickup.
+                router.replace('/book-delivery');
+            } else {
+                router.back();
+            }
         }, 250);
     };
 
