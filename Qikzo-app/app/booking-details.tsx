@@ -22,6 +22,17 @@ import RateRiderModal from '@/components/RateRiderModal';
 import RateOrderModal from '@/components/RateOrderModal';
 import BookingStageStepper from '@/components/BookingStageStepper';
 
+/** Format estimated minutes into a human-friendly string. */
+function fmtDuration(min: number): string {
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h < 24) return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh > 0 ? `${d} day ${rh} hr` : `${d} day`;
+}
+
 // Map booking category → vehicle rendered on the "accepted" overlay.
 // Ride categories map 1:1; delivery categories default to the delivery bike.
 function vehicleFor(categoryId?: string): VehicleKind {
@@ -481,7 +492,7 @@ export default function BookingDetailsScreen() {
                         <Text style={styles.fareValue}>₹{booking.price}</Text>
                     </View>
                     <View style={styles.fareMeta}>
-                        <Text style={styles.fareMetaText}>{booking.distanceKm.toFixed(1)} km · ~{booking.etaMin} min</Text>
+                        <Text style={styles.fareMetaText}>{booking.distanceKm.toFixed(1)} km · ~{fmtDuration(booking.etaMin)}</Text>
                         <Text style={styles.fareMetaText}>Payment: {booking.payment.toUpperCase()}</Text>
                     </View>
                 </View>
