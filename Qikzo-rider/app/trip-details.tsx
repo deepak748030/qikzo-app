@@ -12,6 +12,17 @@ import { ratingsApi } from '@/lib/api/endpoints/ratings';
 import type { Trip, Booking } from '@/lib/api/types';
 import { CATEGORY_META, type JobCategory } from '@/lib/mockData';
 
+/** Format estimated minutes into a human-friendly string. */
+function fmtDuration(min: number): string {
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h < 24) return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh > 0 ? `${d} day ${rh} hr` : `${d} day`;
+}
+
 const CATEGORY_FROM_SLUG: Record<string, JobCategory> = {
     ride: 'ride', bike: 'ride', auto: 'ride', cab: 'ride', sedan: 'ride',
     groceries: 'groceries', food: 'food', medicines: 'medicines',
@@ -217,7 +228,7 @@ export default function TripDetails() {
                         {tip > 0 ? <Text style={styles.tipNote}>includes ₹{tip} tip</Text> : null}
                     </View>
                     <View style={styles.fareMeta}>
-                        <Text style={styles.fareMetaText}>{distanceKm.toFixed(1)} km{durationMin ? ` · ~${durationMin} min` : ''}</Text>
+                        <Text style={styles.fareMetaText}>{distanceKm.toFixed(1)} km{durationMin ? ` · ~${fmtDuration(durationMin)}` : ''}</Text>
                         <Text style={styles.fareMetaText}>Payment: {(booking?.payment || 'cash').toUpperCase()}</Text>
                         <Text style={styles.fareMetaText}>{cancelled ? `Cancelled ${fmtDate(endedAt)}` : `Delivered ${fmtDate(endedAt)}`}</Text>
                     </View>
