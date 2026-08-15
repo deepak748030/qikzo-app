@@ -47,12 +47,23 @@ function StatusGlyph({ status, size = 11 }: { status: BookingStatus; size?: numb
 }
 
 function fmtTime(ts: number) {
-    const d = new Date(ts);
-    const today = new Date();
-    const isToday = d.toDateString() === today.toDateString();
-    const t = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-    if (isToday) return `Today, ${t}`;
-    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ', ' + t;
+    const diff = Date.now() - ts;
+    const seconds = Math.floor(diff / 1000);
+    const m = Math.floor(seconds / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    const weeks = Math.floor(d / 7);
+    const months = Math.floor(d / 30);
+    const years = Math.floor(d / 365);
+
+    if (seconds < 60) return 'Just now';
+    if (m < 60) return m === 1 ? '1 min ago' : `${m} mins ago`;
+    if (h < 24) return h === 1 ? '1 hour ago' : `${h} hours ago`;
+    if (d === 1) return 'Yesterday';
+    if (d < 7) return `${d} days ago`;
+    if (weeks < 4) return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+    if (months < 12) return months === 1 ? '1 month ago' : `${months} months ago`;
+    return years === 1 ? '1 year ago' : `${years} years ago`;
 }
 
 export default function ActivityScreen() {

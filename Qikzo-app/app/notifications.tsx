@@ -24,15 +24,22 @@ function topicToType(t: string): NType {
 }
 function fmtTime(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
-    const m = Math.round(diff / 60_000);
-    if (m < 1) return 'Just now';
-    if (m < 60) return `${m}m ago`;
-    const h = Math.round(m / 60);
-    if (h < 24) return `${h}h ago`;
-    const d = Math.round(h / 24);
+    const seconds = Math.floor(diff / 1000);
+    const m = Math.floor(seconds / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    const weeks = Math.floor(d / 7);
+    const months = Math.floor(d / 30);
+    const years = Math.floor(d / 365);
+
+    if (seconds < 60) return 'Just now';
+    if (m < 60) return m === 1 ? '1 min ago' : `${m} mins ago`;
+    if (h < 24) return h === 1 ? '1 hour ago' : `${h} hours ago`;
     if (d === 1) return 'Yesterday';
-    if (d < 7) return `${d}d ago`;
-    return new Date(iso).toLocaleDateString();
+    if (d < 7) return d === 1 ? '1 day ago' : `${d} days ago`;
+    if (weeks < 4) return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+    if (months < 12) return months === 1 ? '1 month ago' : `${months} months ago`;
+    return years === 1 ? '1 year ago' : `${years} years ago`;
 }
 
 export default function NotificationsScreen() {
