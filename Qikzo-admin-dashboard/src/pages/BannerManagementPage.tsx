@@ -29,7 +29,12 @@ type Banner = {
   imageUrl?: string;
   description?: string;
   address?: string;
-  coord?: { lat: number; lng: number };
+  /**
+   * Banners written before the coordinate became mandatory (and anything the
+   * server stored before validation was tightened) can carry a `coord` object
+   * whose lat/lng are null, so the members are nullable on purpose.
+   */
+  coord?: { lat: number | null; lng: number | null } | null;
   active?: boolean;
   order?: number;
 };
@@ -51,6 +56,19 @@ const emptyForm: Form = {
 };
 
 const TYPE_LABEL: Record<Banner['type'], string> = { food: 'Food', grocery: 'Grocery' };
+
+/**
+ * A banner only has a usable pickup point when BOTH numbers survive. Legacy
+ * rows can hold `coord: { lat: null, lng: null }`, which is a truthy object —
+ * testing the object alone is not enough, so check the members.
+ */
+const formatCoord = (coord?: Banner['coord']) => {
+  const lat = coord?.lat;
+  const lng = coord?.lng;
+  if (typeof lat !== 'number' || typeof lng !== 'number') return 'No coordinate';
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return 'No coordinate';
+  return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+};
 
 export default function BannerManagementPage() {
   const [typeFilter, setTypeFilter] = useState('');
@@ -178,7 +196,7 @@ export default function BannerManagementPage() {
           {b.address ? <div className="text-sm truncate">{b.address}</div> : null}
           <div className="text-xs text-muted-foreground truncate inline-flex items-center gap-1">
             <MapPin className="h-3 w-3" />
-            {b.coord ? `${b.coord.lat.toFixed(4)}, ${b.coord.lng.toFixed(4)}` : 'No coordinate'}
+            {formatCoord(b.coord)}
           </div>
         </div>
       ),

@@ -26,6 +26,20 @@ function paramStr(v?: string | string[]): string {
 }
 
 /**
+ * A banner only has a displayable pickup point when BOTH numbers survive.
+ * Banners saved before the coordinate became mandatory can hold
+ * `{ lat: null, lng: null }` — a truthy object — so testing the object alone
+ * is not enough; check the members. Returns '' when there is nothing to show.
+ */
+function formatCoord(coord?: CategoryBanner['coord']): string {
+    const lat = coord?.lat;
+    const lng = coord?.lng;
+    if (typeof lat !== 'number' || typeof lng !== 'number') return '';
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+/**
  * Banner detail — the screen a Food/Grocery banner opens.
  *
  *   Details tab : the banner itself — image, title, description and the
@@ -98,12 +112,16 @@ export default function BannerDetailScreen() {
             });
             return;
         }
+        // Narrowing done above only proves the values are finite, not that they
+        // are typed as numbers, so coerce explicitly for the booking draft.
+        const lat = Number(banner.coord.lat);
+        const lng = Number(banner.coord.lng);
         setMode('delivery');
         setDraft({
             mode: 'delivery',
             categoryId: banner.type === 'grocery' ? 'groceries' : 'food',
             pickup: banner.address?.trim() || banner.title,
-            pickupCoord: { lat: banner.coord.lat, lng: banner.coord.lng },
+            pickupCoord: { lat, lng },
         });
         router.replace('/book-delivery');
     };
@@ -161,9 +179,9 @@ export default function BannerDetailScreen() {
                                 <Text style={styles.locationText}>
                                     {banner?.address?.trim() || banner?.title || 'Location not set'}
                                 </Text>
-                                {banner?.coord ? (
+                                {formatCoord(banner?.coord) ? (
                                     <Text style={styles.coordText}>
-                                        {banner.coord.lat.toFixed(5)}, {banner.coord.lng.toFixed(5)}
+                                        {formatCoord(banner?.coord)}
                                     </Text>
                                 ) : null}
                             </View>

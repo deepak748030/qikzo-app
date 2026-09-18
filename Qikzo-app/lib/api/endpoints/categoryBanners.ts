@@ -10,8 +10,12 @@ export type CategoryBanner = {
     imageUrl?: string;
     description?: string;
     address?: string;
-    /** Becomes the customer's pickup point when they open the banner. */
-    coord: { lat: number; lng: number };
+    /**
+     * Becomes the customer's pickup point when they open the banner. Nullable
+     * members because banners saved before the coordinate became mandatory can
+     * hold `{ lat: null, lng: null }`.
+     */
+    coord?: { lat: number | null; lng: number | null } | null;
     active?: boolean;
     order?: number;
 };
