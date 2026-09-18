@@ -17,6 +17,7 @@ import { MAX_EXTRA_PICKUPS, usesBannerPickups } from '@/lib/bannerPickup';
 import { ApiError } from '@/lib/api/errors';
 import {
     categoryBannersApi,
+    type BannerReview,
     type BannerReviews,
     type CategoryBanner,
 } from '@/lib/api/endpoints/categoryBanners';
@@ -24,6 +25,19 @@ import {
 function paramStr(v?: string | string[]): string {
     if (Array.isArray(v)) return String(v[0] || '');
     return v ? String(v) : '';
+}
+
+/**
+ * The optional sub-scores the post-delivery review asks for. Customers can skip
+ * any of them (the modal stores null), so only the ones actually filled in come
+ * back — the Rating tab must show exactly what was given, nothing invented.
+ */
+function subScores(r: BannerReview): { label: string; value: number }[] {
+    const out: { label: string; value: number }[] = [];
+    if (typeof r.quality === 'number' && Number.isFinite(r.quality)) out.push({ label: 'Quality', value: r.quality });
+    if (typeof r.packaging === 'number' && Number.isFinite(r.packaging)) out.push({ label: 'Packaging', value: r.packaging });
+    if (typeof r.accuracy === 'number' && Number.isFinite(r.accuracy)) out.push({ label: 'Accuracy', value: r.accuracy });
+    return out;
 }
 
 /**
@@ -306,6 +320,34 @@ export default function BannerDetailScreen() {
                                     <Text style={styles.reviewName} numberOfLines={1}>{r.userName}</Text>
                                 </View>
                                 {r.comment ? <Text style={styles.reviewComment}>{r.comment}</Text> : null}
+
+                                {/* Sub-scores captured by the post-delivery review.
+                                    They are optional there, so only render the ones filled in. */}
+                                {subScores(r).length > 0 ? (
+                                    <View style={styles.subScoreRow}>
+                                        {subScores(r).map((s) => (
+                                            <View key={s.label} style={styles.subScoreChip}>
+                                                <Text style={styles.subScoreLabel}>{s.label}</Text>
+                                                <View style={styles.starsRow}>
+                                                    {[1, 2, 3, 4, 5].map((n) => (
+                                                        <Star key={n} size={9} color={colors.accent} fill={s.value >= n ? colors.accent : 'transparent'} />
+                                                    ))}
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </View>
+                                ) : null}
+
+                                {r.tags?.length ? (
+                                    <View style={styles.tagRow}>
+                                        {r.tags.map((t) => (
+                                            <View key={t} style={styles.tagChip}>
+                                                <Text style={styles.tagText}>{t}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                ) : null}
+
                                 <Text style={styles.reviewMeta}>
                                     {new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                                 </Text>
@@ -320,7 +362,7 @@ export default function BannerDetailScreen() {
                     <Text style={styles.footerMeta} numberOfLines={1}>
                         {banner?.address?.trim() || banner?.title || 'Pickup location'}
                     </Text>
-                    <Button label="Set as pickup" onPress={setAsPickup} disabled={!banner} />
+                    <Button label="Order now" onPress={setAsPickup} disabled={!banner} />
                 </View>
             ) : null}
 
@@ -366,6 +408,20 @@ const styles = StyleSheet.create({
     reviewName: { fontSize: 11, fontFamily: fonts.bodyBold, color: colors.mutedForeground },
     reviewComment: { fontSize: 12, fontFamily: fonts.body, color: colors.foreground, lineHeight: 18 },
     reviewMeta: { fontSize: 10, fontFamily: fonts.body, color: colors.mutedForeground },
+
+    // Optional sub-scores + tags from the post-delivery review.
+    subScoreRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    subScoreChip: {
+        flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4,
+        borderRadius: radius.pill, backgroundColor: colors.chipBg,
+    },
+    subScoreLabel: { fontSize: 10, fontFamily: fonts.bodyBold, color: colors.mutedForeground },
+    tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+    tagChip: {
+        paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill,
+        borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card,
+    },
+    tagText: { fontSize: 10, fontFamily: fonts.body, color: colors.mutedForeground },
 
     emptyBox: {
         alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 36,
