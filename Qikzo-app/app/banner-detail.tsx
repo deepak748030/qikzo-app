@@ -13,7 +13,7 @@ import DetailTabBar, { type DetailTab } from '@/components/DetailTabBar';
 import { useSheet } from '@/lib/useSheet';
 import { useBooking } from '@/lib/bookingStore';
 import { useServiceMode } from '@/lib/serviceMode';
-import { MAX_EXTRA_PICKUPS } from '@/lib/bannerPickup';
+import { MAX_EXTRA_PICKUPS, usesBannerPickups } from '@/lib/bannerPickup';
 import { ApiError } from '@/lib/api/errors';
 import {
     categoryBannersApi,
@@ -151,14 +151,20 @@ export default function BannerDetailScreen() {
         // banner again after going back must land on the NEXT pickup, not
         // overwrite the one already chosen.
         const slots = draft.extraPickups;
+
+        // Once a trip belongs to Food/Groceries its category is fixed — the
+        // banner that created Pickup 1 owns it, and letting a later banner
+        // overwrite it would re-price the whole booking under a different
+        // category than its first pickup. But if the trip is NOT already on
+        // Food/Groceries (e.g. the customer was in ride mode), the banner has
+        // to bring its own category or the per-pickup boxes never render.
+        const categoryPatch = usesBannerPickups(draft.categoryId) ? {} : { categoryId };
+
         const freeIdx = slots.findIndex((s) => !s.address.trim());
         if (freeIdx >= 0) {
-            // categoryId is deliberately left alone here and below: the trip's
-            // category belongs to the banner that created Pickup 1. Letting a
-            // later banner overwrite it would re-price the whole booking under
-            // a different category than its first pickup.
             setDraft({
                 mode: 'delivery',
+                ...categoryPatch,
                 extraPickups: slots.map((s, i) =>
                     i === freeIdx ? { ...s, address, coord } : s
                 ),
@@ -178,6 +184,7 @@ export default function BannerDetailScreen() {
 
         setDraft({
             mode: 'delivery',
+            ...categoryPatch,
             extraPickups: [...slots, { address, coord, notes: '' }],
         });
         router.replace('/book-delivery');
