@@ -14,7 +14,9 @@
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "seed": "tsx src/seed/seed.ts",
         "migrate": "tsx src/db/runMigrations.ts",
-        "test:rewards": "node --test --import tsx src/__tests__/rewardMath.test.ts"
+        "test:rewards": "node --test --import tsx src/__tests__/rewardMath.test.ts",
+        "test:banners": "node --test --import tsx src/__tests__/bannerTargeting.test.ts",
+        "test": "node --test --import tsx \"src/__tests__/*.test.ts\""
     },
     "dependencies": {
         "@sentry/node": "^10.65.0",

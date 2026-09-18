@@ -3,6 +3,18 @@ import { useBooking } from './bookingStore';
 
 export const MAX_EXTRA_PICKUPS = 3;
 
+/**
+ * Food and Groceries are the only categories that carry the banner-driven
+ * multi-pickup behaviour: "Add another pickup" does not jump to the map, and
+ * every pickup keeps its own "What needs to be picked up?" box. Every other
+ * category keeps the original single-notes flow untouched.
+ */
+export const BANNER_PICKUP_CATEGORIES = ['food', 'groceries'] as const;
+
+export function usesBannerPickups(categoryId: string | undefined | null): boolean {
+    return !!categoryId && (BANNER_PICKUP_CATEGORIES as readonly string[]).includes(categoryId);
+}
+
 type Spot = {
     address: string;
     coord: { lat: number; lng: number };

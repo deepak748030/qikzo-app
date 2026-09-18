@@ -2,6 +2,7 @@ import { Router } from 'express';
 import authRoutes from './authRoutes';
 import userRoutes from './userRoutes';
 import catalogRoutes from './catalogRoutes';
+import categoryBannerRoutes from './categoryBannerRoutes';
 import placeRoutes from './placeRoutes';
 import bookingRoutes from './bookingRoutes';
 import riderRoutes from './riderRoutes';
@@ -23,6 +24,8 @@ const router = Router();
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/', catalogRoutes);
+// Food/Grocery tab banners — separate from the home-carousel `/banners`.
+router.use('/category-banners', categoryBannerRoutes);
 router.use('/places', placeRoutes);
 router.use('/bookings', bookingRoutes);
 router.use('/riders', riderRoutes);

@@ -23,7 +23,7 @@ import { uploadFile } from '@/lib/api/endpoints/uploads';
 import { walletApi, type PayQuote } from '@/lib/api/endpoints/wallet';
 import { bookingsApi } from '@/lib/api/endpoints/bookings';
 import { estimateRoute } from '@/lib/estimate';
-import { MAX_EXTRA_PICKUPS } from '@/lib/bannerPickup';
+import { MAX_EXTRA_PICKUPS, usesBannerPickups } from '@/lib/bannerPickup';
 import type { BookingEstimate } from '@/lib/api/types';
 
 /** Format estimated minutes into a human-friendly string. */
@@ -64,6 +64,67 @@ export default function BookDeliveryScreen() {
     const speechSubscriptionsRef = useRef<Array<{ remove: () => void }>>([]);
 
     const isRide = draft.mode === 'ride';
+    /**
+     * Food/Groceries carry one "What needs to be picked up?" box PER pickup.
+     * Every other category keeps the original single shared box.
+     */
+    const bannerPickupMode = !isRide && usesBannerPickups(draft.categoryId);
+
+    /**
+     * Only the extra pickups that actually have a location ship with the
+     * booking — the submit path filters the rest out — so the per-pickup boxes
+     * and the composed notes must be driven by this same list. Without it a
+     * box could be filled for an empty slot and the text would silently vanish.
+     */
+    const filledExtras = useMemo(
+        () => draft.extraPickups
+            .map((stop, index) => ({ stop, index, label: `Pickup ${index + 2}` }))
+            .filter((e) => e.stop.address.trim().length > 0),
+        [draft.extraPickups],
+    );
+
+    const noteBlocks = useMemo(() => {
+        type Block = { key: string; label: string; value: string; set: (v: string) => void };
+        const blocks: Block[] = [{
+            key: 'pickup-1',
+            label: filledExtras.length > 0 ? 'Pickup 1' : 'Pickup',
+            value: draft.notes,
+            set: (v) => setDraft({ notes: v }),
+        }];
+        if (!bannerPickupMode) return blocks;
+        // A slot gets its box once it has a location (map pin or banner).
+        filledExtras.forEach(({ stop, index, label }) => {
+            blocks.push({
+                key: `pickup-${index + 2}`,
+                label,
+                value: stop.notes || '',
+                set: (v) => setDraft({
+                    extraPickups: draft.extraPickups.map((x, j) => (j === index ? { ...x, notes: v } : x)),
+                }),
+            });
+        });
+        return blocks;
+    }, [bannerPickupMode, draft.notes, draft.extraPickups, filledExtras, setDraft]);
+
+    /**
+     * The server stores a single notes string, so the per-pickup boxes are
+     * folded into it here — labelled by pickup whenever more than one is used.
+     * With a single pickup the text is sent exactly as typed, so nothing
+     * changes for the existing flow.
+     */
+    const composedNotes = useMemo(() => {
+        const first = draft.notes.trim();
+        if (!bannerPickupMode) return first;
+        const extra = filledExtras
+            .map((e) => ({ label: e.label, address: e.stop.address.trim(), text: (e.stop.notes || '').trim() }))
+            .filter((s) => s.text);
+        if (extra.length === 0) return first;
+        const lines: string[] = [];
+        if (first) lines.push(`Pickup 1${draft.pickup.trim() ? ` (${draft.pickup.trim()})` : ''}: ${first}`);
+        extra.forEach((s) => lines.push(`${s.label} (${s.address}): ${s.text}`));
+        return lines.join('\n');
+    }, [bannerPickupMode, draft.notes, filledExtras, draft.pickup]);
+
     const savedPlaces = useSavedPlaces((s) => s.places);
     const selectedMenus = useMemo(() => {
         if (isRide || draft.categoryId !== 'food') return [];
@@ -239,6 +300,10 @@ export default function BookDeliveryScreen() {
         if (draft.extraPickups.length >= MAX_EXTRA_PICKUPS) return;
         const next = [...draft.extraPickups, { address: '', coord: null }];
         setDraft({ extraPickups: next });
+        // Food/Groceries: the empty slot is shown inline and the customer fills
+        // it either by tapping the row or by going back and setting another
+        // banner as the pickup — so the map must NOT open by itself.
+        if (usesBannerPickups(draft.categoryId)) return;
         router.push({ pathname: '/select-location', params: { slot: `pickup${next.length + 1}` } });
     };
     const editExtraPickup = (idx: number) => {
@@ -332,7 +397,9 @@ export default function BookDeliveryScreen() {
             sheet.show({ variant: 'error', title: 'Locations required', message: 'Please set both pickup and drop locations.' });
             return;
         }
-        if (!isRide && !draft.notes.trim()) {
+        // Food/Groceries can carry the item list on any pickup box, so check the
+        // composed text rather than the first box alone.
+        if (!isRide && !composedNotes) {
             sheet.show({ variant: 'error', title: 'Add a note', message: 'Tell the rider what to pick up — e.g. "2L milk, bread, dal".' });
             return;
         }
@@ -375,7 +442,7 @@ export default function BookDeliveryScreen() {
                         lat: draft.dropCoord?.lat ?? null,
                         lng: draft.dropCoord?.lng ?? null,
                     },
-                    notes: draft.notes.trim() || (isRide ? 'Passenger ride' : ''),
+                    notes: composedNotes || (isRide ? 'Passenger ride' : ''),
                     noteImages: isRide ? undefined : (draft.noteImages || []),
                     recipientPhone: draft.recipientPhone.trim() || undefined,
                     recipientName: draft.bookingForOther ? (draft.recipientName.trim() || undefined) : undefined,
@@ -399,7 +466,7 @@ export default function BookDeliveryScreen() {
             categoryId: draft.categoryId,
             pickup: draft.pickup.trim(),
             drop: draft.drop.trim(),
-            notes: draft.notes.trim() || (isRide ? 'Passenger ride' : ''),
+            notes: composedNotes || (isRide ? 'Passenger ride' : ''),
             recipientPhone: draft.recipientPhone.trim() || undefined,
             payment: draft.payment,
             distanceKm: trip.distanceKm,
@@ -605,38 +672,49 @@ export default function BookDeliveryScreen() {
                 {/* Notes + photo attachments — only for deliveries */}
                 {!isRide ? (
                     <View style={styles.section}>
-                        <View style={styles.noteHeader}>
-                            <Text style={[styles.label, { marginBottom: 0 }]}>What needs to be picked up?</Text>
-                            <Pressable
-                                onPress={toggleRecording}
-                                style={[styles.micBtn, recording && styles.micBtnActive]}
-                                hitSlop={6}
-                            >
-                                {recording ? (
-                                    <>
-                                        <MicOff size={14} color="#FFFFFF" />
-                                        <Text style={styles.micTextActive}>Stop</Text>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Mic size={14} color={colors.foreground} />
-                                        <Text style={styles.micText}>Voice</Text>
-                                    </>
-                                )}
-                            </Pressable>
-                        </View>
-                        <View style={styles.noteWrap}>
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                                <Input
-                                    placeholder={'List the items, sizes, brand notes... or tap Voice to dictate\ne.g. 2L Amul milk, brown bread, 6 eggs'}
-                                    value={draft.notes}
-                                    onChangeText={(v) => setDraft({ notes: v })}
-                                    multiline
-                                    numberOfLines={4}
-                                    style={{ minHeight: 70, textAlignVertical: 'top' }}
-                                />
+                        {noteBlocks.map((block, blockIdx) => (
+                            <View key={block.key} style={blockIdx > 0 ? styles.noteBlockGap : undefined}>
+                                <View style={styles.noteHeader}>
+                                    <Text style={[styles.label, { marginBottom: 0 }]}>
+                                        {bannerPickupMode
+                                            ? `What needs to be picked up? · ${block.label}`
+                                            : 'What needs to be picked up?'}
+                                    </Text>
+                                    {/* Voice dictates into the first box only — it writes draft.notes. */}
+                                    {blockIdx === 0 ? (
+                                        <Pressable
+                                            onPress={toggleRecording}
+                                            style={[styles.micBtn, recording && styles.micBtnActive]}
+                                            hitSlop={6}
+                                        >
+                                            {recording ? (
+                                                <>
+                                                    <MicOff size={14} color="#FFFFFF" />
+                                                    <Text style={styles.micTextActive}>Stop</Text>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Mic size={14} color={colors.foreground} />
+                                                    <Text style={styles.micText}>Voice</Text>
+                                                </>
+                                            )}
+                                        </Pressable>
+                                    ) : null}
+                                </View>
+                                <View style={styles.noteWrap}>
+                                    <View style={{ flex: 1, minWidth: 0 }}>
+                                        <Input
+                                            placeholder={'List the items, sizes, brand notes... or tap Voice to dictate\ne.g. 2L Amul milk, brown bread, 6 eggs'}
+                                            value={block.value}
+                                            onChangeText={block.set}
+                                            multiline
+                                            numberOfLines={4}
+                                            style={{ minHeight: 70, textAlignVertical: 'top' }}
+                                        />
+                                    </View>
+                                </View>
                             </View>
-                        </View>
+                        ))}
 
                         {/* Photo attachments — up to MAX_IMAGES thumbs + add button.
                             Helps riders identify exact items (brand, pack size). */}
@@ -968,6 +1046,8 @@ const styles = StyleSheet.create({
 
     // Notes header with an inline "Voice" mic button.
     noteHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 },
+    /** Separates the per-pickup "What needs to be picked up?" boxes (Food/Groceries). */
+    noteBlockGap: { marginTop: 14 },
     micBtn: {
         flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6,
         borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card,

@@ -19,6 +19,7 @@ import tripsApi from './endpoints/trips';
 import usersApi from './endpoints/users';
 import placesApi from './endpoints/places';
 import catalogApi from './endpoints/catalog';
+import categoryBannersApi from './endpoints/categoryBanners';
 import notificationsApi from './endpoints/notifications';
 
 export const api = {
@@ -29,6 +30,7 @@ export const api = {
     users: usersApi,
     places: placesApi,
     catalog: catalogApi,
+    categoryBanners: categoryBannersApi,
     notifications: notificationsApi,
 };
 

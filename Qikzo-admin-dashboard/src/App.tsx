@@ -20,6 +20,7 @@ const PayoutsPage = lazy(() => import('@/pages/PayoutsPage'));
 // const CouponsPage = lazy(() => import('@/pages/CouponsPage'));
 const CoveragePage = lazy(() => import('@/pages/CoveragePage'));
 const BannersPage = lazy(() => import('@/pages/BannersPage'));
+const BannerManagementPage = lazy(() => import('@/pages/BannerManagementPage'));
 const SupportPage = lazy(() => import('@/pages/SupportPage'));
 const SupportDetailPage = lazy(() => import('@/pages/SupportDetailPage'));
 const AuditPage = lazy(() => import('@/pages/AuditPage'));
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="referrals" element={<ReferralsPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="banners" element={<BannersPage />} />
+          <Route path="banner-management" element={<BannerManagementPage />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="support/:id" element={<SupportDetailPage />} />
           <Route path="audit" element={<AuditPage />} />

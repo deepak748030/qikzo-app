@@ -109,6 +109,13 @@ export default function HomeScreen() {
   }, [bookings]);
 
   const openWithCategory = (categoryId: string, drop?: string, dropCoord?: { lat: number; lng: number } | null) => {
+    // Food and Groceries open their own banner screen; every other tile keeps
+    // going straight to the booking form exactly as before.
+    if (categoryId === 'food' || categoryId === 'groceries') {
+      setDraft({ mode: 'delivery', categoryId });
+      router.push({ pathname: '/category-banners', params: { type: categoryId === 'food' ? 'food' : 'grocery' } });
+      return;
+    }
     const patch: Parameters<typeof setDraft>[0] = { mode, categoryId };
     if (drop) {
       patch.drop = drop;
