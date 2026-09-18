@@ -13,6 +13,7 @@ import DetailTabBar, { type DetailTab } from '@/components/DetailTabBar';
 import { useSheet } from '@/lib/useSheet';
 import { useBooking } from '@/lib/bookingStore';
 import { useServiceMode } from '@/lib/serviceMode';
+import { MAX_EXTRA_PICKUPS } from '@/lib/bannerPickup';
 import { ApiError } from '@/lib/api/errors';
 import {
     categoryBannersApi,
@@ -65,6 +66,7 @@ export default function BannerDetailScreen() {
     const [loading, setLoading] = useState(true);
     const sheet = useSheet();
 
+    const draft = useBooking((s) => s.draft);
     const setDraft = useBooking((s) => s.setDraft);
     const setMode = useServiceMode((s) => s.setMode);
 
@@ -116,12 +118,65 @@ export default function BannerDetailScreen() {
         // are typed as numbers, so coerce explicitly for the booking draft.
         const lat = Number(banner.coord.lat);
         const lng = Number(banner.coord.lng);
+        const address = banner.address?.trim() || banner.title;
+        const categoryId = banner.type === 'grocery' ? 'groceries' : 'food';
+        const coord = { lat, lng };
+
+        const sameSpot = (a: string, c: { lat: number; lng: number } | null | undefined) => {
+            if (a && a === address) return true;
+            if (!c) return false;
+            return Math.abs(c.lat - lat) < 1e-5 && Math.abs(c.lng - lng) < 1e-5;
+        };
+
+        // Already picked earlier in this trip — don't add it a second time.
+        const alreadyIn =
+            sameSpot(draft.pickup, draft.pickupCoord) ||
+            draft.extraPickups.some((s) => sameSpot(s.address, s.coord));
+        if (alreadyIn) {
+            setMode('delivery');
+            router.replace('/book-delivery');
+            return;
+        }
+
         setMode('delivery');
+
+        // First banner of the trip owns Pickup 1.
+        if (!draft.pickup.trim()) {
+            setDraft({ mode: 'delivery', categoryId, pickup: address, pickupCoord: coord });
+            router.replace('/book-delivery');
+            return;
+        }
+
+        // Every later banner fills the next free pickup slot. Tapping the same
+        // banner again after going back must land on the NEXT pickup, not
+        // overwrite the one already chosen.
+        const slots = draft.extraPickups;
+        const freeIdx = slots.findIndex((s) => !s.address.trim());
+        if (freeIdx >= 0) {
+            setDraft({
+                mode: 'delivery',
+                categoryId,
+                extraPickups: slots.map((s, i) =>
+                    i === freeIdx ? { ...s, address, coord } : s
+                ),
+            });
+            router.replace('/book-delivery');
+            return;
+        }
+
+        if (slots.length >= MAX_EXTRA_PICKUPS) {
+            sheet.show({
+                variant: 'error',
+                title: 'Pickup limit reached',
+                message: `You can add up to ${MAX_EXTRA_PICKUPS + 1} pickups on one booking.`,
+            });
+            return;
+        }
+
         setDraft({
             mode: 'delivery',
-            categoryId: banner.type === 'grocery' ? 'groceries' : 'food',
-            pickup: banner.address?.trim() || banner.title,
-            pickupCoord: { lat, lng },
+            categoryId,
+            extraPickups: [...slots, { address, coord, notes: '' }],
         });
         router.replace('/book-delivery');
     };

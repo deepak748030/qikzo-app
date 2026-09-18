@@ -17,6 +17,12 @@ type Stop = {
     coord: LatLng | null;
     /** Present only when this stop was confirmed from a promo banner. */
     bannerSource?: BannerPickupSource | null;
+    /**
+     * Per-pickup item list. Used by Food/Groceries, where each pickup gets its
+     * own "What needs to be picked up?" box. Other categories keep using the
+     * single draft.notes field, so this stays optional.
+     */
+    notes?: string;
 };
 
 type Draft = {
