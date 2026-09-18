@@ -17,11 +17,6 @@ const OrderReviewSchema = new Schema(
         user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
         // Denormalised for cheap analytics (avg stars for `food` vs `medicines`).
         categorySlug: { type: String, required: true, index: true },
-        // Set only when the booking came through the Food/Grocery banner flow, so
-        // reviews can be rolled up per merchant. Null on every pre-existing
-        // review and on any booking made the old way — both behave as before.
-        storeId: { type: Schema.Types.ObjectId, ref: 'Restaurant', default: null, index: true },
-        storeName: { type: String, default: '' },
 
         // Overall item/order satisfaction.
         stars: { type: Number, required: true, min: 1, max: 5 },

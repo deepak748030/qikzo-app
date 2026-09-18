@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { mediaUrl } from '@/lib/utils';
@@ -10,8 +9,7 @@ import {
 } from '@/components/ui';
 import { DataTable, type Column } from '@/components/DataTable';
 import { ImageField } from '@/components/ImageField';
-import { StoreMultiSelect, type StoreOption } from '@/components/StoreMultiSelect';
-import { Images, Plus, Trash2, ImageOff, Store, ExternalLink } from 'lucide-react';
+import { Images, Plus, Trash2, ImageOff, MapPin } from 'lucide-react';
 
 /**
  * Banner Management — Food / Grocery banners shown as a vertical list inside
@@ -20,6 +18,9 @@ import { Images, Plus, Trash2, ImageOff, Store, ExternalLink } from 'lucide-reac
  * Deliberately separate from the existing "Banners" page: those are the
  * geo-targeted home-carousel promos. Nothing here reads or writes that
  * collection, so the home screen is unaffected.
+ *
+ * A banner is simply an image + title + type + the coordinate that becomes
+ * the customer's pickup location when they open it.
  */
 type Banner = {
   _id: string;
@@ -27,11 +28,8 @@ type Banner = {
   type: 'food' | 'grocery';
   imageUrl?: string;
   description?: string;
-  storeIds: string[];
-  storeNames: string[];
-  storeIdsEmpty: boolean;
-  allStores: boolean;
-  storeCount: number;
+  address?: string;
+  coord?: { lat: number; lng: number };
   active?: boolean;
   order?: number;
 };
@@ -41,51 +39,35 @@ type Form = {
   type: 'food' | 'grocery';
   imageUrl: string;
   description: string;
-  storeIds: string[];
+  address: string;
+  lat: string;
+  lng: string;
   order: string;
   active: boolean;
 };
 
 const emptyForm: Form = {
-  title: '', type: 'food', imageUrl: '', description: '', storeIds: [], order: '0', active: true,
+  title: '', type: 'food', imageUrl: '', description: '', address: '', lat: '', lng: '', order: '0', active: true,
 };
 
 const TYPE_LABEL: Record<Banner['type'], string> = { food: 'Food', grocery: 'Grocery' };
 
 export default function BannerManagementPage() {
-  const nav = useNavigate();
   const [typeFilter, setTypeFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Form>(emptyForm);
   const [editing, setEditing] = useState<Banner | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Banner | null>(null);
   const [busy, setBusy] = useState(false);
-  const [storeOptions, setStoreOptions] = useState<StoreOption[]>([]);
-  const [storesLoading, setStoresLoading] = useState(false);
   const { items, loading, hasMore, loadMore, refresh } = usePaginated<Banner>(
     '/admin/category-banners',
     typeFilter ? { type: typeFilter } : {},
   );
   const sentinelRef = useInfiniteScroll(hasMore, loading, loadMore);
 
-  // The multi-select only ever shows merchants matching the banner's type, so
-  // it is refetched whenever the type changes.
-  useEffect(() => {
-    if (!showForm) return;
-    let alive = true;
-    setStoresLoading(true);
-    api<{ items: StoreOption[] }>('/admin/stores/options', {
-      query: form.type === 'grocery' ? { kind: 'store' } : { kind: 'restaurant' },
-    })
-      .then(r => { if (alive) setStoreOptions(r.items || []); })
-      .catch((e: any) => toast.error(e?.message || 'Failed to load stores'))
-      .finally(() => { if (alive) setStoresLoading(false); });
-    return () => { alive = false; };
-  }, [showForm, form.type]);
-
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...emptyForm, type: (typeFilter === 'grocery' ? 'grocery' : 'food') as Banner['type'] });
+    setForm({ ...emptyForm, type: typeFilter === 'grocery' ? 'grocery' : 'food' });
     setShowForm(true);
   };
 
@@ -96,7 +78,9 @@ export default function BannerManagementPage() {
       type: b.type,
       imageUrl: b.imageUrl || '',
       description: b.description || '',
-      storeIds: b.storeIds || [],
+      address: b.address || '',
+      lat: b.coord?.lat != null ? String(b.coord.lat) : '',
+      lng: b.coord?.lng != null ? String(b.coord.lng) : '',
       order: String(b.order ?? 0),
       active: b.active !== false,
     });
@@ -110,13 +94,21 @@ export default function BannerManagementPage() {
       if (!form.title.trim()) throw new Error('Title is required');
       if (!form.imageUrl.trim()) throw new Error('Banner image is required');
 
+      const lat = Number(form.lat);
+      const lng = Number(form.lng);
+      if (form.lat.trim() === '' || form.lng.trim() === '' || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        throw new Error('Latitude and longitude are required');
+      }
+      if (lat < -90 || lat > 90) throw new Error('Latitude must be between -90 and 90');
+      if (lng < -180 || lng > 180) throw new Error('Longitude must be between -180 and 180');
+
       const payload: any = {
         title: form.title.trim(),
         type: form.type,
         imageUrl: form.imageUrl.trim(),
         description: form.description.trim(),
-        // Empty array is meaningful: the server reads it as "ALL merchants".
-        storeIds: form.storeIds,
+        address: form.address.trim(),
+        coord: { lat, lng },
         active: form.active,
         order: Number(form.order) || 0,
       };
@@ -179,14 +171,15 @@ export default function BannerManagementPage() {
       render: b => <Badge tone={b.type === 'food' ? 'warning' : 'info'}>{TYPE_LABEL[b.type]}</Badge>,
     },
     {
-      key: 'stores',
-      header: 'Applies to',
-      render: b => b.storeIdsEmpty ? (
-        <Badge tone="success">ALL {TYPE_LABEL[b.type].toLowerCase()} ({b.storeCount})</Badge>
-      ) : (
+      key: 'pickup',
+      header: 'Pickup location',
+      render: b => (
         <div className="min-w-0">
-          <div className="text-sm">{b.storeCount} selected</div>
-          <div className="text-xs text-muted-foreground truncate">{(b.storeNames || []).join(', ')}</div>
+          {b.address ? <div className="text-sm truncate">{b.address}</div> : null}
+          <div className="text-xs text-muted-foreground truncate inline-flex items-center gap-1">
+            <MapPin className="h-3 w-3" />
+            {b.coord ? `${b.coord.lat.toFixed(4)}, ${b.coord.lng.toFixed(4)}` : 'No coordinate'}
+          </div>
         </div>
       ),
     },
@@ -220,13 +213,10 @@ export default function BannerManagementPage() {
         </div>
         <div className="flex items-center gap-2">
           <Select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="w-40">
-            <option value="">All types</option>
+            <option value="">All</option>
             <option value="food">Food</option>
             <option value="grocery">Grocery</option>
           </Select>
-          <Button variant="outline" onClick={() => nav('/banner-management/stores')}>
-            <Store className="h-4 w-4" /> Stores
-          </Button>
           <Button onClick={openCreate}><Plus className="h-4 w-4" /> Create banner</Button>
         </div>
       </div>
@@ -236,7 +226,7 @@ export default function BannerManagementPage() {
           <Card>
             <EmptyState
               icon={<Images className="h-8 w-8" />}
-              title="No banners yet"
+              title={typeFilter ? `No ${TYPE_LABEL[typeFilter as Banner['type']]} banners yet` : 'No banners yet'}
               hint="Create a Food or Grocery banner to feature it on the customer app."
             />
           </Card>
@@ -269,18 +259,14 @@ export default function BannerManagementPage() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
             <div className="absolute bottom-2 left-3 right-3 text-white">
               <div className="text-sm font-semibold truncate">{form.title || 'Banner title'}</div>
-              <div className="text-[11px] opacity-90 truncate">
-                {TYPE_LABEL[form.type]} · {form.storeIds.length === 0
-                  ? `All ${TYPE_LABEL[form.type].toLowerCase()} merchants`
-                  : `${form.storeIds.length} selected`}
+              <div className="text-[11px] opacity-90 truncate flex items-center gap-1">
+                <MapPin className="h-3 w-3" />
+                {form.address || 'Pickup location not set'} · {TYPE_LABEL[form.type]}
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium block mb-1">Banner image</label>
-            <ImageField value={form.imageUrl} onChange={url => set('imageUrl', url)} label="" hint="Upload a file or paste a URL" />
-          </div>
+          <ImageField value={form.imageUrl} onChange={url => set('imageUrl', url)} label="Banner image" hint="Upload a file or paste a URL" />
 
           <div>
             <label className="text-sm font-medium block mb-1">Banner title</label>
@@ -291,15 +277,7 @@ export default function BannerManagementPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium block mb-1">Banner type</label>
-              <Select
-                value={form.type}
-                onChange={e => {
-                  const type = e.target.value as Banner['type'];
-                  // A Food banner may not keep grocery selections (the server
-                  // would reject the mix), so the list resets with the type.
-                  setForm(f => ({ ...f, type, storeIds: [] }));
-                }}
-              >
+              <Select value={form.type} onChange={e => set('type', e.target.value as Banner['type'])}>
                 <option value="food">Food</option>
                 <option value="grocery">Grocery</option>
               </Select>
@@ -316,25 +294,29 @@ export default function BannerManagementPage() {
               placeholder="Flat 20% off on weekend orders" maxLength={1000} />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium">
-                Select {form.type === 'grocery' ? 'stores' : 'restaurants'}
-              </label>
-              {storeOptions.length === 0 && !storesLoading && (
-                <Link to="/banner-management/stores"
-                  className="text-xs text-primary inline-flex items-center gap-1 hover:underline">
-                  Add stores <ExternalLink className="h-3 w-3" />
-                </Link>
-              )}
+          {/* Pickup location — becomes the customer's pickup point */}
+          <div className="rounded-md border border-border p-3 space-y-3">
+            <div className="text-sm font-medium flex items-center gap-1.5">
+              <MapPin className="h-4 w-4" /> Pickup location
             </div>
-            <StoreMultiSelect
-              options={storeOptions}
-              value={form.storeIds}
-              onChange={ids => set('storeIds', ids)}
-              typeLabel={form.type === 'grocery' ? 'grocery stores' : 'restaurants'}
-              loading={storesLoading}
-            />
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Address</label>
+              <Input value={form.address} onChange={e => set('address', e.target.value)}
+                placeholder="Chandni Chowk, Old Delhi 110006" maxLength={300} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Latitude</label>
+                <Input required inputMode="decimal" value={form.lat} onChange={e => set('lat', e.target.value)} placeholder="28.6506" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Longitude</label>
+                <Input required inputMode="decimal" value={form.lng} onChange={e => set('lng', e.target.value)} placeholder="77.2303" />
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              When a customer opens this banner, this point is dropped into their pickup location.
+            </div>
           </div>
 
           <label className="flex items-center gap-2 text-sm">

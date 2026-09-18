@@ -63,26 +63,6 @@ const BookingSchema = new Schema(
         recipientPhone: { type: String, default: '' },
         recipientName: { type: String, default: '' },
         payment: { type: String, enum: ['cash', 'upi', 'wallet'], default: 'cash' },
-
-        // --- Food/Grocery banner flow (both optional; null/[] on every
-        // booking created the old way) -------------------------------------
-        bannerId: { type: Schema.Types.ObjectId, ref: 'CategoryBanner', default: null, index: true },
-        // One entry per merchant the customer ordered from. The same text is
-        // also composed into `notes`, which is what the rider app already
-        // renders — so no rider-side change is needed.
-        storeInputs: {
-            type: [
-                new Schema(
-                    {
-                        storeId: { type: Schema.Types.ObjectId, ref: 'Restaurant', default: null },
-                        storeName: { type: String, default: '' },
-                        note: { type: String, default: '', maxlength: 300 },
-                    },
-                    { _id: false }
-                ),
-            ],
-            default: [],
-        },
         // Split recorded when the bill is charged to the wallet, so a refund
         // can return each part to the wallet it came from.
         walletPaid: {

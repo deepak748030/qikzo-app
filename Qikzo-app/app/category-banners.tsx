@@ -7,10 +7,7 @@ import { ChevronRight, ImageOff, MapPin } from 'lucide-react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 import ScreenHeader from '@/components/ScreenHeader';
 import Skeleton from '@/components/Skeleton';
-import { useBannerFlow } from '@/lib/bannerFlowStore';
-import { useBooking } from '@/lib/bookingStore';
-import { useServiceMode } from '@/lib/serviceMode';
-import { categoryBannersApi, type BannerType, type CategoryBannerSummary } from '@/lib/api/endpoints/categoryBanners';
+import { categoryBannersApi, type BannerType, type CategoryBanner } from '@/lib/api/endpoints/categoryBanners';
 
 function paramStr(v?: string | string[]): string {
     if (Array.isArray(v)) return String(v[0] || '');
@@ -26,11 +23,8 @@ export default function CategoryBannersScreen() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams<{ type?: string | string[] }>();
     const type: BannerType = paramStr(params.type).toLowerCase() === 'grocery' ? 'grocery' : 'food';
-    const setDraft = useBooking((s) => s.setDraft);
-    const setMode = useServiceMode((s) => s.setMode);
-    const setBanner = useBannerFlow((s) => s.setBanner);
 
-    const [banners, setBanners] = useState<CategoryBannerSummary[]>([]);
+    const [banners, setBanners] = useState<CategoryBanner[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -50,15 +44,6 @@ export default function CategoryBannersScreen() {
 
     useEffect(() => load(), [load]);
     useFocusEffect(useCallback(() => { load(); }, [load]));
-
-    const openBanner = (b: CategoryBannerSummary) => {
-        // The banner flow is a delivery flow — put the app in delivery mode
-        // with the matching category so the eventual booking is categorised.
-        setMode('delivery');
-        setDraft({ mode: 'delivery', categoryId: type === 'food' ? 'food' : 'groceries' });
-        setBanner({ id: b._id, title: b.title, type: b.type });
-        router.push({ pathname: '/banner-detail', params: { id: b._id } });
-    };
 
     return (
         <View style={styles.container}>
@@ -99,7 +84,7 @@ export default function CategoryBannersScreen() {
                     renderItem={({ item }) => (
                         <Pressable
                             style={styles.card}
-                            onPress={() => openBanner(item)}
+                            onPress={() => router.push({ pathname: '/banner-detail', params: { id: item._id } })}
                             accessibilityRole="button"
                             accessibilityLabel={`Open ${item.title}`}
                         >
@@ -118,9 +103,7 @@ export default function CategoryBannersScreen() {
                                     <View style={styles.metaChip}>
                                         <MapPin size={11} color={colors.primaryForeground} />
                                         <Text style={styles.metaText} numberOfLines={1}>
-                                            {item.allStores
-                                                ? `All ${type === 'food' ? 'restaurants' : 'stores'}`
-                                                : item.storeNames.slice(0, 2).join(', ') || `${item.storeCount} places`}
+                                            {item.address || 'Tap to see location'}
                                         </Text>
                                     </View>
                                     <ChevronRight size={16} color={colors.primaryForeground} />
@@ -130,12 +113,6 @@ export default function CategoryBannersScreen() {
                     )}
                 />
             )}
-
-            {loading ? null : banners.length > 0 ? (
-                <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
-                    <Text style={styles.footerText}>{banners.length} offer{banners.length === 1 ? '' : 's'}</Text>
-                </View>
-            ) : null}
         </View>
     );
 }
@@ -170,6 +147,4 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
     },
     retryText: { color: colors.primaryForeground, fontSize: 12, fontFamily: fonts.bodyBold },
-    footer: { alignItems: 'center', paddingTop: 4 },
-    footerText: { fontSize: 10, fontFamily: fonts.body, color: colors.mutedForeground },
 });

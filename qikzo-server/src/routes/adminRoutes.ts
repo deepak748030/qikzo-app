@@ -5,7 +5,6 @@ import validate from '../middleware/validate';
 import adminController from '../controllers/adminController';
 import categoryAdminController from '../controllers/categoryAdminController';
 import coverageController from '../controllers/coverageController';
-import restaurantAdminController from '../controllers/restaurantAdminController';
 import categoryBannerController from '../controllers/categoryBannerController';
 import {
     listQuerySchema,
@@ -16,9 +15,6 @@ import {
     updateUserSchema,
 } from '../validators/adminValidators';
 import {
-    createStoreSchema,
-    updateStoreSchema,
-    storeListQuerySchema,
     createCategoryBannerSchema,
     updateCategoryBannerSchema,
     bannerListQuerySchema,
@@ -99,15 +95,6 @@ router.delete('/banners/:id', adminController.deleteBanner);
 router.get('/reward-config', adminController.getRewardConfig);
 router.patch('/reward-config', adminController.updateRewardConfig);
 router.get('/referrals', adminController.listReferrals);
-
-// Banner Management — Food / Grocery merchants (restaurants & stores)
-router.get('/stores', validate(storeListQuerySchema, 'query'), restaurantAdminController.list);
-router.get('/stores/options', restaurantAdminController.options);
-router.post('/stores', validate(createStoreSchema), restaurantAdminController.create);
-router.get('/stores/:id', restaurantAdminController.get);
-router.patch('/stores/:id', validate(updateStoreSchema), restaurantAdminController.update);
-router.post('/stores/:id/toggle', restaurantAdminController.toggle);
-router.delete('/stores/:id', restaurantAdminController.remove);
 
 // Banner Management — Food / Grocery banners (separate collection from the
 // home-carousel promo banners above; those routes are unchanged).

@@ -30,18 +30,6 @@ export const createBookingSchema = z.object({
     couponCode: z.string().min(2).max(40).optional(),
     // ISO string; must be in the future when scheduling.
     scheduledAt: z.string().datetime().optional(),
-    // --- Food/Grocery banner flow (optional; omitted by every existing client) ---
-    bannerId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid banner id').optional(),
-    storeInputs: z
-        .array(
-            z.object({
-                storeId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid store id'),
-                storeName: z.string().max(120).optional(),
-                note: z.string().min(1).max(300),
-            })
-        )
-        .max(10)
-        .optional(),
 });
 
 export const updateStatusSchema = z.object({
