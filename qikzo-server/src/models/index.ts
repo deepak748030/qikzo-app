@@ -16,6 +16,8 @@ export { default as RideHistory } from './RideHistory';
 export { default as Category } from './Category';
 export { default as CoverageCity } from './Coverage';
 export { default as PromoBanner } from './PromoBanner';
+export { default as Restaurant } from './Restaurant';
+export { default as CategoryBanner } from './CategoryBanner';
 export { default as Promo } from './Promo';
 export { default as Coupon } from './Coupon';
 export { default as CouponRedemption } from './CouponRedemption';

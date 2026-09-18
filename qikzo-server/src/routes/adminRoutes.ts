@@ -5,6 +5,8 @@ import validate from '../middleware/validate';
 import adminController from '../controllers/adminController';
 import categoryAdminController from '../controllers/categoryAdminController';
 import coverageController from '../controllers/coverageController';
+import restaurantAdminController from '../controllers/restaurantAdminController';
+import categoryBannerController from '../controllers/categoryBannerController';
 import {
     listQuerySchema,
     rejectSchema,
@@ -13,6 +15,14 @@ import {
     blockUserSchema,
     updateUserSchema,
 } from '../validators/adminValidators';
+import {
+    createStoreSchema,
+    updateStoreSchema,
+    storeListQuerySchema,
+    createCategoryBannerSchema,
+    updateCategoryBannerSchema,
+    bannerListQuerySchema,
+} from '../validators/bannerAdminValidators';
 
 /**
  * Admin backoffice routes. All mounted behind `requireAuth + requireAdmin`.
@@ -89,6 +99,24 @@ router.delete('/banners/:id', adminController.deleteBanner);
 router.get('/reward-config', adminController.getRewardConfig);
 router.patch('/reward-config', adminController.updateRewardConfig);
 router.get('/referrals', adminController.listReferrals);
+
+// Banner Management — Food / Grocery merchants (restaurants & stores)
+router.get('/stores', validate(storeListQuerySchema, 'query'), restaurantAdminController.list);
+router.get('/stores/options', restaurantAdminController.options);
+router.post('/stores', validate(createStoreSchema), restaurantAdminController.create);
+router.get('/stores/:id', restaurantAdminController.get);
+router.patch('/stores/:id', validate(updateStoreSchema), restaurantAdminController.update);
+router.post('/stores/:id/toggle', restaurantAdminController.toggle);
+router.delete('/stores/:id', restaurantAdminController.remove);
+
+// Banner Management — Food / Grocery banners (separate collection from the
+// home-carousel promo banners above; those routes are unchanged).
+router.get('/category-banners', validate(bannerListQuerySchema, 'query'), categoryBannerController.listAdmin);
+router.post('/category-banners', validate(createCategoryBannerSchema), categoryBannerController.create);
+router.get('/category-banners/:id', categoryBannerController.get);
+router.patch('/category-banners/:id', validate(updateCategoryBannerSchema), categoryBannerController.update);
+router.post('/category-banners/:id/toggle', categoryBannerController.toggle);
+router.delete('/category-banners/:id', categoryBannerController.remove);
 
 // Audit log
 router.get('/audit', adminController.listAudit);

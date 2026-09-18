@@ -84,6 +84,9 @@ type State = {
         recipientName?: string;
         payment: 'cash' | 'upi' | 'wallet';
         vehicleTypeSlug?: string;
+        /** Food/Grocery banner flow only — every other caller omits these. */
+        bannerId?: string;
+        storeInputs?: { storeId: string; storeName?: string; note: string }[];
     }) => Promise<Booking>;
     cancelOnServer: (id: string, reason?: string) => Promise<void>;
     confirmPaymentOnServer: (id: string) => Promise<void>;
@@ -236,6 +239,10 @@ export const useBooking = create<State>((set, get) => ({
                 recipientPhone: input.recipientPhone,
                 recipientName: input.recipientName,
                 payment: input.payment,
+                // Banner-flow metadata; undefined for every existing caller, so
+                // those bookings are byte-for-byte what they were before.
+                bannerId: input.bannerId,
+                storeInputs: input.storeInputs,
             } as any, { idempotencyKey });
             const mapped = mapBooking(created);
             set((s) => ({ bookings: [mapped, ...s.bookings], loading: false }));

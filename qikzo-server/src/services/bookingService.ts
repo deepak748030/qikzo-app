@@ -15,6 +15,9 @@ function genCode(): string {
     return 'QZ' + String(2100 + Math.floor(Math.random() * 9000));
 }
 
+/** Guards optional banner/store ids so a malformed value can't cast-error a booking. */
+const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
+
 export interface CreateBookingInput {
     userId: string;
     mode?: 'ride' | 'delivery';
@@ -30,6 +33,10 @@ export interface CreateBookingInput {
     payment?: 'cash' | 'upi' | 'wallet';
     couponCode?: string;
     scheduledAt?: string;
+    /** Food/Grocery banner flow only — omitted by every other caller. */
+    bannerId?: string;
+    /** One entry per merchant; also composed into `notes` by the client. */
+    storeInputs?: { storeId: string; storeName?: string; note: string }[];
 }
 
 
@@ -136,6 +143,20 @@ export const bookingService = {
                     recipientPhone: input.recipientPhone || '',
                     recipientName: input.recipientName || '',
                     payment: input.payment || 'cash',
+                    // --- Food/Grocery banner flow metadata. Both stay
+                    // null/[] for every booking created the old way. Bad ids
+                    // are dropped rather than cast-erroring the whole booking.
+                    bannerId: OBJECT_ID_RE.test(String(input.bannerId || '')) ? input.bannerId! : null,
+                    storeInputs: Array.isArray(input.storeInputs)
+                        ? input.storeInputs
+                              .filter((s) => s && OBJECT_ID_RE.test(String(s.storeId)) && String(s.note || '').trim())
+                              .slice(0, 10)
+                              .map((s) => ({
+                                  storeId: s.storeId,
+                                  storeName: String(s.storeName || '').trim().slice(0, 120),
+                                  note: String(s.note).trim().slice(0, 300),
+                              }))
+                        : [],
                     distanceKm: est.distanceKm,
                     etaMin: est.etaMin,
                     price: finalPrice,

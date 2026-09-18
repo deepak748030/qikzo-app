@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCog, ShieldCheck, PackageCheck, Wallet, /* TicketPercent, */ Images, LifeBuoy, ScrollText, LogOut, Menu, X, Package, Gift, Share2, MapPinned } from 'lucide-react';
+import { LayoutDashboard, Users, UserCog, ShieldCheck, PackageCheck, Wallet, /* TicketPercent, */ Images, Layers, LifeBuoy, ScrollText, LogOut, Menu, X, Package, Gift, Share2, MapPinned } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { cn, fmtPhone } from '@/lib/utils';
@@ -17,6 +17,9 @@ const nav = [
   { to: '/referrals', label: 'Referrals', icon: Share2 },
   { to: '/categories', label: 'Categories', icon: Package },
   { to: '/banners', label: 'Banners', icon: Images },
+  // Food / Grocery tab banners — a separate surface from the home-carousel
+  // promo banners above (different collection, different endpoints).
+  { to: '/banner-management', label: 'Banner Management', icon: Layers },
   { to: '/support', label: 'Support', icon: LifeBuoy },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
 ];
