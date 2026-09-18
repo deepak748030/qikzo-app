@@ -153,9 +153,12 @@ export default function BannerDetailScreen() {
         const slots = draft.extraPickups;
         const freeIdx = slots.findIndex((s) => !s.address.trim());
         if (freeIdx >= 0) {
+            // categoryId is deliberately left alone here and below: the trip's
+            // category belongs to the banner that created Pickup 1. Letting a
+            // later banner overwrite it would re-price the whole booking under
+            // a different category than its first pickup.
             setDraft({
                 mode: 'delivery',
-                categoryId,
                 extraPickups: slots.map((s, i) =>
                     i === freeIdx ? { ...s, address, coord } : s
                 ),
@@ -175,7 +178,6 @@ export default function BannerDetailScreen() {
 
         setDraft({
             mode: 'delivery',
-            categoryId,
             extraPickups: [...slots, { address, coord, notes: '' }],
         });
         router.replace('/book-delivery');
