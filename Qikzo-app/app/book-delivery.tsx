@@ -69,27 +69,42 @@ export default function BookDeliveryScreen() {
      * Every other category keeps the original single shared box.
      */
     const bannerPickupMode = !isRide && usesBannerPickups(draft.categoryId);
+
+    /**
+     * Only the extra pickups that actually have a location ship with the
+     * booking — the submit path filters the rest out — so the per-pickup boxes
+     * and the composed notes must be driven by this same list. Without it a
+     * box could be filled for an empty slot and the text would silently vanish.
+     */
+    const filledExtras = useMemo(
+        () => draft.extraPickups
+            .map((stop, index) => ({ stop, index, label: `Pickup ${index + 2}` }))
+            .filter((e) => e.stop.address.trim().length > 0),
+        [draft.extraPickups],
+    );
+
     const noteBlocks = useMemo(() => {
         type Block = { key: string; label: string; value: string; set: (v: string) => void };
         const blocks: Block[] = [{
             key: 'pickup-1',
-            label: draft.extraPickups.length > 0 ? 'Pickup 1' : 'Pickup',
+            label: filledExtras.length > 0 ? 'Pickup 1' : 'Pickup',
             value: draft.notes,
             set: (v) => setDraft({ notes: v }),
         }];
         if (!bannerPickupMode) return blocks;
-        draft.extraPickups.forEach((stop, i) => {
+        // A slot gets its box once it has a location (map pin or banner).
+        filledExtras.forEach(({ stop, index, label }) => {
             blocks.push({
-                key: `pickup-${i + 2}`,
-                label: `Pickup ${i + 2}`,
+                key: `pickup-${index + 2}`,
+                label,
                 value: stop.notes || '',
                 set: (v) => setDraft({
-                    extraPickups: draft.extraPickups.map((x, j) => (j === i ? { ...x, notes: v } : x)),
+                    extraPickups: draft.extraPickups.map((x, j) => (j === index ? { ...x, notes: v } : x)),
                 }),
             });
         });
         return blocks;
-    }, [bannerPickupMode, draft.notes, draft.extraPickups, setDraft]);
+    }, [bannerPickupMode, draft.notes, draft.extraPickups, filledExtras, setDraft]);
 
     /**
      * The server stores a single notes string, so the per-pickup boxes are
@@ -100,15 +115,15 @@ export default function BookDeliveryScreen() {
     const composedNotes = useMemo(() => {
         const first = draft.notes.trim();
         if (!bannerPickupMode) return first;
-        const extra = draft.extraPickups
-            .map((s, i) => ({ label: `Pickup ${i + 2}`, address: s.address.trim(), text: (s.notes || '').trim() }))
+        const extra = filledExtras
+            .map((e) => ({ label: e.label, address: e.stop.address.trim(), text: (e.stop.notes || '').trim() }))
             .filter((s) => s.text);
         if (extra.length === 0) return first;
         const lines: string[] = [];
         if (first) lines.push(`Pickup 1${draft.pickup.trim() ? ` (${draft.pickup.trim()})` : ''}: ${first}`);
-        extra.forEach((s) => lines.push(`${s.label}${s.address ? ` (${s.address})` : ''}: ${s.text}`));
+        extra.forEach((s) => lines.push(`${s.label} (${s.address}): ${s.text}`));
         return lines.join('\n');
-    }, [bannerPickupMode, draft.notes, draft.extraPickups, draft.pickup]);
+    }, [bannerPickupMode, draft.notes, filledExtras, draft.pickup]);
 
     const savedPlaces = useSavedPlaces((s) => s.places);
     const selectedMenus = useMemo(() => {

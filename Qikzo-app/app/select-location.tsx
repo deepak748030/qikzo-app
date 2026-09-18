@@ -226,7 +226,11 @@ export default function SelectLocationScreen() {
             useSavedPlaces.getState().setPendingPick({ address: address.trim(), coord: center });
         } else if (extraIdx >= 0) {
             const next = [...draft.extraPickups];
+            // Spread the existing stop first — Food/Groceries keep a per-pickup
+            // "What needs to be picked up?" note on the stop, and replacing the
+            // object outright would wipe what the customer already typed.
             next[extraIdx] = {
+                ...next[extraIdx],
                 address: address.trim(),
                 coord: center,
                 bannerSource: bannerSourceAtCenter(),
