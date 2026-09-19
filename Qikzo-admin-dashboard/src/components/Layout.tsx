@@ -19,7 +19,7 @@ const nav = [
   { to: '/banners', label: 'Banners', icon: Images },
   // Food / Grocery tab banners — a separate surface from the home-carousel
   // promo banners above (different collection, different endpoints).
-  { to: '/banner-management', label: 'Banner Management', icon: Layers },
+  { to: '/shop-management', label: 'Shop Management', icon: Layers },
   { to: '/support', label: 'Support', icon: LifeBuoy },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
 ];

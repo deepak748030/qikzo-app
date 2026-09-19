@@ -58,7 +58,7 @@ export default function JobRequestCard({ job, onAccept, onDecline, accepting }: 
                 <Stop icon="drop" label="Drop" value={job.drop} />
             </View>
 
-            {job.notes ? <Text style={styles.notes} numberOfLines={2}>Note: {job.notes}</Text> : null}
+            {job.notes ? <Text style={styles.notes}>Note: {job.notes}</Text> : null}
 
             <View style={styles.actions}>
                 <Pressable style={[styles.decline, accepting && { opacity: 0.5 }]} onPress={accepting ? undefined : onDecline} hitSlop={6} disabled={accepting}>

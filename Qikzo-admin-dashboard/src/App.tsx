@@ -62,7 +62,7 @@ export default function App() {
           <Route path="referrals" element={<ReferralsPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="banners" element={<BannersPage />} />
-          <Route path="banner-management" element={<BannerManagementPage />} />
+          <Route path="shop-management" element={<BannerManagementPage />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="support/:id" element={<SupportDetailPage />} />
           <Route path="audit" element={<AuditPage />} />
