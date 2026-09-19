@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { mediaUrl } from '@/lib/utils';
@@ -10,6 +13,57 @@ import {
 import { DataTable, type Column } from '@/components/DataTable';
 import { ImageField } from '@/components/ImageField';
 import { Images, Plus, Trash2, ImageOff, MapPin } from 'lucide-react';
+
+const pinIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:16px;height:16px;border-radius:9999px;background:#dc2626;border:2px solid white;box-shadow:0 0 0 2px rgba(220,38,38,0.35);"></div>',
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+});
+
+/** Click anywhere on the map → report that point as the pickup coordinate. */
+function PickOnClick({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({ click(e) { onPick(e.latlng.lat, e.latlng.lng); } });
+  return null;
+}
+
+/** Modal / delayed layout: Leaflet needs a kick once the container has a real size. */
+function InvalidateSize() {
+  const map = useMap();
+  useEffect(() => {
+    const t = window.setTimeout(() => map.invalidateSize(), 80);
+    return () => window.clearTimeout(t);
+  }, [map]);
+  return null;
+}
+
+/** Keeps the map centred on the typed coordinate when it changes. */
+function FlyTo({ lat, lng }: { lat: number | null; lng: number | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (lat != null && lng != null) map.setView([lat, lng], Math.max(map.getZoom(), 14));
+  }, [lat, lng, map]);
+  return null;
+}
+
+/** Free OpenStreetMap picker — click to drop the pickup pin. */
+function CoordPicker({ lat, lng, onPick }: { lat: string; lng: string; onPick: (lat: number, lng: number) => void }) {
+  const la = Number(lat), ln = Number(lng);
+  const has = lat.trim() !== '' && lng.trim() !== '' && Number.isFinite(la) && Number.isFinite(ln);
+  const center: [number, number] = has ? [la, ln] : [28.6139, 77.209];
+  return (
+    <div className="h-64 rounded-md overflow-hidden border border-border">
+      <MapContainer center={center} zoom={has ? 14 : 5} style={{ height: '100%', width: '100%' }}>
+        <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <InvalidateSize />
+        <FlyTo lat={has ? la : null} lng={has ? ln : null} />
+        <PickOnClick onPick={onPick} />
+        {has && <Marker position={[la, ln]} icon={pinIcon} />}
+      </MapContainer>
+    </div>
+  );
+}
 
 /**
  * Banner Management — Food / Grocery banners shown as a vertical list inside
@@ -224,7 +278,7 @@ export default function BannerManagementPage() {
     <div className="space-y-4">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-display font-semibold">Banner Management</h1>
+          <h1 className="text-2xl font-display font-semibold">Shop Management</h1>
           <p className="text-sm text-muted-foreground">
             Banners listed vertically inside the customer app's Food and Grocery screens.
           </p>
@@ -321,6 +375,11 @@ export default function BannerManagementPage() {
               <label className="text-xs text-muted-foreground block mb-1">Address</label>
               <Input value={form.address} onChange={e => set('address', e.target.value)}
                 placeholder="Chandni Chowk, Old Delhi 110006" maxLength={300} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Pick on map (click to set coordinates)</label>
+              <CoordPicker lat={form.lat} lng={form.lng}
+                onPick={(la, ln) => setForm(f => ({ ...f, lat: la.toFixed(6), lng: ln.toFixed(6) }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
